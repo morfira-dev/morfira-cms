@@ -65,6 +65,6 @@ final class InMemoryPageRepository implements PageRepository
 
     private function record(Page $page): void
     {
-        $this->revisions[$page->id->value][$page->version] = new PageRevision($page->version, $page->title, $page->slug, $page->blocks, $page->seo, $page->updatedAt);
+        $this->revisions[$page->id->value][$page->version] = new PageRevision($page->version, $page->title, $page->slug, $page->blocks, $page->seo, $page->updatedAt, $page->layout);
     }
 }

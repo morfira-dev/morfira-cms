@@ -26,6 +26,8 @@ final readonly class DoctrineMediaAssetRepository implements MediaAssetRepositor
             'height' => $asset->height,
             'byte_size' => $asset->bytes,
             'default_alt' => $asset->defaultAlt,
+            'collection' => $asset->collection,
+            'tags' => json_encode($asset->tags, JSON_THROW_ON_ERROR),
             'variants' => json_encode(
                 array_map(static fn (MediaVariant $variant): array => $variant->toArray(), $asset->variants),
                 JSON_THROW_ON_ERROR,
@@ -39,6 +41,20 @@ final readonly class DoctrineMediaAssetRepository implements MediaAssetRepositor
         $row = $this->connection->fetchAssociative('SELECT * FROM media_assets WHERE id = ?', [$id->value]);
 
         return $row === false ? null : $this->hydrate($row);
+    }
+
+    public function save(MediaAsset $asset): void
+    {
+        $this->connection->update('media_assets', [
+            'default_alt' => $asset->defaultAlt,
+            'collection' => $asset->collection,
+            'tags' => json_encode($asset->tags, JSON_THROW_ON_ERROR),
+        ], ['id' => $asset->id->value]);
+    }
+
+    public function remove(MediaAssetId $id): void
+    {
+        $this->connection->delete('media_assets', ['id' => $id->value]);
     }
 
     public function all(): array
@@ -70,6 +86,16 @@ final readonly class DoctrineMediaAssetRepository implements MediaAssetRepositor
                 self::stringValue($variant, 'url'),
             );
         }, $variantRows);
+        $tags = json_decode(self::stringValue($row, 'tags'), true, flags: JSON_THROW_ON_ERROR);
+        if (!is_array($tags) || !array_is_list($tags) || array_filter($tags, static fn (mixed $tag): bool => !is_string($tag)) !== []) {
+            throw new \UnexpectedValueException('Media tags must be a JSON list of strings.');
+        }
+        /** @var list<string> $tags */
+
+        $collection = $row['collection'] ?? null;
+        if ($collection !== null && !is_string($collection)) {
+            throw new \UnexpectedValueException('Media collection must be null or a string.');
+        }
 
         return MediaAsset::reconstitute(
             MediaAssetId::fromString(self::stringValue($row, 'id')),
@@ -79,6 +105,8 @@ final readonly class DoctrineMediaAssetRepository implements MediaAssetRepositor
             self::intValue($row, 'height'),
             self::intValue($row, 'byte_size'),
             self::stringValue($row, 'default_alt'),
+            $collection,
+            $tags,
             $variants,
             new \DateTimeImmutable(self::stringValue($row, 'created_at'), new \DateTimeZone('UTC')),
         );

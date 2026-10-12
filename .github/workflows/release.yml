@@ -19,7 +19,7 @@ jobs:
   release:
     name: Verify and release
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - name: Check out repository
@@ -51,6 +51,9 @@ jobs:
 
       - name: Verify frontend
         run: docker compose run --rm --no-deps front npm run check
+
+      - name: Verify production browser journey
+        run: ./scripts/test-e2e.sh
 
       - name: Create release
         env:

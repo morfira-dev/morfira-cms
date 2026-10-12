@@ -7,6 +7,7 @@ namespace Cms\Tests\Publishing\Application;
 use Cms\Content\Application\CreatePage\CreatePage;
 use Cms\Content\Application\UpdatePage\UpdatePage;
 use Cms\Content\Domain\PageVersionConflict;
+use Cms\Content\Domain\PageLayout;
 use Cms\Content\Domain\PageSeo;
 use Cms\Content\Infrastructure\Html\SymfonyRichTextSanitizer;
 use Cms\Publishing\Application\GetPublishedPage\GetPublishedPage;
@@ -38,6 +39,7 @@ final class PublishPageTest extends TestCase
             [['id' => 'cf49b538-07ee-4b53-a6a3-6b25cbfa22ae', 'type' => 'hero', 'data' => ['heading' => 'Hello']]],
             new PageSeo('Landing SEO', 'An immutable description.', false, null),
             1,
+            new PageLayout('morfira', 'wide', 'main', 'footer'),
         );
 
         $published = (new PublishPage($drafts, $delivery))($draft->id, 2);
@@ -49,6 +51,7 @@ final class PublishPageTest extends TestCase
         self::assertSame('Landing', $publicPage->title);
         self::assertCount(1, $publicPage->blocks);
         self::assertSame('Landing SEO', $publicPage->seo['title']);
+        self::assertSame(['theme' => 'morfira', 'template' => 'wide', 'headerNavigationCode' => 'main', 'footerNavigationCode' => 'footer'], $publicPage->layout);
     }
 
     #[Test]

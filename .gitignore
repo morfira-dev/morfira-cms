@@ -9,3 +9,5 @@
 /back/vendor/
 /front/dist/
 /front/node_modules/
+/front/test-results/
+/front/playwright-report/

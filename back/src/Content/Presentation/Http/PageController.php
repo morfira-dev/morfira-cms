@@ -10,6 +10,7 @@ use Cms\Content\Application\ListPages\ListPages;
 use Cms\Content\Application\PageView;
 use Cms\Content\Application\UpdatePage\UpdatePage;
 use Cms\Content\Domain\PageNotFound;
+use Cms\Content\Domain\PageLayout;
 use Cms\Content\Domain\PageSeo;
 use Cms\Content\Domain\PageSlugAlreadyExists;
 use Cms\Content\Domain\PageVersionConflict;
@@ -79,9 +80,10 @@ final readonly class PageController
         $slug = $payload['slug'] ?? null;
         $blocks = $payload['blocks'] ?? null;
         $seo = $payload['seo'] ?? null;
+        $layout = $payload['layout'] ?? null;
         $version = $payload['version'] ?? null;
 
-        if (!is_string($title) || !is_string($slug) || !is_array($blocks) || !array_is_list($blocks) || !is_array($seo) || array_is_list($seo) || !is_int($version)) {
+        if (!is_string($title) || !is_string($slug) || !is_array($blocks) || !array_is_list($blocks) || !is_array($seo) || array_is_list($seo) || !is_array($layout) || array_is_list($layout) || !is_int($version)) {
             return new JsonResponse(['error' => 'Invalid page revision payload.'], 422);
         }
 
@@ -96,7 +98,8 @@ final readonly class PageController
 
         try {
             /** @var array<string, mixed> $seo */
-            $page = ($this->updatePage)($id, $title, $slug, $blockPayloads, PageSeo::fromArray($seo), $version);
+            /** @var array<string, mixed> $layout */
+            $page = ($this->updatePage)($id, $title, $slug, $blockPayloads, PageSeo::fromArray($seo), $version, PageLayout::fromArray($layout));
         } catch (PageNotFound) {
             return new JsonResponse(['error' => 'Page not found.'], 404);
         } catch (PageSlugAlreadyExists|PageVersionConflict $exception) {

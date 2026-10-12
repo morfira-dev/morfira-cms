@@ -29,6 +29,16 @@ final class InMemoryMediaAssetRepository implements MediaAssetRepository
         return $this->items[$id->value] ?? null;
     }
 
+    public function save(MediaAsset $asset): void
+    {
+        $this->items[$asset->id->value] = $asset;
+    }
+
+    public function remove(MediaAssetId $id): void
+    {
+        unset($this->items[$id->value]);
+    }
+
     public function all(): array
     {
         return array_values($this->items);

@@ -19,6 +19,32 @@ docker compose up app front
 
 Open the Admin Studio at <http://localhost:5174>, the backend health endpoint at <http://localhost:8080/health>, and the OpenAPI 3.1 contract at <http://localhost:8080/api/openapi.yaml>. Override the frontend port with `CMS_FRONT_PORT` when needed. Set `CMS_PUBLIC_SITE_URL` to the external site origin in deployments so canonical, Open Graph, robots and sitemap URLs are absolute and correct.
 
+## Production deployment
+
+The production image contains the optimized backend and Admin Studio and serves both from one origin. Provide secrets outside source control, then start the production stack:
+
+```bash
+export CMS_APP_SECRET='replace-with-a-long-random-secret'
+export CMS_DATABASE_PASSWORD='replace-with-a-database-password'
+export CMS_DATABASE_ROOT_PASSWORD='replace-with-a-root-password'
+export CMS_PUBLIC_SITE_URL='https://cms.example.com'
+docker compose -f compose.prod.yaml up -d --build
+```
+
+Open `/admin`; `/health` is the dependency-free liveness endpoint and `/ready` includes database readiness. Startup applies pending migrations before accepting traffic. Set `CMS_MAINTENANCE_MODE=1` and recreate the app container to return controlled `503` responses while preserving health checks.
+
+Back up database and media together to a new, operator-controlled directory:
+
+```bash
+./scripts/backup.sh /absolute/path/to/backup
+./scripts/restore.sh --confirm-destructive-restore /absolute/path/to/backup
+./scripts/upgrade.sh
+```
+
+Restore replaces the target installation's database and media and must be tested on a disposable environment before production use. Keep an off-host copy, encrypt archives containing private content, and verify the public and Admin Studio routes after every upgrade.
+
+The isolated production-browser journey can be run with `./scripts/test-e2e.sh`; it uses a dedicated Compose project and deletes only that project's disposable volumes.
+
 ## Project structure
 
 ```text
@@ -77,9 +103,11 @@ The initial foundation contains:
 - cacheable public Twig HTML and headless `/api/v1/content` delivery with ETags;
 - atomic first-owner setup, session authentication, editor roles and CSRF protection;
 - immutable image assets with safe WebP re-encoding, responsive variants and reusable Image blocks;
+- searchable media collections and tags, mutable alt metadata and reference-safe asset deletion;
 - revisioned SEO metadata, canonical/Open Graph output, `robots.txt` and a published-snapshot sitemap;
 - permanent slug history with direct `301` redirects and an optional CMS-managed `404` page;
 - versioned three-level navigation trees with optimistic editing and immutable public snapshots;
+- versioned built-in page layouts with published header and footer navigation placement;
 - versioned custom content schemas, schema-validated entry drafts and immutable public entry snapshots;
 - brokerless scheduled publication for exact page revisions and entry versions;
 - idempotent page and entry unpublishing that preserves immutable snapshots;
@@ -93,6 +121,7 @@ The initial foundation contains:
 - visible immutable page revision history and append-only draft restoration;
 - authenticated self-service password rotation;
 - a live Admin Studio content overview with direct workspace navigation;
+- a single-image production deployment, readiness/maintenance controls, backup and restore scripts, and a production browser journey;
 - versioned `/api/v1` contracts with frontend types generated from OpenAPI 3.1;
 - architectural decision records.
 

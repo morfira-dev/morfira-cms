@@ -17,6 +17,14 @@ final readonly class PublishedPage
         /** @var array{title: string, description: string, noIndex: bool, openGraphImageAssetId: ?string} */
         public array $seo,
         public \DateTimeImmutable $publishedAt,
+        /** @var array{theme: string, template: string, headerNavigationCode: ?string, footerNavigationCode: ?string}|null */
+        public ?array $layout = null,
     ) {
+    }
+
+    /** @return array{theme: string, template: string, headerNavigationCode: ?string, footerNavigationCode: ?string} */
+    public function resolvedLayout(): array
+    {
+        return $this->layout ?? ['theme' => 'morfira', 'template' => 'standard', 'headerNavigationCode' => null, 'footerNavigationCode' => null];
     }
 }

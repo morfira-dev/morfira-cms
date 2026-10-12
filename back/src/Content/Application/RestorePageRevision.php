@@ -27,7 +27,7 @@ final readonly class RestorePageRevision
             throw new PageRevisionNotFound();
         }
 
-        $restored = $page->revise($revision->title, $revision->slug, $revision->blocks, $revision->seo, new \DateTimeImmutable('now', new \DateTimeZone('UTC')));
+        $restored = $page->revise($revision->title, $revision->slug, $revision->blocks, $revision->seo, new \DateTimeImmutable('now', new \DateTimeZone('UTC')), $revision->resolvedLayout());
         $this->pages->save($restored, $expectedVersion);
 
         return PageView::fromPage($restored);

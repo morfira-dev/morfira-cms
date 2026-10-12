@@ -1,0 +1,12 @@
+.git
+.github
+.idea
+.vscode
+back/var
+back/vendor
+front/dist
+front/node_modules
+node_modules
+playwright-report
+test-results
+*.log

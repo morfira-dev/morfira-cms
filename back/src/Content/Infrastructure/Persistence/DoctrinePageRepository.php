@@ -7,6 +7,7 @@ namespace Cms\Content\Infrastructure\Persistence;
 use Cms\Content\Domain\Page;
 use Cms\Content\Domain\PageBlock;
 use Cms\Content\Domain\PageId;
+use Cms\Content\Domain\PageLayout;
 use Cms\Content\Domain\PageRepository;
 use Cms\Content\Domain\PageRevision;
 use Cms\Content\Domain\PageSeo;
@@ -106,6 +107,7 @@ final readonly class DoctrinePageRepository implements PageRepository
             'status' => $page->status->value,
             'blocks' => json_encode(array_map(static fn (PageBlock $block): array => $block->toArray(), $page->blocks), JSON_THROW_ON_ERROR),
             'seo' => json_encode($page->seo->toArray(), JSON_THROW_ON_ERROR),
+            'layout' => json_encode($page->layout->toArray(), JSON_THROW_ON_ERROR),
             'version' => $page->version,
             'created_at' => $page->createdAt->format('Y-m-d H:i:s.u'),
             'updated_at' => $page->updatedAt->format('Y-m-d H:i:s.u'),
@@ -121,6 +123,7 @@ final readonly class DoctrinePageRepository implements PageRepository
             'slug' => $page->slug->value,
             'blocks' => json_encode(array_map(static fn (PageBlock $block): array => $block->toArray(), $page->blocks), JSON_THROW_ON_ERROR),
             'seo' => json_encode($page->seo->toArray(), JSON_THROW_ON_ERROR),
+            'layout' => json_encode($page->layout->toArray(), JSON_THROW_ON_ERROR),
             'created_at' => $page->updatedAt->format('Y-m-d H:i:s.u'),
         ]);
     }
@@ -139,6 +142,7 @@ final readonly class DoctrinePageRepository implements PageRepository
             throw new \UnexpectedValueException('Page SEO settings must be a JSON object.');
         }
         /** @var array<string, mixed> $seo */
+        $layout = self::objectValue($row, 'layout', 'Page layout');
 
         return Page::reconstitute(
             PageId::fromString(self::stringValue($row, 'id')),
@@ -157,6 +161,7 @@ final readonly class DoctrinePageRepository implements PageRepository
             self::intValue($row, 'version'),
             new \DateTimeImmutable(self::stringValue($row, 'created_at'), new \DateTimeZone('UTC')),
             new \DateTimeImmutable(self::stringValue($row, 'updated_at'), new \DateTimeZone('UTC')),
+            PageLayout::fromArray($layout),
         );
     }
 
@@ -169,6 +174,7 @@ final readonly class DoctrinePageRepository implements PageRepository
             throw new \UnexpectedValueException('Stored page revision payload is invalid.');
         }
         /** @var array<string, mixed> $seo */
+        $layout = self::objectValue($row, 'layout', 'Page revision layout');
 
         return new PageRevision(
             self::intValue($row, 'revision_number'),
@@ -183,7 +189,22 @@ final readonly class DoctrinePageRepository implements PageRepository
             }, $blocks),
             PageSeo::fromArray($seo),
             new \DateTimeImmutable(self::stringValue($row, 'created_at'), new \DateTimeZone('UTC')),
+            PageLayout::fromArray($layout),
         );
+    }
+
+    /** @param array<string, mixed> $row
+     *  @return array<string, mixed>
+     */
+    private static function objectValue(array $row, string $key, string $label): array
+    {
+        $value = json_decode(self::stringValue($row, $key), true, flags: JSON_THROW_ON_ERROR);
+        if (!is_array($value) || array_is_list($value)) {
+            throw new \UnexpectedValueException($label . ' must be a JSON object.');
+        }
+        /** @var array<string, mixed> $value */
+
+        return $value;
     }
 
     /** @param array<string, mixed> $row */

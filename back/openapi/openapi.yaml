@@ -25,6 +25,25 @@ tags:
   - name: Entries
     description: Schema-validated custom content drafts and immutable published snapshots.
 paths:
+  /ready:
+    get:
+      operationId: getReadiness
+      tags: [Delivery]
+      summary: Check whether the application and database are ready to serve traffic
+      security: []
+      responses:
+        '200':
+          description: Application and database are ready.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Readiness'
+        '503':
+          description: A required service is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Readiness'
   /api/v1/setup:
     get:
       operationId: getSetupStatus
@@ -467,6 +486,70 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /api/v1/admin/media/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    put:
+      operationId: updateMediaMetadata
+      tags: [Media]
+      summary: Update mutable media organization metadata
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMediaMetadataRequest'
+      responses:
+        '200':
+          description: Metadata updated without changing immutable image bytes or URLs.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaAsset'
+        '404':
+          description: Media asset not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Invalid metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      operationId: deleteMedia
+      tags: [Media]
+      summary: Delete an unreferenced media asset and its immutable files
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfTokenHeader'
+      responses:
+        '204':
+          description: Media asset deleted.
+        '404':
+          description: Media asset not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Media asset is retained by draft, revision, or published content.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaAssetInUseError'
   /api/v1/admin/pages:
     get:
       operationId: listPages
@@ -2590,7 +2673,7 @@ components:
     UpdatePageRequest:
       type: object
       additionalProperties: false
-      required: [title, slug, blocks, seo, version]
+      required: [title, slug, blocks, seo, layout, version]
       properties:
         title:
           type: string
@@ -2606,6 +2689,8 @@ components:
             $ref: '#/components/schemas/PageBlock'
         seo:
           $ref: '#/components/schemas/PageSeo'
+        layout:
+          $ref: '#/components/schemas/PageLayout'
         version:
           type: integer
           minimum: 1
@@ -2628,6 +2713,25 @@ components:
           hero: '#/components/schemas/HeroBlock'
           richText: '#/components/schemas/RichTextBlock'
           image: '#/components/schemas/ImageBlock'
+    PageLayout:
+      type: object
+      additionalProperties: false
+      required: [theme, template, headerNavigationCode, footerNavigationCode]
+      properties:
+        theme:
+          type: string
+          const: morfira
+        template:
+          type: string
+          enum: [standard, wide]
+        headerNavigationCode:
+          oneOf:
+            - $ref: '#/components/schemas/NavigationCode'
+            - type: 'null'
+        footerNavigationCode:
+          oneOf:
+            - $ref: '#/components/schemas/NavigationCode'
+            - type: 'null'
     HeroBlock:
       type: object
       additionalProperties: false
@@ -2711,6 +2815,28 @@ components:
           type: string
           maxLength: 500
           description: Default alternative text copied when inserting the asset into a page.
+    UpdateMediaMetadataRequest:
+      type: object
+      additionalProperties: false
+      required: [defaultAlt, collection, tags]
+      properties:
+        defaultAlt:
+          type: string
+          maxLength: 500
+        collection:
+          oneOf:
+            - type: string
+              minLength: 1
+              maxLength: 120
+            - type: 'null'
+        tags:
+          type: array
+          maxItems: 20
+          uniqueItems: true
+          items:
+            type: string
+            pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+            maxLength: 50
     MediaVariant:
       type: object
       additionalProperties: false
@@ -2729,7 +2855,7 @@ components:
     MediaAsset:
       type: object
       additionalProperties: false
-      required: [id, originalName, mimeType, size, width, height, defaultAlt, variants, createdAt]
+      required: [id, originalName, mimeType, size, width, height, defaultAlt, collection, tags, variants, createdAt]
       properties:
         id:
           type: string
@@ -2755,6 +2881,14 @@ components:
         defaultAlt:
           type: string
           maxLength: 500
+        collection:
+          oneOf:
+            - type: string
+            - type: 'null'
+        tags:
+          type: array
+          items:
+            type: string
         variants:
           type: array
           minItems: 1
@@ -2772,6 +2906,31 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/MediaAsset'
+    MediaAssetInUseError:
+      type: object
+      additionalProperties: false
+      required: [error, usages]
+      properties:
+        error:
+          type: string
+        usages:
+          type: array
+          items:
+            type: string
+    Readiness:
+      type: object
+      additionalProperties: false
+      required: [status, service, database]
+      properties:
+        status:
+          type: string
+          enum: [ready, unavailable]
+        service:
+          type: string
+          const: cms
+        database:
+          type: string
+          enum: [ready, unavailable]
     PageSeo:
       type: object
       additionalProperties: false
@@ -2822,7 +2981,7 @@ components:
     Page:
       type: object
       additionalProperties: false
-      required: [id, title, slug, status, blocks, seo, version, createdAt, updatedAt]
+      required: [id, title, slug, status, blocks, seo, layout, version, createdAt, updatedAt]
       properties:
         id:
           type: string
@@ -2840,6 +2999,8 @@ components:
             $ref: '#/components/schemas/PageBlock'
         seo:
           $ref: '#/components/schemas/PageSeo'
+        layout:
+          $ref: '#/components/schemas/PageLayout'
         version:
           type: integer
         createdAt:
@@ -2860,7 +3021,7 @@ components:
     PageRevision:
       type: object
       additionalProperties: false
-      required: [revision, title, slug, blocks, seo, createdAt]
+      required: [revision, title, slug, blocks, seo, layout, createdAt]
       properties:
         revision: { type: integer, minimum: 1 }
         title: { type: string }
@@ -2871,6 +3032,8 @@ components:
             $ref: '#/components/schemas/PageBlock'
         seo:
           $ref: '#/components/schemas/PageSeo'
+        layout:
+          $ref: '#/components/schemas/PageLayout'
         createdAt: { type: string, format: date-time }
     PageRevisionCollection:
       type: object
@@ -2890,7 +3053,7 @@ components:
     PublishedPage:
       type: object
       additionalProperties: false
-      required: [snapshotId, pageId, sourceRevision, title, slug, blocks, seo, publishedAt]
+      required: [snapshotId, pageId, sourceRevision, title, slug, blocks, seo, layout, publishedAt]
       properties:
         snapshotId:
           type: string
@@ -2911,6 +3074,8 @@ components:
             $ref: '#/components/schemas/PageBlock'
         seo:
           $ref: '#/components/schemas/PageSeo'
+        layout:
+          $ref: '#/components/schemas/PageLayout'
         publishedAt:
           type: string
           format: date-time

@@ -1,0 +1,46 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${CMS_PORT:-8080}:8080"
+    environment:
+      APP_ENV: prod
+      APP_DEBUG: 0
+      APP_SECRET: ${CMS_APP_SECRET:?CMS_APP_SECRET is required}
+      DATABASE_URL: mysql://cms:${CMS_DATABASE_PASSWORD:?CMS_DATABASE_PASSWORD is required}@database:3306/cms?serverVersion=11.4.0-MariaDB&charset=utf8mb4
+      PUBLIC_SITE_URL: ${CMS_PUBLIC_SITE_URL:?CMS_PUBLIC_SITE_URL is required}
+      MAINTENANCE_MODE: ${CMS_MAINTENANCE_MODE:-0}
+    depends_on:
+      database:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@file_get_contents('http://127.0.0.1:8080/ready') === false ? 1 : 0);"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+    volumes:
+      - media_data:/app/back/public/media
+
+  database:
+    image: mariadb:11.4
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: cms
+      MARIADB_USER: cms
+      MARIADB_PASSWORD: ${CMS_DATABASE_PASSWORD:?CMS_DATABASE_PASSWORD is required}
+      MARIADB_ROOT_PASSWORD: ${CMS_DATABASE_ROOT_PASSWORD:?CMS_DATABASE_ROOT_PASSWORD is required}
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - database_data:/var/lib/mysql
+
+volumes:
+  database_data:
+  media_data:

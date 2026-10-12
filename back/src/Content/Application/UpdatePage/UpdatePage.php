@@ -9,6 +9,7 @@ use Cms\Content\Application\RichTextSanitizer;
 use Cms\Content\Domain\PageBlock;
 use Cms\Content\Domain\PageId;
 use Cms\Content\Domain\PageNotFound;
+use Cms\Content\Domain\PageLayout;
 use Cms\Content\Domain\PageRepository;
 use Cms\Content\Domain\PageSeo;
 use Cms\Content\Domain\PageSlug;
@@ -23,7 +24,7 @@ final readonly class UpdatePage
     }
 
     /** @param list<array<string, mixed>> $blocks */
-    public function __invoke(string $id, string $title, string $slug, array $blocks, PageSeo $seo, int $version): PageView
+    public function __invoke(string $id, string $title, string $slug, array $blocks, PageSeo $seo, int $version, ?PageLayout $layout = null): PageView
     {
         $page = $this->pages->get(PageId::fromString($id));
 
@@ -41,6 +42,7 @@ final readonly class UpdatePage
             array_map(PageBlock::fromArray(...), $this->sanitizeRichTextBlocks($blocks)),
             $seo,
             new \DateTimeImmutable('now', new \DateTimeZone('UTC')),
+            $layout,
         );
 
         $this->pages->save($revised, $version);

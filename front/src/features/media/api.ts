@@ -31,3 +31,24 @@ export async function uploadMedia(file: File, alt: string): Promise<MediaAsset> 
 
   return (await response.json()) as MediaAsset
 }
+
+export async function updateMediaMetadata(
+  id: string,
+  metadata: Pick<MediaAsset, 'defaultAlt' | 'collection' | 'tags'>,
+): Promise<MediaAsset> {
+  const response = await apiFetch(`/api/v1/admin/media/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(metadata),
+  })
+
+  if (!response.ok) throw new Error(await readApiError(response))
+
+  return (await response.json()) as MediaAsset
+}
+
+export async function deleteMedia(id: string): Promise<void> {
+  const response = await apiFetch(`/api/v1/admin/media/${id}`, { method: 'DELETE' })
+
+  if (!response.ok) throw new Error(await readApiError(response))
+}

@@ -12,6 +12,12 @@ const revision: PageUpdate = {
     noIndex: false,
     openGraphImageAssetId: null,
   },
+  layout: {
+    theme: 'morfira',
+    template: 'standard',
+    headerNavigationCode: null,
+    footerNavigationCode: null,
+  },
   version: 1,
 }
 

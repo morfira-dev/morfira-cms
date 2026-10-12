@@ -7,6 +7,7 @@ import { EntriesWorkspace } from '../entries/EntriesWorkspace'
 import { MediaLibrary } from '../media/MediaLibrary'
 import { getMedia, type MediaAsset } from '../media/api'
 import { NavigationWorkspace } from '../navigation/NavigationWorkspace'
+import { getNavigationMenus, type NavigationMenu } from '../navigation/api'
 import { PagesWorkspace } from '../pages/PagesWorkspace'
 import { getTaxonomies, type Taxonomy } from '../taxonomy/api'
 import { TaxonomyWorkspace } from '../taxonomy/TaxonomyWorkspace'
@@ -29,6 +30,7 @@ export function ContentWorkspace({ route, isOwner, currentUserId, onNavigate, on
   const [contentTypes, setContentTypes] = useState<ContentType[]>([])
   const [loadingContentTypes, setLoadingContentTypes] = useState(true)
   const [taxonomies, setTaxonomies] = useState<Taxonomy[]>([])
+  const [navigationMenus, setNavigationMenus] = useState<NavigationMenu[]>([])
 
   useEffect(() => {
     if (!['pages', 'media', 'entries'].includes(route)) return
@@ -40,6 +42,17 @@ export function ContentWorkspace({ route, isOwner, currentUserId, onNavigate, on
         if (!(reason instanceof DOMException && reason.name === 'AbortError')) setError(reason instanceof Error ? reason.message : 'Could not load the media library.')
       })
       .finally(() => setLoadingMedia(false))
+    return () => controller.abort()
+  }, [route])
+
+  useEffect(() => {
+    if (route !== 'pages') return
+    const controller = new AbortController()
+    getNavigationMenus(controller.signal)
+      .then(setNavigationMenus)
+      .catch((reason: unknown) => {
+        if (!(reason instanceof DOMException && reason.name === 'AbortError')) setError(reason instanceof Error ? reason.message : 'Could not load navigation choices.')
+      })
     return () => controller.abort()
   }, [route])
 
@@ -68,8 +81,8 @@ export function ContentWorkspace({ route, isOwner, currentUserId, onNavigate, on
   }, [route])
 
   let workspace
-  if (route === 'pages') workspace = <PagesWorkspace mediaAssets={assets} />
-  else if (route === 'media') workspace = <MediaLibrary assets={assets} loading={loadingMedia} onUploaded={(asset) => setAssets((current) => [asset, ...current])} />
+  if (route === 'pages') workspace = <PagesWorkspace mediaAssets={assets} navigationMenus={navigationMenus} />
+  else if (route === 'media') workspace = <MediaLibrary assets={assets} loading={loadingMedia} onChange={setAssets} />
   else if (route === 'navigation') workspace = <NavigationWorkspace />
   else if (route === 'content-types') workspace = <ContentTypesWorkspace contentTypes={contentTypes} loading={loadingContentTypes} onChange={setContentTypes} />
   else if (route === 'taxonomies') workspace = <TaxonomyWorkspace taxonomies={taxonomies} onChange={setTaxonomies} />

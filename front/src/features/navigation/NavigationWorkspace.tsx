@@ -32,6 +32,7 @@ import {
   removeNavigationItem,
   updateNavigationItem,
 } from './tree'
+import { createUuid } from '../../utils/createUuid'
 
 export function NavigationWorkspace() {
   const [menus, setMenus] = useState<NavigationMenu[]>([])
@@ -292,7 +293,7 @@ export function NavigationWorkspace() {
                   <Button
                     variant="outlined"
                     disabled={itemCount >= 100}
-                    onClick={() => changeItems(addNavigationItem(editing.items, createNavigationItem(crypto.randomUUID())))}
+                    onClick={() => changeItems(addNavigationItem(editing.items, createNavigationItem(createUuid())))}
                   >
                     Add root item
                   </Button>
@@ -311,7 +312,7 @@ export function NavigationWorkspace() {
                         siblingCount={editing.items.length}
                         totalCount={itemCount}
                         onChange={(id, field, value) => changeItems(updateNavigationItem(editing.items, id, field, value))}
-                        onAddChild={(parentId) => changeItems(addNavigationItem(editing.items, createNavigationItem(crypto.randomUUID()), parentId))}
+                        onAddChild={(parentId) => changeItems(addNavigationItem(editing.items, createNavigationItem(createUuid()), parentId))}
                         onRemove={(id) => changeItems(removeNavigationItem(editing.items, id))}
                         onMove={(id, offset) => changeItems(moveNavigationItem(editing.items, id, offset))}
                       />

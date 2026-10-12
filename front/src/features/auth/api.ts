@@ -17,6 +17,7 @@ export async function setupOwner(email: string, password: string): Promise<void>
     body: JSON.stringify({ email, password }),
   })
   if (!response.ok) throw new Error(await readApiError(response))
+  resetCsrfToken()
 }
 
 export async function login(email: string, password: string): Promise<AuthenticatedUser> {
@@ -26,7 +27,10 @@ export async function login(email: string, password: string): Promise<Authentica
     body: JSON.stringify({ email, password }),
   })
   if (!response.ok) throw new Error(await readApiError(response))
-  return (await response.json()) as AuthenticatedUser
+  const user = (await response.json()) as AuthenticatedUser
+  resetCsrfToken()
+
+  return user
 }
 
 export async function getCurrentUser(): Promise<AuthenticatedUser | null> {

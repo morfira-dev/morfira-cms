@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+    "/ready": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Check whether the application and database are ready to serve traffic */
+        get: operations["getReadiness"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/setup": {
         parameters: {
             query?: never;
@@ -179,6 +196,26 @@ export interface paths {
          */
         post: operations["uploadMedia"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/media/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Update mutable media organization metadata */
+        put: operations["updateMediaMetadata"];
+        post?: never;
+        /** Delete an unreferenced media asset and its immutable files */
+        delete: operations["deleteMedia"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1033,12 +1070,21 @@ export interface components {
             slug: string;
             blocks: components["schemas"]["PageBlock"][];
             seo: components["schemas"]["PageSeo"];
+            layout: components["schemas"]["PageLayout"];
             version: number;
         };
         PublishPageRequest: {
             version: number;
         };
         PageBlock: components["schemas"]["HeroBlock"] | components["schemas"]["RichTextBlock"] | components["schemas"]["ImageBlock"];
+        PageLayout: {
+            /** @constant */
+            theme: "morfira";
+            /** @enum {string} */
+            template: "standard" | "wide";
+            headerNavigationCode: components["schemas"]["NavigationCode"] | null;
+            footerNavigationCode: components["schemas"]["NavigationCode"] | null;
+        };
         HeroBlock: {
             /** Format: uuid */
             id: string;
@@ -1089,6 +1135,11 @@ export interface components {
             /** @description Default alternative text copied when inserting the asset into a page. */
             alt: string;
         };
+        UpdateMediaMetadataRequest: {
+            defaultAlt: string;
+            collection: string | null;
+            tags: string[];
+        };
         MediaVariant: {
             /**
              * Format: uri-reference
@@ -1112,12 +1163,26 @@ export interface components {
             width: number;
             height: number;
             defaultAlt: string;
+            collection: string | null;
+            tags: string[];
             variants: components["schemas"]["MediaVariant"][];
             /** Format: date-time */
             createdAt: string;
         };
         MediaAssetCollection: {
             items: components["schemas"]["MediaAsset"][];
+        };
+        MediaAssetInUseError: {
+            error: string;
+            usages: string[];
+        };
+        Readiness: {
+            /** @enum {string} */
+            status: "ready" | "unavailable";
+            /** @constant */
+            service: "cms";
+            /** @enum {string} */
+            database: "ready" | "unavailable";
         };
         PageSeo: {
             /** @description Optional search/social title; the page title is used when empty. */
@@ -1147,6 +1212,7 @@ export interface components {
             status: "draft";
             blocks: components["schemas"]["PageBlock"][];
             seo: components["schemas"]["PageSeo"];
+            layout: components["schemas"]["PageLayout"];
             version: number;
             /** Format: date-time */
             createdAt: string;
@@ -1162,6 +1228,7 @@ export interface components {
             slug: string;
             blocks: components["schemas"]["PageBlock"][];
             seo: components["schemas"]["PageSeo"];
+            layout: components["schemas"]["PageLayout"];
             /** Format: date-time */
             createdAt: string;
         };
@@ -1181,6 +1248,7 @@ export interface components {
             slug: string;
             blocks: components["schemas"]["PageBlock"][];
             seo: components["schemas"]["PageSeo"];
+            layout: components["schemas"]["PageLayout"];
             /** Format: date-time */
             publishedAt: string;
         };
@@ -1239,6 +1307,35 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    getReadiness: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Application and database are ready. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Readiness"];
+                };
+            };
+            /** @description A required service is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Readiness"];
+                };
+            };
+        };
+    };
     getSetupStatus: {
         parameters: {
             query?: never;
@@ -1867,6 +1964,94 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    updateMediaMetadata: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Session-bound token obtained from `/api/v1/auth/csrf`. */
+                "X-CSRF-Token": components["parameters"]["CsrfTokenHeader"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateMediaMetadataRequest"];
+            };
+        };
+        responses: {
+            /** @description Metadata updated without changing immutable image bytes or URLs. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaAsset"];
+                };
+            };
+            /** @description Media asset not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid metadata. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteMedia: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Session-bound token obtained from `/api/v1/auth/csrf`. */
+                "X-CSRF-Token": components["parameters"]["CsrfTokenHeader"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Media asset deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Media asset not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Media asset is retained by draft, revision, or published content. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaAssetInUseError"];
                 };
             };
         };

@@ -10,6 +10,10 @@ interface MediaAssetRepository
 
     public function get(MediaAssetId $id): ?MediaAsset;
 
+    public function save(MediaAsset $asset): void;
+
+    public function remove(MediaAssetId $id): void;
+
     /** @return list<MediaAsset> */
     public function all(): array;
 }

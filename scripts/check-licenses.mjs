@@ -107,13 +107,13 @@ for (const section of ['packages', 'packages-dev']) {
 
 summaries.push({ source: composerLockfile, packages: composerPackages, counts: composerCounts });
 
-const composeFile = await readFile('compose.yaml', 'utf8');
-const dockerfile = await readFile('back/Dockerfile', 'utf8');
+const composeFiles = await Promise.all(['compose.yaml', 'compose.prod.yaml', 'compose.e2e.yaml'].map((path) => readFile(path, 'utf8')));
+const dockerfiles = await Promise.all(['back/Dockerfile', 'Dockerfile', 'docker/Dockerfile.e2e'].map((path) => readFile(path, 'utf8')));
 const releaseWorkflow = await readFile('.github/workflows/release.yml', 'utf8');
-const containerImages = [
-  ...[...composeFile.matchAll(/^\s*image:\s*([^\s#]+).*$/gm)].map((match) => match[1]),
-  ...[...dockerfile.matchAll(/^FROM\s+([^\s]+).*$/gim)].map((match) => match[1]),
-];
+const containerImages = [...new Set([
+  ...composeFiles.flatMap((file) => [...file.matchAll(/^\s*image:\s*([^\s#]+).*$/gm)].map((match) => match[1])),
+  ...dockerfiles.flatMap((file) => [...file.matchAll(/^FROM\s+([^\s]+).*$/gim)].map((match) => match[1])),
+])];
 
 for (const image of containerImages) {
   if (!reviewedContainerImages.has(image)) {

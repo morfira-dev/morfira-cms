@@ -18,6 +18,8 @@ final readonly class PublishedPageView
         public array $blocks,
         /** @var array{title: string, description: string, noIndex: bool, openGraphImageAssetId: ?string} */
         public array $seo,
+        /** @var array{theme: string, template: string, headerNavigationCode: ?string, footerNavigationCode: ?string} */
+        public array $layout,
         public string $publishedAt,
     ) {
     }
@@ -32,11 +34,12 @@ final readonly class PublishedPageView
             $page->slug,
             $page->blocks,
             $page->seo,
+            $page->resolvedLayout(),
             $page->publishedAt->format(DATE_ATOM),
         );
     }
 
-    /** @return array{snapshotId: string, pageId: string, sourceRevision: int, title: string, slug: string, blocks: list<array{id: string, type: string, data: array<string, string>}>, seo: array{title: string, description: string, noIndex: bool, openGraphImageAssetId: ?string}, publishedAt: string} */
+    /** @return array{snapshotId: string, pageId: string, sourceRevision: int, title: string, slug: string, blocks: list<array{id: string, type: string, data: array<string, string>}>, seo: array{title: string, description: string, noIndex: bool, openGraphImageAssetId: ?string}, layout: array{theme: string, template: string, headerNavigationCode: ?string, footerNavigationCode: ?string}, publishedAt: string} */
     public function toArray(): array
     {
         return [
@@ -47,6 +50,7 @@ final readonly class PublishedPageView
             'slug' => $this->slug,
             'blocks' => $this->blocks,
             'seo' => $this->seo,
+            'layout' => $this->layout,
             'publishedAt' => $this->publishedAt,
         ];
     }

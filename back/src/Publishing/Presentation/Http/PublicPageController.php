@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Cms\Publishing\Presentation\Http;
 
+use Cms\Navigation\Application\GetPublishedNavigation\GetPublishedNavigation;
+use Cms\Navigation\Application\PublishedNavigationView;
 use Cms\Publishing\Application\GetPublishedPage\GetPublishedPage;
 use Cms\Publishing\Application\GetPublishedRedirect\GetPublishedRedirect;
 use Cms\Publishing\Application\PublishedPageView;
@@ -22,6 +24,7 @@ final readonly class PublicPageController
         private Environment $twig,
         #[Autowire('%env(PUBLIC_SITE_URL)%')]
         private string $publicSiteUrl,
+        private ?GetPublishedNavigation $getPublishedNavigation = null,
     ) {
     }
 
@@ -81,11 +84,15 @@ final readonly class PublicPageController
     private function renderPublished(PublishedPageView $published, Request $request, int $status = 200, bool $notFound = false): Response
     {
         $baseUrl = rtrim($this->publicSiteUrl, '/');
+        $headerNavigation = $this->navigation($published->layout['headerNavigationCode']);
+        $footerNavigation = $this->navigation($published->layout['footerNavigationCode']);
         $response = new Response($this->twig->render('delivery/page.html.twig', [
             'page' => $published,
             'publicSiteUrl' => $baseUrl,
             'canonicalUrl' => $notFound ? null : $this->publicUrl($published->slug),
             'notFound' => $notFound,
+            'headerNavigation' => $headerNavigation,
+            'footerNavigation' => $footerNavigation,
         ]), $status);
         $response->setPublic();
         $response->setMaxAge(60);
@@ -97,6 +104,11 @@ final readonly class PublicPageController
         $response->isNotModified($request);
 
         return $response;
+    }
+
+    private function navigation(?string $code): ?PublishedNavigationView
+    {
+        return $code === null || $this->getPublishedNavigation === null ? null : ($this->getPublishedNavigation)($code);
     }
 
     private function publicUrl(string $slug): string

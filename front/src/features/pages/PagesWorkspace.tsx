@@ -22,6 +22,7 @@ import {
   Typography,
 } from '../../ui'
 import { type MediaAsset } from '../media/api'
+import type { NavigationMenu } from '../navigation/api'
 import { getMediaThumbnail } from '../media/MediaLibrary'
 import { PublicationScheduler } from '../publishing/PublicationScheduler'
 import {
@@ -42,14 +43,16 @@ import {
   updatePage,
 } from './api'
 import { RichTextEditor } from './RichTextEditor'
+import { createUuid } from '../../utils/createUuid'
 
 const publicSiteUrl = import.meta.env.VITE_PUBLIC_SITE_URL || window.location.origin
 
 interface PagesWorkspaceProps {
   mediaAssets: MediaAsset[]
+  navigationMenus: NavigationMenu[]
 }
 
-export function PagesWorkspace({ mediaAssets }: PagesWorkspaceProps) {
+export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceProps) {
   const [pages, setPages] = useState<PageSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -116,6 +119,7 @@ export function PagesWorkspace({ mediaAssets }: PagesWorkspaceProps) {
         slug: editing.slug,
         blocks: editing.blocks,
         seo: editing.seo,
+        layout: editing.layout,
         version: editing.version,
       })
       setEditing(saved)
@@ -245,11 +249,11 @@ export function PagesWorkspace({ mediaAssets }: PagesWorkspaceProps) {
     }
 
     const block: PageSummary['blocks'][number] = type === 'hero'
-      ? { id: crypto.randomUUID(), type, data: { heading: 'A clear headline', text: 'Explain why this page matters.' } }
+      ? { id: createUuid(), type, data: { heading: 'A clear headline', text: 'Explain why this page matters.' } }
       : type === 'richText'
-        ? { id: crypto.randomUUID(), type, data: { content: 'Start writing useful content.' } }
+        ? { id: createUuid(), type, data: { content: 'Start writing useful content.' } }
         : {
-            id: crypto.randomUUID(),
+            id: createUuid(),
             type,
             data: { assetId: firstAsset.id, alt: firstAsset.defaultAlt, caption: '' },
           }
@@ -497,6 +501,40 @@ export function PagesWorkspace({ mediaAssets }: PagesWorkspaceProps) {
                   </Stack>
                   <Stack direction="row" spacing={1} sx={{ mt: 2 }}><TextField size="small" label="Old slug" value={redirectSlug} onChange={(event) => setRedirectSlug(event.target.value.toLowerCase())} helperText="The page must be published"/><Button variant="outlined" disabled={!redirectSlug || redirectBusy} onClick={() => void addManualRedirect()}>Add redirect</Button></Stack>
                 </Alert>
+
+              <Divider />
+
+              <Stack spacing={2}>
+                <div>
+                  <Typography variant="h6">Theme and layout</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    Layout settings are versioned with the page and frozen into each published snapshot.
+                  </Typography>
+                </div>
+                <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+                  <TextField select label="Template" value={editing.layout.template} onChange={(event) => {
+                    setEditing({ ...editing, layout: { ...editing.layout, template: event.target.value as 'standard' | 'wide' } })
+                    setEditingDirty(true)
+                  }} fullWidth>
+                    <MenuItem value="standard">Standard</MenuItem>
+                    <MenuItem value="wide">Wide</MenuItem>
+                  </TextField>
+                  <TextField select label="Header navigation" value={editing.layout.headerNavigationCode ?? ''} onChange={(event) => {
+                    setEditing({ ...editing, layout: { ...editing.layout, headerNavigationCode: event.target.value || null } })
+                    setEditingDirty(true)
+                  }} fullWidth>
+                    <MenuItem value="">No header navigation</MenuItem>
+                    {navigationMenus.map((menu) => <MenuItem key={menu.id} value={menu.code}>{menu.name}</MenuItem>)}
+                  </TextField>
+                  <TextField select label="Footer navigation" value={editing.layout.footerNavigationCode ?? ''} onChange={(event) => {
+                    setEditing({ ...editing, layout: { ...editing.layout, footerNavigationCode: event.target.value || null } })
+                    setEditingDirty(true)
+                  }} fullWidth>
+                    <MenuItem value="">No footer navigation</MenuItem>
+                    {navigationMenus.map((menu) => <MenuItem key={menu.id} value={menu.code}>{menu.name}</MenuItem>)}
+                  </TextField>
+                </Stack>
+              </Stack>
 
               <Divider />
 

@@ -22,6 +22,7 @@ import {
   updateContentType,
 } from './api'
 import { contentFieldTypes, createContentField, moveContentField, removeContentField, updateContentField } from './fields'
+import { createUuid } from '../../utils/createUuid'
 
 interface ContentTypesWorkspaceProps {
   contentTypes: ContentType[]
@@ -177,7 +178,7 @@ export function ContentTypesWorkspace({ contentTypes, loading, onChange }: Conte
               </Stack>
               <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
                 <Typography variant="h6">Fields</Typography>
-                <Button variant="outlined" disabled={editing.fields.length >= 50} onClick={() => changeFields([...editing.fields, createContentField(crypto.randomUUID())])}>Add field</Button>
+                <Button variant="outlined" disabled={editing.fields.length >= 50} onClick={() => changeFields([...editing.fields, createContentField(createUuid())])}>Add field</Button>
               </Stack>
               {editing.fields.length === 0 && <Alert severity="info">Add the first field to this schema.</Alert>}
               {editing.fields.map((field, index) => (

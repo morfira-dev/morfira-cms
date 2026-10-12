@@ -42,6 +42,7 @@ final readonly class PublishPage
             array_map(static fn (PageBlock $block): array => $block->toArray(), $draft->blocks),
             $draft->seo->toArray(),
             new \DateTimeImmutable('now', new \DateTimeZone('UTC')),
+            $draft->layout->toArray(),
         );
 
         return PublishedPageView::fromPublishedPage($this->publishedPages->publish($snapshot));

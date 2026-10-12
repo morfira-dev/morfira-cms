@@ -1,0 +1,22 @@
+services:
+  app:
+    networks:
+      default:
+        aliases:
+          - morfira.test
+
+  e2e:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.e2e
+    working_dir: /app/front
+    environment:
+      CI: 1
+      PLAYWRIGHT_BASE_URL: http://morfira.test:8080
+    volumes:
+      - ./front/test-results:/app/front/test-results
+      - ./front/playwright-report:/app/front/playwright-report
+    depends_on:
+      app:
+        condition: service_healthy
+    command: npm run test:e2e

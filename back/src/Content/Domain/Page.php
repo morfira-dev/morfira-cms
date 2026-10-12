@@ -14,6 +14,7 @@ final readonly class Page
         public PageStatus $status,
         public array $blocks,
         public PageSeo $seo,
+        public PageLayout $layout,
         public int $version,
         public \DateTimeImmutable $createdAt,
         public \DateTimeImmutable $updatedAt,
@@ -22,7 +23,7 @@ final readonly class Page
 
     public static function draft(PageId $id, PageTitle $title, PageSlug $slug, \DateTimeImmutable $createdAt): self
     {
-        return new self($id, $title, $slug, PageStatus::Draft, [], PageSeo::defaults(), 1, $createdAt, $createdAt);
+        return new self($id, $title, $slug, PageStatus::Draft, [], PageSeo::defaults(), PageLayout::defaults(), 1, $createdAt, $createdAt);
     }
 
     /** @param list<PageBlock> $blocks */
@@ -36,12 +37,13 @@ final readonly class Page
         int $version,
         \DateTimeImmutable $createdAt,
         \DateTimeImmutable $updatedAt,
+        ?PageLayout $layout = null,
     ): self {
-        return new self($id, $title, $slug, $status, $blocks, $seo, $version, $createdAt, $updatedAt);
+        return new self($id, $title, $slug, $status, $blocks, $seo, $layout ?? PageLayout::defaults(), $version, $createdAt, $updatedAt);
     }
 
     /** @param list<PageBlock> $blocks */
-    public function revise(PageTitle $title, PageSlug $slug, array $blocks, PageSeo $seo, \DateTimeImmutable $updatedAt): self
+    public function revise(PageTitle $title, PageSlug $slug, array $blocks, PageSeo $seo, \DateTimeImmutable $updatedAt, ?PageLayout $layout = null): self
     {
         return new self(
             $this->id,
@@ -50,6 +52,7 @@ final readonly class Page
             $this->status,
             $blocks,
             $seo,
+            $layout ?? $this->layout,
             $this->version + 1,
             $this->createdAt,
             $updatedAt,

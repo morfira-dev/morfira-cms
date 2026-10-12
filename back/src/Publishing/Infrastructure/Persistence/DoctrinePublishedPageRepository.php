@@ -36,6 +36,7 @@ final readonly class DoctrinePublishedPageRepository implements PublishedPageRep
                     'slug' => $page->slug,
                     'blocks' => json_encode($page->blocks, JSON_THROW_ON_ERROR),
                     'seo' => json_encode($page->seo, JSON_THROW_ON_ERROR),
+                    'layout' => json_encode($page->resolvedLayout(), JSON_THROW_ON_ERROR),
                     'published_at' => $page->publishedAt->format('Y-m-d H:i:s.u'),
                 ]);
                 $this->activateUsing($connection, $page);
@@ -224,6 +225,17 @@ SQL);
             throw new \UnexpectedValueException('Published SEO settings must be a JSON object.');
         }
         /** @var array<string, mixed> $seo */
+        $layout = json_decode(self::stringValue($row, 'layout'), true, flags: JSON_THROW_ON_ERROR);
+        if (!is_array($layout) || array_is_list($layout)) {
+            throw new \UnexpectedValueException('Published layout must be a JSON object.');
+        }
+        $theme = $layout['theme'] ?? null;
+        $template = $layout['template'] ?? null;
+        $header = $layout['headerNavigationCode'] ?? null;
+        $footer = $layout['footerNavigationCode'] ?? null;
+        if (!is_string($theme) || !is_string($template) || ($header !== null && !is_string($header)) || ($footer !== null && !is_string($footer))) {
+            throw new \UnexpectedValueException('Invalid published layout.');
+        }
 
         $normalizedBlocks = [];
         foreach ($blocks as $block) {
@@ -257,6 +269,7 @@ SQL);
             $normalizedBlocks,
             self::seoValue($seo),
             new \DateTimeImmutable(self::stringValue($row, 'published_at'), new \DateTimeZone('UTC')),
+            ['theme' => $theme, 'template' => $template, 'headerNavigationCode' => $header, 'footerNavigationCode' => $footer],
         );
     }
 

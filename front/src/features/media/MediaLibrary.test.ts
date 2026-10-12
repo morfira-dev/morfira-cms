@@ -10,6 +10,8 @@ const asset: MediaAsset = {
   width: 1600,
   height: 900,
   defaultAlt: 'Mountain at sunrise',
+  collection: null,
+  tags: [],
   variants: [
     { url: '/media/example/960.webp', width: 960, height: 540 },
     { url: '/media/example/480.webp', width: 480, height: 270 },

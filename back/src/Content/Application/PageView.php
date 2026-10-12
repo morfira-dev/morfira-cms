@@ -17,6 +17,8 @@ final readonly class PageView
         public array $blocks,
         /** @var array{title: string, description: string, noIndex: bool, openGraphImageAssetId: ?string} */
         public array $seo,
+        /** @var array{theme: string, template: string, headerNavigationCode: ?string, footerNavigationCode: ?string} */
+        public array $layout,
         public int $version,
         public string $createdAt,
         public string $updatedAt,
@@ -32,13 +34,14 @@ final readonly class PageView
             $page->status->value,
             array_map(static fn ($block): array => $block->toArray(), $page->blocks),
             $page->seo->toArray(),
+            $page->layout->toArray(),
             $page->version,
             $page->createdAt->format(DATE_ATOM),
             $page->updatedAt->format(DATE_ATOM),
         );
     }
 
-    /** @return array{id: string, title: string, slug: string, status: string, blocks: list<array{id: string, type: string, data: array<string, string>}>, seo: array{title: string, description: string, noIndex: bool, openGraphImageAssetId: ?string}, version: int, createdAt: string, updatedAt: string} */
+    /** @return array{id: string, title: string, slug: string, status: string, blocks: list<array{id: string, type: string, data: array<string, string>}>, seo: array{title: string, description: string, noIndex: bool, openGraphImageAssetId: ?string}, layout: array{theme: string, template: string, headerNavigationCode: ?string, footerNavigationCode: ?string}, version: int, createdAt: string, updatedAt: string} */
     public function toArray(): array
     {
         return [
@@ -48,6 +51,7 @@ final readonly class PageView
             'status' => $this->status,
             'blocks' => $this->blocks,
             'seo' => $this->seo,
+            'layout' => $this->layout,
             'version' => $this->version,
             'createdAt' => $this->createdAt,
             'updatedAt' => $this->updatedAt,
