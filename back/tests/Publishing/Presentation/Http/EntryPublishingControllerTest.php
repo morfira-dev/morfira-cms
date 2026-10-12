@@ -36,6 +36,7 @@ final class EntryPublishingControllerTest extends TestCase
             'First',
             'first',
             [],
+            [],
             new \DateTimeImmutable('2026-10-11T12:00:00+00:00'),
         );
         $published->publish($snapshot);

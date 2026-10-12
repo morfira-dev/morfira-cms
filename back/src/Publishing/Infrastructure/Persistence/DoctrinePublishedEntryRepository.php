@@ -26,7 +26,10 @@ final readonly class DoctrinePublishedEntryRepository implements PublishedEntryR
         }
         try {
             $this->connection->transactional(function (Connection $c) use ($e): void {
-                $c->insert('published_entry_snapshots', ['id' => $e->snapshotId, 'entry_id' => $e->entryId, 'source_version' => $e->sourceVersion, 'content_type' => json_encode($e->contentType, JSON_THROW_ON_ERROR), 'title' => $e->title, 'slug' => $e->slug, 'values_json' => json_encode($e->values, JSON_THROW_ON_ERROR | JSON_FORCE_OBJECT), 'published_at' => $e->publishedAt->format('Y-m-d H:i:s.u')]);
+                $c->insert('published_entry_snapshots', ['id' => $e->snapshotId, 'entry_id' => $e->entryId, 'source_version' => $e->sourceVersion, 'content_type' => json_encode($e->contentType, JSON_THROW_ON_ERROR), 'title' => $e->title, 'slug' => $e->slug, 'values_json' => json_encode($e->values, JSON_THROW_ON_ERROR | JSON_FORCE_OBJECT), 'taxonomies' => json_encode($e->taxonomies, JSON_THROW_ON_ERROR), 'published_at' => $e->publishedAt->format('Y-m-d H:i:s.u')]);
+                foreach ($e->taxonomies as $term) {
+                    $c->insert('published_entry_terms', ['snapshot_id' => $e->snapshotId, 'taxonomy_slug' => $term['taxonomySlug'], 'term_slug' => $term['termSlug']]);
+                }
                 $this->activateUsing($c, $e);
             });
         } catch (UniqueConstraintViolationException) {
@@ -49,14 +52,21 @@ final readonly class DoctrinePublishedEntryRepository implements PublishedEntryR
         return false === $r ? null : $this->hydrate($r);
     }
 
-    public function list(string $apiName, int $limit, int $offset): array
+    public function list(string $apiName, int $limit, int $offset, ?string $taxonomy = null, ?string $term = null): array
     {
-        return array_map($this->hydrate(...), $this->connection->fetchAllAssociative('SELECT s.* FROM published_entry_routes r JOIN published_entry_snapshots s ON s.id=r.snapshot_id WHERE r.api_name=? ORDER BY s.published_at DESC LIMIT ? OFFSET ?', [$apiName, $limit, $offset], [\Doctrine\DBAL\ParameterType::STRING, \Doctrine\DBAL\ParameterType::INTEGER, \Doctrine\DBAL\ParameterType::INTEGER]));
+        $join = $taxonomy === null ? '' : ' JOIN published_entry_terms t ON t.snapshot_id=s.id';
+        $filter = $taxonomy === null ? '' : ' AND t.taxonomy_slug=? AND t.term_slug=?';
+        $params = $taxonomy === null ? [$apiName,$limit,$offset] : [$apiName,$taxonomy,$term,$limit,$offset];
+        $types = $taxonomy === null ? [\Doctrine\DBAL\ParameterType::STRING,\Doctrine\DBAL\ParameterType::INTEGER,\Doctrine\DBAL\ParameterType::INTEGER] : [\Doctrine\DBAL\ParameterType::STRING,\Doctrine\DBAL\ParameterType::STRING,\Doctrine\DBAL\ParameterType::STRING,\Doctrine\DBAL\ParameterType::INTEGER,\Doctrine\DBAL\ParameterType::INTEGER];
+        return array_map($this->hydrate(...), $this->connection->fetchAllAssociative('SELECT s.* FROM published_entry_routes r JOIN published_entry_snapshots s ON s.id=r.snapshot_id'.$join.' WHERE r.api_name=?'.$filter.' ORDER BY s.published_at DESC LIMIT ? OFFSET ?', $params, $types));
     }
 
-    public function count(string $apiName): int
+    public function count(string $apiName, ?string $taxonomy = null, ?string $term = null): int
     {
-        $value = $this->connection->fetchOne('SELECT COUNT(*) FROM published_entry_routes WHERE api_name = ?', [$apiName]);
+        $join = $taxonomy === null ? '' : ' JOIN published_entry_terms t ON t.snapshot_id=r.snapshot_id';
+        $filter = $taxonomy === null ? '' : ' AND t.taxonomy_slug=? AND t.term_slug=?';
+        $params = $taxonomy === null ? [$apiName] : [$apiName,$taxonomy,$term];
+        $value = $this->connection->fetchOne('SELECT COUNT(*) FROM published_entry_routes r'.$join.' WHERE r.api_name=?'.$filter, $params);
         if (!is_int($value) && !(is_string($value) && ctype_digit($value))) {
             throw new \UnexpectedValueException('Published entry count must be an integer.');
         }
@@ -93,7 +103,16 @@ final readonly class DoctrinePublishedEntryRepository implements PublishedEntryR
     /** @param array<string,mixed> $r */
     private function hydrate(array $r): PublishedEntry
     {
-        return new PublishedEntry(self::s($r, 'id'), self::s($r, 'entry_id'), self::i($r, 'source_version'), self::contentType($r), self::s($r, 'title'), self::s($r, 'slug'), self::values($r), new \DateTimeImmutable(self::s($r, 'published_at'), new \DateTimeZone('UTC')));
+        return new PublishedEntry(self::s($r, 'id'), self::s($r, 'entry_id'), self::i($r, 'source_version'), self::contentType($r), self::s($r, 'title'), self::s($r, 'slug'), self::values($r), self::taxonomies($r), new \DateTimeImmutable(self::s($r, 'published_at'), new \DateTimeZone('UTC')));
+    }
+
+    /** @param array<string,mixed> $r
+     * @return list<array{taxonomyId:string,taxonomySlug:string,termId:string,termSlug:string,name:string}>
+     */
+    private static function taxonomies(array $r): array
+    {
+        $value=json_decode(self::s($r,'taxonomies'),true,flags:JSON_THROW_ON_ERROR);if(!is_array($value)||!array_is_list($value))throw new \UnexpectedValueException('Invalid published taxonomies.');
+        $result=[];foreach($value as $item){if(!is_array($item))throw new \UnexpectedValueException('Invalid published taxonomy term.');$taxonomyId=$item['taxonomyId']??null;$taxonomySlug=$item['taxonomySlug']??null;$termId=$item['termId']??null;$termSlug=$item['termSlug']??null;$name=$item['name']??null;if(!is_string($taxonomyId)||!is_string($taxonomySlug)||!is_string($termId)||!is_string($termSlug)||!is_string($name))throw new \UnexpectedValueException('Invalid published taxonomy term.');$result[]=['taxonomyId'=>$taxonomyId,'taxonomySlug'=>$taxonomySlug,'termId'=>$termId,'termSlug'=>$termSlug,'name'=>$name];}return $result;
     }
 
     /**

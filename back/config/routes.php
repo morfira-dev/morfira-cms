@@ -12,4 +12,5 @@ return static function (RoutingConfigurator $routes): void {
     $routes->import('../src/Media/Presentation/Http/', 'attribute');
     $routes->import('../src/Navigation/Presentation/Http/', 'attribute');
     $routes->import('../src/Schema/Presentation/Http/', 'attribute');
+    $routes->import('../src/Taxonomy/Presentation/Http/', 'attribute');
 };

@@ -56,7 +56,12 @@ final readonly class EntryPublishingController
         if (null === $limit || null === $offset) {
             return new JsonResponse(['error' => 'Invalid pagination parameters.'], 422);
         }
-        $page = ($this->listEntries)($type, $limit, $offset);
+        $taxonomy = $request->query->get('taxonomy');
+        $term = $request->query->get('term');
+        if (($taxonomy === null) !== ($term === null)) {
+            return new JsonResponse(['error' => 'taxonomy and term must be supplied together.'], 422);
+        }
+        $page = ($this->listEntries)($type, $limit, $offset, $taxonomy, $term);
 
         return new JsonResponse(['items' => array_map(static fn (PublishedEntryView $entry): array => $entry->toArray(), $page['items']), 'total' => $page['total'], 'limit' => $page['limit'], 'offset' => $page['offset']]);
     }

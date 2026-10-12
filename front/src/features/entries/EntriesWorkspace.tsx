@@ -17,6 +17,8 @@ import {
 import type { ContentField, ContentType } from '../contentTypes/api'
 import type { MediaAsset } from '../media/api'
 import { PublicationScheduler } from '../publishing/PublicationScheduler'
+import { EntryTaxonomyAssignments } from '../taxonomy/EntryTaxonomyAssignments'
+import type { Taxonomy } from '../taxonomy/api'
 import {
   createEntry,
   type Entry,
@@ -29,10 +31,10 @@ import {
 } from './api'
 import { initializeEntryValues, publishedEntryUrl, setEntryValue, validateEntryValues } from './values'
 
-interface EntriesWorkspaceProps { contentTypes: ContentType[]; mediaAssets: MediaAsset[] }
+interface EntriesWorkspaceProps { contentTypes: ContentType[]; mediaAssets: MediaAsset[]; taxonomies: Taxonomy[] }
 interface EntryForm { id: string | null; title: string; slug: string; values: EntryValues; version: number | null }
 
-export function EntriesWorkspace({ contentTypes, mediaAssets }: EntriesWorkspaceProps) {
+export function EntriesWorkspace({ contentTypes, mediaAssets, taxonomies }: EntriesWorkspaceProps) {
   const [contentTypeId, setContentTypeId] = useState('')
   const [entries, setEntries] = useState<Entry[]>([])
   const [editing, setEditing] = useState<EntryForm | null>(null)
@@ -174,6 +176,7 @@ export function EntriesWorkspace({ contentTypes, mediaAssets }: EntriesWorkspace
                 </Stack>
                 {dirty && editing.id && <Alert severity="warning">Save this version before publishing it.</Alert>}
                 {editing.id && editing.version !== null && <PublicationScheduler target="entry" targetId={editing.id} sourceVersion={editing.version} dirty={dirty} />}
+                {editing.id && <EntryTaxonomyAssignments entryId={editing.id} taxonomies={taxonomies} />}
                 <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
                   <TextField label="Title" value={editing.title} onChange={(event) => { setEditing({ ...editing, title: event.target.value }); setDirty(true); setPublishedUrl(null) }} fullWidth required />
                   <TextField label="Slug" value={editing.slug} onChange={(event) => { setEditing({ ...editing, slug: event.target.value.toLowerCase() }); setDirty(true); setPublishedUrl(null) }} fullWidth required helperText="Lowercase letters, numbers and hyphens" />

@@ -39,20 +39,22 @@ final class InMemoryPublishedEntryRepository implements PublishedEntryRepository
         return $this->snapshots[$entryId.':'.$sourceVersion] ?? null;
     }
 
-    public function list(string $apiName, int $limit, int $offset): array
+    public function list(string $apiName, int $limit, int $offset, ?string $taxonomy = null, ?string $term = null): array
     {
         $items = [];
         foreach ($this->routes as $route => $key) {
             if (str_starts_with($route, $apiName.'/') && isset($this->snapshots[$key])) {
-                $items[] = $this->snapshots[$key];
+                $snapshot=$this->snapshots[$key];
+                if($taxonomy!==null&&!array_any($snapshot->taxonomies,static fn(array $item):bool=>$item['taxonomySlug']===$taxonomy&&$item['termSlug']===$term))continue;
+                $items[] = $snapshot;
             }
         }
 
         return array_slice($items, $offset, $limit);
     }
 
-    public function count(string $apiName): int
+    public function count(string $apiName, ?string $taxonomy = null, ?string $term = null): int
     {
-        return count($this->list($apiName, PHP_INT_MAX, 0));
+        return count($this->list($apiName, PHP_INT_MAX, 0, $taxonomy, $term));
     }
 }

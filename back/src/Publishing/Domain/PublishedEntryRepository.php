@@ -13,7 +13,7 @@ interface PublishedEntryRepository
     public function find(string $apiName, string $slug): ?PublishedEntry;
 
     /** @return list<PublishedEntry> */
-    public function list(string $apiName, int $limit, int $offset): array;
+    public function list(string $apiName, int $limit, int $offset, ?string $taxonomy = null, ?string $term = null): array;
 
-    public function count(string $apiName): int;
+    public function count(string $apiName, ?string $taxonomy = null, ?string $term = null): int;
 }

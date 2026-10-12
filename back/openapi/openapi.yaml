@@ -955,6 +955,77 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /api/v1/admin/taxonomies:
+    get:
+      operationId: listTaxonomies
+      tags: [Entries]
+      summary: List taxonomies and their terms
+      security: [{ sessionCookie: [] }]
+      responses:
+        '200':
+          description: Taxonomy collection.
+          content: { application/json: { schema: { $ref: '#/components/schemas/TaxonomyCollection' } } }
+    post:
+      operationId: createTaxonomy
+      tags: [Entries]
+      summary: Create a taxonomy
+      security: [{ sessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/CsrfTokenHeader' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CreateTaxonomyRequest' } } }
+      responses:
+        '201':
+          description: Taxonomy created.
+          content: { application/json: { schema: { $ref: '#/components/schemas/Taxonomy' } } }
+        '409': { description: Taxonomy slug conflict, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '422': { description: Invalid taxonomy, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/taxonomies/{id}/terms:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: createTaxonomyTerm
+      tags: [Entries]
+      summary: Create a term
+      security: [{ sessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/CsrfTokenHeader' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CreateTaxonomyTermRequest' } } }
+      responses:
+        '201':
+          description: Updated taxonomy.
+          content: { application/json: { schema: { $ref: '#/components/schemas/Taxonomy' } } }
+        '404': { description: Taxonomy not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '409': { description: Term slug conflict, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '422': { description: Invalid term, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/entries/{id}/terms:
+    parameters:
+      - $ref: '#/components/parameters/EntryId'
+    get:
+      operationId: getEntryTerms
+      tags: [Entries]
+      summary: Get entry term assignments
+      security: [{ sessionCookie: [] }]
+      responses:
+        '200':
+          description: Assigned terms.
+          content: { application/json: { schema: { $ref: '#/components/schemas/TaxonomyTermCollection' } } }
+    put:
+      operationId: putEntryTerms
+      tags: [Entries]
+      summary: Replace entry term assignments
+      security: [{ sessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/CsrfTokenHeader' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/PutEntryTermsRequest' } } }
+      responses:
+        '200':
+          description: Assigned terms.
+          content: { application/json: { schema: { $ref: '#/components/schemas/TaxonomyTermCollection' } } }
+        '404': { description: Entry or term not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '422': { description: Invalid assignment, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
   /api/v1/admin/navigation:
     get:
       operationId: listNavigationMenus
@@ -1195,6 +1266,14 @@ paths:
       tags: [Entries, Delivery]
       summary: List active published entry snapshots for a content type
       parameters:
+        - name: taxonomy
+          in: query
+          schema: { type: string, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' }
+          description: Taxonomy slug; must be supplied together with term.
+        - name: term
+          in: query
+          schema: { type: string, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' }
+          description: Term slug; must be supplied together with taxonomy.
         - $ref: '#/components/parameters/PublicEntriesLimit'
         - $ref: '#/components/parameters/PublicEntriesOffset'
       responses:
@@ -1685,6 +1764,10 @@ components:
           $ref: '#/components/schemas/EntrySlug'
         values:
           $ref: '#/components/schemas/EntryValues'
+        taxonomies:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublishedTaxonomyTerm'
         publishedAt:
           type: string
           format: date-time
@@ -1707,6 +1790,75 @@ components:
         offset:
           type: integer
           minimum: 0
+    CreateTaxonomyRequest:
+      type: object
+      additionalProperties: false
+      required: [name, slug, hierarchical]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        slug: { type: string, maxLength: 120, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' }
+        hierarchical: { type: boolean }
+    CreateTaxonomyTermRequest:
+      type: object
+      additionalProperties: false
+      required: [name, slug, parentId]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        slug: { type: string, maxLength: 120, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' }
+        parentId: { type: [string, 'null'], format: uuid }
+    PutEntryTermsRequest:
+      type: object
+      additionalProperties: false
+      required: [termIds]
+      properties:
+        termIds:
+          type: array
+          uniqueItems: true
+          items: { type: string, format: uuid }
+    TaxonomyTerm:
+      type: object
+      additionalProperties: false
+      required: [id, taxonomyId, name, slug, parentId, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        taxonomyId: { type: string, format: uuid }
+        name: { type: string }
+        slug: { type: string }
+        parentId: { type: [string, 'null'], format: uuid }
+        createdAt: { type: string, format: date-time }
+    TaxonomyTermCollection:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/TaxonomyTerm' } }
+    Taxonomy:
+      type: object
+      additionalProperties: false
+      required: [id, name, slug, hierarchical, createdAt, terms]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        slug: { type: string }
+        hierarchical: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        terms: { type: array, items: { $ref: '#/components/schemas/TaxonomyTerm' } }
+    TaxonomyCollection:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Taxonomy' } }
+    PublishedTaxonomyTerm:
+      type: object
+      additionalProperties: false
+      required: [taxonomyId, taxonomySlug, termId, termSlug, name]
+      properties:
+        taxonomyId: { type: string, format: uuid }
+        taxonomySlug: { type: string }
+        termId: { type: string, format: uuid }
+        termSlug: { type: string }
+        name: { type: string }
     NavigationCode:
       type: string
       minLength: 1

@@ -324,6 +324,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/taxonomies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List taxonomies and their terms */
+        get: operations["listTaxonomies"];
+        put?: never;
+        /** Create a taxonomy */
+        post: operations["createTaxonomy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/taxonomies/{id}/terms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a term */
+        post: operations["createTaxonomyTerm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/entries/{id}/terms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["EntryId"];
+            };
+            cookie?: never;
+        };
+        /** Get entry term assignments */
+        get: operations["getEntryTerms"];
+        /** Replace entry term assignments */
+        put: operations["putEntryTerms"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/navigation": {
         parameters: {
             query?: never;
@@ -623,6 +680,7 @@ export interface components {
             title: string;
             slug: components["schemas"]["EntrySlug"];
             values: components["schemas"]["EntryValues"];
+            taxonomies?: components["schemas"]["PublishedTaxonomyTerm"][];
             /** Format: date-time */
             publishedAt: string;
         };
@@ -631,6 +689,57 @@ export interface components {
             total: number;
             limit: number;
             offset: number;
+        };
+        CreateTaxonomyRequest: {
+            name: string;
+            slug: string;
+            hierarchical: boolean;
+        };
+        CreateTaxonomyTermRequest: {
+            name: string;
+            slug: string;
+            /** Format: uuid */
+            parentId: string | null;
+        };
+        PutEntryTermsRequest: {
+            termIds: string[];
+        };
+        TaxonomyTerm: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            taxonomyId: string;
+            name: string;
+            slug: string;
+            /** Format: uuid */
+            parentId: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        TaxonomyTermCollection: {
+            items: components["schemas"]["TaxonomyTerm"][];
+        };
+        Taxonomy: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            slug: string;
+            hierarchical: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            terms: components["schemas"]["TaxonomyTerm"][];
+        };
+        TaxonomyCollection: {
+            items: components["schemas"]["Taxonomy"][];
+        };
+        PublishedTaxonomyTerm: {
+            /** Format: uuid */
+            taxonomyId: string;
+            taxonomySlug: string;
+            /** Format: uuid */
+            termId: string;
+            termSlug: string;
+            name: string;
         };
         NavigationCode: string;
         NavigationHref: string;
@@ -2189,6 +2298,196 @@ export interface operations {
             };
         };
     };
+    listTaxonomies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Taxonomy collection. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxonomyCollection"];
+                };
+            };
+        };
+    };
+    createTaxonomy: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Session-bound token obtained from `/api/v1/auth/csrf`. */
+                "X-CSRF-Token": components["parameters"]["CsrfTokenHeader"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTaxonomyRequest"];
+            };
+        };
+        responses: {
+            /** @description Taxonomy created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Taxonomy"];
+                };
+            };
+            /** @description Taxonomy slug conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid taxonomy */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    createTaxonomyTerm: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Session-bound token obtained from `/api/v1/auth/csrf`. */
+                "X-CSRF-Token": components["parameters"]["CsrfTokenHeader"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTaxonomyTermRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated taxonomy. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Taxonomy"];
+                };
+            };
+            /** @description Taxonomy not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Term slug conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid term */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getEntryTerms: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["EntryId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Assigned terms. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxonomyTermCollection"];
+                };
+            };
+        };
+    };
+    putEntryTerms: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Session-bound token obtained from `/api/v1/auth/csrf`. */
+                "X-CSRF-Token": components["parameters"]["CsrfTokenHeader"];
+            };
+            path: {
+                id: components["parameters"]["EntryId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PutEntryTermsRequest"];
+            };
+        };
+        responses: {
+            /** @description Assigned terms. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxonomyTermCollection"];
+                };
+            };
+            /** @description Entry or term not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid assignment */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     listNavigationMenus: {
         parameters: {
             query?: never;
@@ -2515,6 +2814,10 @@ export interface operations {
     listPublishedEntries: {
         parameters: {
             query?: {
+                /** @description Taxonomy slug; must be supplied together with term. */
+                taxonomy?: string;
+                /** @description Term slug; must be supplied together with taxonomy. */
+                term?: string;
                 limit?: components["parameters"]["PublicEntriesLimit"];
                 offset?: components["parameters"]["PublicEntriesOffset"];
             };

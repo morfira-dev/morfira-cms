@@ -7,6 +7,8 @@ import { MediaLibrary } from '../media/MediaLibrary'
 import { getMedia, type MediaAsset } from '../media/api'
 import { NavigationWorkspace } from '../navigation/NavigationWorkspace'
 import { PagesWorkspace } from '../pages/PagesWorkspace'
+import { getTaxonomies, type Taxonomy } from '../taxonomy/api'
+import { TaxonomyWorkspace } from '../taxonomy/TaxonomyWorkspace'
 
 export function ContentWorkspace() {
   const [assets, setAssets] = useState<MediaAsset[]>([])
@@ -14,6 +16,7 @@ export function ContentWorkspace() {
   const [error, setError] = useState<string | null>(null)
   const [contentTypes, setContentTypes] = useState<ContentType[]>([])
   const [loadingContentTypes, setLoadingContentTypes] = useState(true)
+  const [taxonomies, setTaxonomies] = useState<Taxonomy[]>([])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -28,6 +31,8 @@ export function ContentWorkspace() {
 
     return () => controller.abort()
   }, [])
+
+  useEffect(() => { const controller=new AbortController();getTaxonomies(controller.signal).then(setTaxonomies).catch((reason:unknown)=>{if(!(reason instanceof DOMException&&reason.name==='AbortError'))setError(reason instanceof Error?reason.message:'Could not load taxonomies.')});return()=>controller.abort() }, [])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -55,7 +60,9 @@ export function ContentWorkspace() {
       <Divider />
       <ContentTypesWorkspace contentTypes={contentTypes} loading={loadingContentTypes} onChange={setContentTypes} />
       <Divider />
-      <EntriesWorkspace contentTypes={contentTypes} mediaAssets={assets} />
+      <TaxonomyWorkspace taxonomies={taxonomies} onChange={setTaxonomies} />
+      <Divider />
+      <EntriesWorkspace contentTypes={contentTypes} mediaAssets={assets} taxonomies={taxonomies} />
     </Stack>
   )
 }

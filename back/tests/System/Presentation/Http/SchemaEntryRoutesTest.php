@@ -23,6 +23,8 @@ final class SchemaEntryRoutesTest extends KernelTestCase
         self::assertSame('/api/v1/admin/entries/{id}/publish', $routes->get('publishing.entries.publish')?->getPath());
         self::assertSame('/api/v1/admin/entries/{id}/schedule', $routes->get('publishing.entries.schedule.put')?->getPath());
         self::assertSame('/api/v1/admin/pages/{id}/schedule', $routes->get('publishing.pages.schedule.put')?->getPath());
+        self::assertSame('/api/v1/admin/taxonomies', $routes->get('taxonomy.list')?->getPath());
+        self::assertSame('/api/v1/admin/entries/{id}/terms', $routes->get('taxonomy.entries.put')?->getPath());
         self::assertSame('/api/v1/content/entries/{type}', $routes->get('publishing.entries.list')?->getPath());
         self::assertSame('/api/v1/content/entries/{type}/{slug}', $routes->get('publishing.entries.get')?->getPath());
         self::assertSame('/content/{type}/{slug}', $routes->get('publishing.entries.web')?->getPath());

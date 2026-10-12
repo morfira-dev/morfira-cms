@@ -13,11 +13,11 @@ final readonly class ListPublishedEntries
     }
 
     /** @return array{items:list<PublishedEntryView>,total:int,limit:int,offset:int} */
-    public function __invoke(string $type, int $limit, int $offset): array
+    public function __invoke(string $type, int $limit, int $offset, ?string $taxonomy = null, ?string $term = null): array
     {
         return [
-            'items' => array_map(PublishedEntryView::fromEntry(...), $this->entries->list($type, $limit, $offset)),
-            'total' => $this->entries->count($type),
+            'items' => array_map(PublishedEntryView::fromEntry(...), $this->entries->list($type, $limit, $offset, $taxonomy, $term)),
+            'total' => $this->entries->count($type, $taxonomy, $term),
             'limit' => $limit,
             'offset' => $offset,
         ];

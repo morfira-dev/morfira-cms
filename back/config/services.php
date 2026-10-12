@@ -27,6 +27,8 @@ use Cms\Publishing\Domain\PublishedEntryRepository;
 use Cms\Publishing\Infrastructure\Persistence\DoctrinePublishedEntryRepository;
 use Cms\Publishing\Domain\PublicationScheduleRepository;
 use Cms\Publishing\Infrastructure\Persistence\DoctrinePublicationScheduleRepository;
+use Cms\Taxonomy\Domain\TaxonomyRepository;
+use Cms\Taxonomy\Infrastructure\Persistence\DoctrineTaxonomyRepository;
 
 return static function (ContainerConfigurator $container): void {
     $services = $container->services()
@@ -53,4 +55,5 @@ return static function (ContainerConfigurator $container): void {
     $services->alias(EntryRepository::class, DoctrineEntryRepository::class);
     $services->alias(PublishedEntryRepository::class, DoctrinePublishedEntryRepository::class);
     $services->alias(PublicationScheduleRepository::class, DoctrinePublicationScheduleRepository::class);
+    $services->alias(TaxonomyRepository::class, DoctrineTaxonomyRepository::class);
 };
