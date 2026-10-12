@@ -1,3 +1,9 @@
+## [1.1.0](https://github.com/nuykon/morfira-cms/compare/v1.0.0...v1.1.0) (2026-10-12)
+
+### Features
+
+* **publishing:** add scheduled publishing ([0859d90](https://github.com/nuykon/morfira-cms/commit/0859d90ec91d9672d3358e01fa1314115245b3fe))
+
 ## 1.0.0 (2026-10-12)
 
 ### Features
