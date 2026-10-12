@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex,nofollow">
+    <title>{{ page.seo.title ?: page.title }} · Preview</title>
+    {% if page.seo.description %}<meta name="description" content="{{ page.seo.description }}">{% endif %}
+    <style>
+        :root { color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #182230; }
+        * { box-sizing: border-box; }
+        body { margin: 0; background: #fff; }
+        .preview-bar { padding: 10px 24px; background: #111827; color: #fff; font-size: 14px; }
+        .hero { padding: clamp(72px, 10vw, 144px) 24px; background: #f4f6ff; text-align: center; }
+        .hero h1 { max-width: 900px; margin: 0 auto; font-size: clamp(42px, 7vw, 84px); line-height: .98; letter-spacing: -.045em; }
+        .hero p { max-width: 680px; margin: 28px auto 0; color: #52606d; font-size: 20px; line-height: 1.6; }
+        .rich-text { max-width: 760px; margin: 0 auto; padding: 64px 24px; color: #344054; font-size: 18px; line-height: 1.75; white-space: pre-line; }
+        .image-block { max-width: 1200px; margin: 0 auto; padding: 32px 24px 64px; }
+        .image-block img { display: block; width: 100%; height: auto; border-radius: 20px; }
+        .image-block figcaption { margin-top: 12px; color: #667085; font-size: 14px; text-align: center; }
+        .empty { max-width: 760px; margin: 80px auto; padding: 32px; border: 1px dashed #98a2b3; border-radius: 16px; color: #667085; text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="preview-bar">Draft preview · revision {{ page.version }}</div>
+
+    {% if page.blocks is empty %}
+        <div class="empty">This page has no blocks yet.</div>
+    {% endif %}
+
+    {% for block in page.blocks %}
+        {% if block.type == 'hero' %}
+            <section class="hero">
+                <h1>{{ block.data.heading }}</h1>
+                {% if block.data.text is defined and block.data.text %}<p>{{ block.data.text }}</p>{% endif %}
+            </section>
+        {% elseif block.type == 'richText' %}
+            <section class="rich-text">{{ block.data.content }}</section>
+        {% elseif block.type == 'image' %}
+            {% set asset = media_asset(block.data.assetId) %}
+            {% if asset %}
+                <figure class="image-block">
+                    <img
+                        src="{{ asset.variants|last.url }}"
+                        srcset="{% for variant in asset.variants %}{{ variant.url }} {{ variant.width }}w{% if not loop.last %}, {% endif %}{% endfor %}"
+                        sizes="(max-width: 1248px) calc(100vw - 48px), 1200px"
+                        width="{{ asset.width }}"
+                        height="{{ asset.height }}"
+                        alt="{{ block.data.alt }}"
+                    >
+                    {% if block.data.caption is defined and block.data.caption %}<figcaption>{{ block.data.caption }}</figcaption>{% endif %}
+                </figure>
+            {% endif %}
+        {% endif %}
+    {% endfor %}
+</body>
+</html>

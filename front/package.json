@@ -1,0 +1,30 @@
+{
+  "name": "@morfira/admin",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "api:types": "openapi-typescript ../back/openapi/openapi.yaml -o src/api/schema.d.ts",
+    "boundaries": "node scripts/check-ui-boundaries.mjs",
+    "build": "npm run api:types && tsc --noEmit && vite build",
+    "check": "npm run boundaries && npm run test && npm run build",
+    "dev": "vite",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/material": "^9.4.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "openapi-typescript": "^7.10.1",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.3",
+    "vitest": "^5.0.3"
+  }
+}

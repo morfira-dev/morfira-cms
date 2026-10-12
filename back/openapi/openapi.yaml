@@ -1,0 +1,1984 @@
+openapi: 3.1.0
+info:
+  title: Morfira CMS API
+  version: 0.9.0
+  description: Stable HTTP contract shared by Admin Studio and headless clients.
+servers:
+  - url: /
+tags:
+  - name: Admin Content
+    description: Authoring operations available to authenticated editors.
+  - name: Publishing
+    description: Promote an exact draft revision to an immutable delivery snapshot.
+  - name: Delivery
+    description: Public headless delivery of published snapshots only.
+  - name: Identity
+    description: First-owner setup and session authentication.
+  - name: Media
+    description: Upload and reuse immutable, safely re-encoded image assets.
+  - name: SEO
+    description: Search-engine discovery documents generated from active published snapshots.
+  - name: Navigation
+    description: Versioned navigation drafts and immutable public menu snapshots.
+  - name: Content Schema
+    description: Versioned custom content-type definitions.
+  - name: Entries
+    description: Schema-validated custom content drafts and immutable published snapshots.
+paths:
+  /api/v1/setup:
+    get:
+      operationId: getSetupStatus
+      tags: [Identity]
+      summary: Check whether the first owner must be created
+      responses:
+        '200':
+          description: Current installation state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SetupStatus'
+    post:
+      operationId: setupOwner
+      tags: [Identity]
+      summary: Atomically create the first CMS owner
+      parameters:
+        - $ref: '#/components/parameters/CsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetupOwnerRequest'
+      responses:
+        '201':
+          description: Owner created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticatedUser'
+        '409':
+          description: The CMS has already been configured.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Invalid email or password.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/auth/csrf:
+    get:
+      operationId: getCsrfToken
+      tags: [Identity]
+      summary: Issue a session-bound CSRF token
+      responses:
+        '200':
+          description: CSRF token for subsequent mutations.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CsrfToken'
+  /api/v1/auth/login:
+    post:
+      operationId: login
+      tags: [Identity]
+      summary: Start an authenticated editor session
+      parameters:
+        - $ref: '#/components/parameters/CsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Authenticated user.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticatedUser'
+        '401':
+          description: Invalid credentials.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Too many login attempts.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/auth/me:
+    get:
+      operationId: getAuthenticatedUser
+      tags: [Identity]
+      summary: Get the current authenticated user
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Authenticated user.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticatedUser'
+        '401':
+          description: No authenticated session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/auth/logout:
+    post:
+      operationId: logout
+      tags: [Identity]
+      summary: End the authenticated session
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfTokenHeader'
+      responses:
+        '204':
+          description: Session ended.
+  /api/v1/admin/media:
+    get:
+      operationId: listMedia
+      tags: [Media]
+      summary: List image assets
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Image assets ordered from newest to oldest.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaAssetCollection'
+        '401':
+          description: No authenticated editor session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      operationId: uploadMedia
+      tags: [Media]
+      summary: Upload and safely re-encode an image
+      description: >-
+        Accepts JPEG, PNG or WebP input up to 10 MiB. The server validates the
+        decoded image instead of trusting the client MIME type, strips metadata,
+        and creates immutable WebP variants. SVG input is not accepted.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UploadMediaRequest'
+      responses:
+        '201':
+          description: Image validated, re-encoded and stored.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaAsset'
+        '401':
+          description: No authenticated editor session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Missing or invalid CSRF token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          description: File exceeds the 10 MiB upload limit.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '415':
+          description: File is not a supported JPEG, PNG or WebP image.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: The image cannot be decoded or the alt text is invalid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/admin/pages:
+    get:
+      operationId: listPages
+      tags: [Admin Content]
+      summary: List pages
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Pages ordered from newest to oldest.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageCollection'
+    post:
+      operationId: createPage
+      tags: [Admin Content]
+      summary: Create a page draft
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePageRequest'
+      responses:
+        '201':
+          description: Draft created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page'
+        '409':
+          description: The slug is already in use.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: The request does not satisfy content rules.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/admin/pages/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getPage
+      tags: [Admin Content]
+      summary: Read a page draft
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Current draft revision.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page'
+        '404':
+          description: Page not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      operationId: updatePage
+      tags: [Admin Content]
+      summary: Save a new page revision
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePageRequest'
+      responses:
+        '200':
+          description: Revision saved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page'
+        '404':
+          description: Page not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Slug collision or optimistic locking conflict.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Invalid page or block data.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/admin/pages/{id}/publish:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      operationId: publishPage
+      tags: [Publishing]
+      summary: Publish an exact draft revision
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublishPageRequest'
+      responses:
+        '200':
+          description: Existing idempotent snapshot or newly published snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublishedPage'
+        '404':
+          description: Draft page not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Stale version or public slug collision.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Invalid publication request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/admin/pages/{id}/redirects:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: listPageRedirects
+      tags: [Publishing]
+      summary: List permanent old slugs pointing to the page's active route
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Redirect history for this page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublishedRedirectCollection'
+        '401':
+          description: No authenticated editor session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Invalid page identifier.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/admin/content-types:
+    get:
+      operationId: listContentTypes
+      tags: [Content Schema]
+      summary: List custom content types
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Content types ordered from newest to oldest.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContentTypeCollection'
+        '401':
+          description: No authenticated editor session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      operationId: createContentType
+      tags: [Content Schema]
+      summary: Create a custom content type
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateContentTypeRequest'
+      responses:
+        '201':
+          description: Content type created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContentType'
+        '401':
+          description: No authenticated editor session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Missing or invalid CSRF token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: API name or field identifier/key uniqueness conflict.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Invalid content-type definition.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/admin/content-types/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ContentTypeId'
+    get:
+      operationId: getContentType
+      tags: [Content Schema]
+      summary: Read a custom content type
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Current content-type version.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContentType'
+        '401':
+          description: No authenticated editor session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Content type not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      operationId: updateContentType
+      tags: [Content Schema]
+      summary: Save a new content-type version
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateContentTypeRequest'
+      responses:
+        '200':
+          description: Content-type version saved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContentType'
+        '401':
+          description: No authenticated editor session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Missing or invalid CSRF token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Content type not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Stale version or API name/field uniqueness conflict.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Invalid content-type definition.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/admin/entries:
+    get:
+      operationId: listEntries
+      tags: [Entries]
+      summary: List entry drafts for one content type
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/EntryContentTypeId'
+      responses:
+        '200':
+          description: Entry drafts ordered from newest to oldest.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntryCollection'
+        '401':
+          description: No authenticated editor session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Content type not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Missing or invalid contentTypeId filter.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      operationId: createEntry
+      tags: [Entries]
+      summary: Create a schema-validated entry draft
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateEntryRequest'
+      responses:
+        '201':
+          description: Entry draft created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Entry'
+        '401':
+          description: No authenticated editor session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Missing or invalid CSRF token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Content type not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Slug is already used by another entry of this content type.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Entry values do not satisfy the content-type schema.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/admin/entries/{id}:
+    parameters:
+      - $ref: '#/components/parameters/EntryId'
+    get:
+      operationId: getEntry
+      tags: [Entries]
+      summary: Read an entry draft
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Current entry draft version.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Entry'
+        '401':
+          description: No authenticated editor session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Entry not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      operationId: updateEntry
+      tags: [Entries]
+      summary: Save a new schema-validated entry version
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateEntryRequest'
+      responses:
+        '200':
+          description: Entry version saved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Entry'
+        '401':
+          description: No authenticated editor session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Missing or invalid CSRF token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Entry or its content type not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Stale version or slug uniqueness conflict within the content type.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Entry values do not satisfy the current content-type schema.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/admin/entries/{id}/publish:
+    parameters:
+      - $ref: '#/components/parameters/EntryId'
+    post:
+      operationId: publishEntry
+      tags: [Entries]
+      summary: Publish an exact entry version with its current schema
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublishEntryRequest'
+      responses:
+        '200':
+          description: Existing idempotent snapshot or newly published snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublishedEntry'
+        '401':
+          description: No authenticated editor session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Missing or invalid CSRF token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Entry or its content type not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Stale version or public slug uniqueness conflict within the content type.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Entry no longer satisfies the current content-type schema.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/admin/navigation:
+    get:
+      operationId: listNavigationMenus
+      tags: [Navigation]
+      summary: List navigation drafts
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Navigation drafts ordered from newest to oldest.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NavigationMenuCollection'
+        '401':
+          description: No authenticated editor session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      operationId: createNavigationMenu
+      tags: [Navigation]
+      summary: Create a navigation draft
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateNavigationMenuRequest'
+      responses:
+        '201':
+          description: Navigation draft created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NavigationMenu'
+        '401':
+          description: No authenticated editor session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Missing or invalid CSRF token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: The navigation code is already in use.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Invalid navigation name, code or item tree.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/admin/navigation/{id}:
+    parameters:
+      - $ref: '#/components/parameters/NavigationId'
+    get:
+      operationId: getNavigationMenu
+      tags: [Navigation]
+      summary: Read a navigation draft
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Current navigation draft revision.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NavigationMenu'
+        '401':
+          description: No authenticated editor session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Navigation menu not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      operationId: updateNavigationMenu
+      tags: [Navigation]
+      summary: Save a new navigation draft revision
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateNavigationMenuRequest'
+      responses:
+        '200':
+          description: Navigation revision saved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NavigationMenu'
+        '401':
+          description: No authenticated editor session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Missing or invalid CSRF token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Navigation menu not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Navigation code collision or optimistic locking conflict.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Invalid navigation name, code or item tree.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/admin/navigation/{id}/publish:
+    parameters:
+      - $ref: '#/components/parameters/NavigationId'
+    post:
+      operationId: publishNavigationMenu
+      tags: [Navigation]
+      summary: Publish an exact navigation draft version
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublishNavigationMenuRequest'
+      responses:
+        '200':
+          description: Existing idempotent snapshot or newly published snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublishedNavigationMenu'
+        '401':
+          description: No authenticated editor session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Missing or invalid CSRF token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Navigation menu not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Stale version or public navigation code collision.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Invalid publication request or navigation item tree.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/content/navigation/{code}:
+    parameters:
+      - name: code
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/NavigationCode'
+    get:
+      operationId: getPublishedNavigationMenu
+      tags: [Navigation, Delivery]
+      summary: Get the active published navigation snapshot
+      parameters:
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Active immutable navigation snapshot.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublishedNavigationMenu'
+        '304':
+          description: The supplied entity tag still identifies the active snapshot.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '404':
+          description: No published navigation snapshot exists for this code.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/content/entries/{type}:
+    parameters:
+      - $ref: '#/components/parameters/ContentTypeApiName'
+    get:
+      operationId: listPublishedEntries
+      tags: [Entries, Delivery]
+      summary: List active published entry snapshots for a content type
+      parameters:
+        - $ref: '#/components/parameters/PublicEntriesLimit'
+        - $ref: '#/components/parameters/PublicEntriesOffset'
+      responses:
+        '200':
+          description: Paginated active published entry snapshots.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublishedEntryCollection'
+        '422':
+          description: Invalid pagination parameters.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/content/entries/{type}/{slug}:
+    parameters:
+      - $ref: '#/components/parameters/ContentTypeApiName'
+      - name: slug
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/EntrySlug'
+    get:
+      operationId: getPublishedEntry
+      tags: [Entries, Delivery]
+      summary: Get one active published entry snapshot
+      parameters:
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Active immutable entry snapshot.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublishedEntry'
+        '304':
+          description: The supplied entity tag still identifies the active snapshot.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+        '404':
+          description: No active published entry exists for this type and slug.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/content/pages/{slug}:
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+    get:
+      operationId: getPublishedPage
+      tags: [Delivery]
+      summary: Get the active published page snapshot
+      responses:
+        '200':
+          description: Published delivery snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublishedPage'
+        '301':
+          description: This historical slug permanently redirects to the page's active slug.
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+                format: uri-reference
+        '404':
+          description: No published snapshot exists for this slug.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /robots.txt:
+    get:
+      operationId: getRobotsTxt
+      tags: [SEO]
+      summary: Get crawler directives and the sitemap location
+      responses:
+        '200':
+          description: Plain-text crawler policy.
+          content:
+            text/plain:
+              schema:
+                type: string
+  /sitemap.xml:
+    get:
+      operationId: getSitemap
+      tags: [SEO]
+      summary: List indexable active publication snapshots
+      responses:
+        '200':
+          description: XML sitemap excluding pages marked noIndex.
+          content:
+            application/xml:
+              schema:
+                type: string
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: CMSSESSID
+      description: HttpOnly same-site editor session cookie.
+  parameters:
+    CsrfTokenHeader:
+      name: X-CSRF-Token
+      in: header
+      required: true
+      description: Session-bound token obtained from `/api/v1/auth/csrf`.
+      schema:
+        type: string
+    NavigationId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ContentTypeId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    EntryId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    EntryContentTypeId:
+      name: contentTypeId
+      in: query
+      required: true
+      description: Restricts the admin list to drafts of one content type.
+      schema:
+        type: string
+        format: uuid
+    ContentTypeApiName:
+      name: type
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/ContentTypeApiName'
+    PublicEntriesLimit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    PublicEntriesOffset:
+      name: offset
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      required: false
+      description: Entity tag from a previous immutable public response.
+      schema:
+        type: string
+  headers:
+    ETag:
+      required: true
+      description: Quoted immutable snapshot identifier used for conditional reads.
+      schema:
+        type: string
+        example: '"019db391-89cb-7d2f-9aa0-9cd4765d9125"'
+  schemas:
+    SetupStatus:
+      type: object
+      additionalProperties: false
+      required: [required]
+      properties:
+        required:
+          type: boolean
+    SetupOwnerRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+          minLength: 12
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+    AuthenticatedUser:
+      type: object
+      additionalProperties: false
+      required: [id, email, roles]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        roles:
+          type: array
+          items:
+            type: string
+            enum: [ROLE_OWNER, ROLE_EDITOR]
+    CsrfToken:
+      type: object
+      additionalProperties: false
+      required: [token]
+      properties:
+        token:
+          type: string
+    ContentTypeApiName:
+      type: string
+      minLength: 1
+      maxLength: 120
+      pattern: '^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$'
+    ContentField:
+      type: object
+      additionalProperties: false
+      required: [id, key, label, type, required]
+      properties:
+        id:
+          type: string
+          format: uuid
+        key:
+          type: string
+          minLength: 1
+          maxLength: 120
+          pattern: '^[a-z][a-zA-Z0-9]*$'
+        label:
+          type: string
+          minLength: 1
+          maxLength: 120
+        type:
+          type: string
+          enum: [text, textarea, number, boolean, date, media]
+          description: >-
+            Determines value validation: text is a string of at most 255
+            characters; textarea is a string of at most 20000 characters;
+            number is a JSON number; boolean is a JSON boolean; date is an ISO
+            calendar-date string (YYYY-MM-DD); media is a media asset UUID string.
+        required:
+          type: boolean
+    ContentFieldCollection:
+      type: array
+      maxItems: 50
+      description: Field identifiers and keys must each be unique within the content type.
+      items:
+        $ref: '#/components/schemas/ContentField'
+    CreateContentTypeRequest:
+      type: object
+      additionalProperties: false
+      required: [name, apiName, fields]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        apiName:
+          $ref: '#/components/schemas/ContentTypeApiName'
+        fields:
+          $ref: '#/components/schemas/ContentFieldCollection'
+    UpdateContentTypeRequest:
+      type: object
+      additionalProperties: false
+      required: [name, apiName, fields, version]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        apiName:
+          $ref: '#/components/schemas/ContentTypeApiName'
+        fields:
+          $ref: '#/components/schemas/ContentFieldCollection'
+        version:
+          type: integer
+          minimum: 1
+          description: Optimistic-lock version read from the current schema.
+    ContentType:
+      type: object
+      additionalProperties: false
+      required: [id, name, apiName, fields, version, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        apiName:
+          $ref: '#/components/schemas/ContentTypeApiName'
+        fields:
+          $ref: '#/components/schemas/ContentFieldCollection'
+        version:
+          type: integer
+          minimum: 1
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ContentTypeCollection:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ContentType'
+    EntrySlug:
+      type: string
+      minLength: 1
+      maxLength: 191
+      pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+    EntryValue:
+      description: >-
+        Scalar value validated against its content field. Date and media values are
+        strings containing an ISO calendar date and media asset UUID respectively.
+        String length is additionally constrained by the field type: text allows
+        at most 255 characters and textarea at most 20000 characters.
+      oneOf:
+        - type: string
+          maxLength: 20000
+        - type: number
+        - type: boolean
+        - type: 'null'
+    EntryValues:
+      type: object
+      description: >-
+        Keys must exactly match defined schema fields. Unknown keys are rejected;
+        required fields must be present and non-null.
+      additionalProperties:
+        $ref: '#/components/schemas/EntryValue'
+    CreateEntryRequest:
+      type: object
+      additionalProperties: false
+      required: [contentTypeId, title, slug, values]
+      properties:
+        contentTypeId:
+          type: string
+          format: uuid
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        slug:
+          $ref: '#/components/schemas/EntrySlug'
+        values:
+          $ref: '#/components/schemas/EntryValues'
+    UpdateEntryRequest:
+      type: object
+      additionalProperties: false
+      required: [title, slug, values, version]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        slug:
+          $ref: '#/components/schemas/EntrySlug'
+        values:
+          $ref: '#/components/schemas/EntryValues'
+        version:
+          type: integer
+          minimum: 1
+          description: Optimistic-lock version read from the current draft.
+    PublishEntryRequest:
+      type: object
+      additionalProperties: false
+      required: [version]
+      properties:
+        version:
+          type: integer
+          minimum: 1
+          description: Exact entry version to publish.
+    Entry:
+      type: object
+      additionalProperties: false
+      required: [id, contentTypeId, title, slug, values, version, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        contentTypeId:
+          type: string
+          format: uuid
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        slug:
+          $ref: '#/components/schemas/EntrySlug'
+        values:
+          $ref: '#/components/schemas/EntryValues'
+        version:
+          type: integer
+          minimum: 1
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    EntryCollection:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Entry'
+    PublishedContentType:
+      type: object
+      additionalProperties: false
+      required: [id, name, apiName, version, fields]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        apiName:
+          $ref: '#/components/schemas/ContentTypeApiName'
+        version:
+          type: integer
+          minimum: 1
+        fields:
+          $ref: '#/components/schemas/ContentFieldCollection'
+    PublishedEntry:
+      type: object
+      additionalProperties: false
+      required: [snapshotId, entryId, sourceVersion, contentType, title, slug, values, publishedAt]
+      properties:
+        snapshotId:
+          type: string
+          format: uuid
+        entryId:
+          type: string
+          format: uuid
+        sourceVersion:
+          type: integer
+          minimum: 1
+        contentType:
+          $ref: '#/components/schemas/PublishedContentType'
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        slug:
+          $ref: '#/components/schemas/EntrySlug'
+        values:
+          $ref: '#/components/schemas/EntryValues'
+        publishedAt:
+          type: string
+          format: date-time
+    PublishedEntryCollection:
+      type: object
+      additionalProperties: false
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublishedEntry'
+        total:
+          type: integer
+          minimum: 0
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+        offset:
+          type: integer
+          minimum: 0
+    NavigationCode:
+      type: string
+      minLength: 1
+      maxLength: 120
+      pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+    NavigationHref:
+      oneOf:
+        - type: string
+          maxLength: 2048
+          pattern: '^/(?!/).*$'
+          description: Root-relative URL beginning with one slash.
+        - type: string
+          format: uri
+          maxLength: 2048
+          pattern: '^https?://'
+          description: Absolute HTTP or HTTPS URL.
+    NavigationItem:
+      type: object
+      additionalProperties: false
+      description: >-
+        Ordered navigation node. The complete tree is limited to three levels
+        including root items and 100 items in total.
+      required: [id, label, href, openInNewTab, children]
+      properties:
+        id:
+          type: string
+          format: uuid
+        label:
+          type: string
+          minLength: 1
+          maxLength: 120
+        href:
+          $ref: '#/components/schemas/NavigationHref'
+        openInNewTab:
+          type: boolean
+        children:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/NavigationItem'
+    NavigationItemTree:
+      type: array
+      maxItems: 100
+      description: >-
+        Ordered root items. Across this recursive tree there may be at most 100
+        items and at most three levels; the application validates both aggregate rules.
+      items:
+        $ref: '#/components/schemas/NavigationItem'
+    CreateNavigationMenuRequest:
+      type: object
+      additionalProperties: false
+      required: [name, code, items]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        code:
+          $ref: '#/components/schemas/NavigationCode'
+        items:
+          $ref: '#/components/schemas/NavigationItemTree'
+    UpdateNavigationMenuRequest:
+      type: object
+      additionalProperties: false
+      required: [name, code, items, version]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        code:
+          $ref: '#/components/schemas/NavigationCode'
+        items:
+          $ref: '#/components/schemas/NavigationItemTree'
+        version:
+          type: integer
+          minimum: 1
+          description: Optimistic-lock version read from the current draft.
+    PublishNavigationMenuRequest:
+      type: object
+      additionalProperties: false
+      required: [version]
+      properties:
+        version:
+          type: integer
+          minimum: 1
+          description: Exact draft version to publish.
+    NavigationMenu:
+      type: object
+      additionalProperties: false
+      required: [id, name, code, items, version, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        code:
+          $ref: '#/components/schemas/NavigationCode'
+        items:
+          $ref: '#/components/schemas/NavigationItemTree'
+        version:
+          type: integer
+          minimum: 1
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    NavigationMenuCollection:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/NavigationMenu'
+    PublishedNavigationMenu:
+      type: object
+      additionalProperties: false
+      required: [snapshotId, navigationId, sourceVersion, name, code, items, publishedAt]
+      properties:
+        snapshotId:
+          type: string
+          format: uuid
+        navigationId:
+          type: string
+          format: uuid
+        sourceVersion:
+          type: integer
+          minimum: 1
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        code:
+          $ref: '#/components/schemas/NavigationCode'
+        items:
+          $ref: '#/components/schemas/NavigationItemTree'
+        publishedAt:
+          type: string
+          format: date-time
+    CreatePageRequest:
+      type: object
+      additionalProperties: false
+      required: [title, slug]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        slug:
+          type: string
+          maxLength: 191
+          pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+    UpdatePageRequest:
+      type: object
+      additionalProperties: false
+      required: [title, slug, blocks, seo, version]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        slug:
+          type: string
+          maxLength: 191
+          pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+        blocks:
+          type: array
+          items:
+            $ref: '#/components/schemas/PageBlock'
+        seo:
+          $ref: '#/components/schemas/PageSeo'
+        version:
+          type: integer
+          minimum: 1
+    PublishPageRequest:
+      type: object
+      additionalProperties: false
+      required: [version]
+      properties:
+        version:
+          type: integer
+          minimum: 1
+    PageBlock:
+      oneOf:
+        - $ref: '#/components/schemas/HeroBlock'
+        - $ref: '#/components/schemas/RichTextBlock'
+        - $ref: '#/components/schemas/ImageBlock'
+      discriminator:
+        propertyName: type
+        mapping:
+          hero: '#/components/schemas/HeroBlock'
+          richText: '#/components/schemas/RichTextBlock'
+          image: '#/components/schemas/ImageBlock'
+    HeroBlock:
+      type: object
+      additionalProperties: false
+      required: [id, type, data]
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          const: hero
+        data:
+          type: object
+          additionalProperties: false
+          required: [heading]
+          properties:
+            heading:
+              type: string
+              minLength: 1
+              maxLength: 120
+            text:
+              type: string
+              maxLength: 500
+    RichTextBlock:
+      type: object
+      additionalProperties: false
+      required: [id, type, data]
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          const: richText
+        data:
+          type: object
+          additionalProperties: false
+          required: [content]
+          properties:
+            content:
+              type: string
+              minLength: 1
+              maxLength: 20000
+    ImageBlock:
+      type: object
+      additionalProperties: false
+      required: [id, type, data]
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          const: image
+        data:
+          type: object
+          additionalProperties: false
+          required: [assetId, alt]
+          properties:
+            assetId:
+              type: string
+              format: uuid
+            alt:
+              type: string
+              minLength: 1
+              maxLength: 300
+            caption:
+              type: string
+              maxLength: 500
+    UploadMediaRequest:
+      type: object
+      additionalProperties: false
+      required: [file, alt]
+      properties:
+        file:
+          type: string
+          format: binary
+          description: JPEG, PNG or WebP image, at most 10 MiB.
+        alt:
+          type: string
+          maxLength: 500
+          description: Default alternative text copied when inserting the asset into a page.
+    MediaVariant:
+      type: object
+      additionalProperties: false
+      required: [url, width, height]
+      properties:
+        url:
+          type: string
+          format: uri-reference
+          description: Stable public URL whose content never changes.
+        width:
+          type: integer
+          minimum: 1
+        height:
+          type: integer
+          minimum: 1
+    MediaAsset:
+      type: object
+      additionalProperties: false
+      required: [id, originalName, mimeType, size, width, height, defaultAlt, variants, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        originalName:
+          type: string
+          minLength: 1
+          maxLength: 255
+        mimeType:
+          type: string
+          const: image/webp
+          description: MIME type of the canonical safely re-encoded asset.
+        size:
+          type: integer
+          minimum: 1
+          description: Canonical encoded asset size in bytes.
+        width:
+          type: integer
+          minimum: 1
+        height:
+          type: integer
+          minimum: 1
+        defaultAlt:
+          type: string
+          maxLength: 500
+        variants:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/MediaVariant'
+        createdAt:
+          type: string
+          format: date-time
+    MediaAssetCollection:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MediaAsset'
+    PageSeo:
+      type: object
+      additionalProperties: false
+      required: [title, description, noIndex, openGraphImageAssetId]
+      properties:
+        title:
+          type: string
+          maxLength: 70
+          description: Optional search/social title; the page title is used when empty.
+        description:
+          type: string
+          maxLength: 170
+        noIndex:
+          type: boolean
+          description: Adds noindex directives and excludes the page from the sitemap.
+        openGraphImageAssetId:
+          oneOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+          description: Optional immutable media asset used for social sharing cards.
+    PublishedRedirect:
+      type: object
+      additionalProperties: false
+      required: [sourceSlug, targetSlug]
+      properties:
+        sourceSlug:
+          type: string
+          pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+        targetSlug:
+          type: string
+          pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+    PublishedRedirectCollection:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublishedRedirect'
+    Page:
+      type: object
+      additionalProperties: false
+      required: [id, title, slug, status, blocks, seo, version, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        slug:
+          type: string
+        status:
+          type: string
+          enum: [draft]
+        blocks:
+          type: array
+          items:
+            $ref: '#/components/schemas/PageBlock'
+        seo:
+          $ref: '#/components/schemas/PageSeo'
+        version:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    PageCollection:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Page'
+    PublishedPage:
+      type: object
+      additionalProperties: false
+      required: [snapshotId, pageId, sourceRevision, title, slug, blocks, seo, publishedAt]
+      properties:
+        snapshotId:
+          type: string
+          format: uuid
+        pageId:
+          type: string
+          format: uuid
+        sourceRevision:
+          type: integer
+          minimum: 1
+        title:
+          type: string
+        slug:
+          type: string
+        blocks:
+          type: array
+          items:
+            $ref: '#/components/schemas/PageBlock'
+        seo:
+          $ref: '#/components/schemas/PageSeo'
+        publishedAt:
+          type: string
+          format: date-time
+    Error:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: string

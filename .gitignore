@@ -1,0 +1,10 @@
+/.idea/
+/.DS_Store
+/node_modules/
+/npm-debug.log*
+/back/.env.local
+/back/.phpunit.cache/
+/back/var/
+/back/vendor/
+/front/dist/
+/front/node_modules/

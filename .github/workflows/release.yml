@@ -1,0 +1,55 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Verify and release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.15.0
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install release dependencies
+        run: npm ci
+
+      - name: Install backend dependencies
+        run: docker compose run --rm --no-deps composer install --no-interaction --prefer-dist
+
+      - name: Install frontend dependencies
+        run: docker compose run --rm --no-deps front npm ci
+
+      - name: Verify backend
+        run: docker compose run --rm --no-deps composer check
+
+      - name: Verify frontend
+        run: docker compose run --rm --no-deps front npm run check
+
+      - name: Create release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run release

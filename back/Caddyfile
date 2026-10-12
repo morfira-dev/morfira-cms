@@ -1,0 +1,10 @@
+{
+    frankenphp
+}
+
+:8080 {
+    root * /app/back/public
+    @immutableMedia path /media/*
+    header @immutableMedia Cache-Control "public, max-age=31536000, immutable"
+    php_server
+}

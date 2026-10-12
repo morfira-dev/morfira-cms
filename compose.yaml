@@ -1,0 +1,63 @@
+services:
+  app:
+    build:
+      context: ./back
+    working_dir: /app/back
+    ports:
+      - "8080:8080"
+    volumes:
+      - .:/app
+      - ./back/Caddyfile:/etc/frankenphp/Caddyfile:ro
+      - media_data:/app/back/public/media
+    environment:
+      APP_ENV: dev
+      APP_DEBUG: 1
+      APP_SECRET: local-development-secret
+      DATABASE_URL: mysql://cms:cms@database:3306/cms?serverVersion=11.4.0-MariaDB&charset=utf8mb4
+      PUBLIC_SITE_URL: ${CMS_PUBLIC_SITE_URL:-http://localhost:8080}
+    depends_on:
+      database:
+        condition: service_healthy
+
+  database:
+    image: mariadb:11.4
+    environment:
+      MARIADB_DATABASE: cms
+      MARIADB_USER: cms
+      MARIADB_PASSWORD: cms
+      MARIADB_ROOT_PASSWORD: local-root-password
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+    volumes:
+      - database_data:/var/lib/mysql
+
+  composer:
+    image: composer:2
+    working_dir: /app/back
+    volumes:
+      - .:/app
+    environment:
+      COMPOSER_HOME: /tmp/composer
+      DATABASE_URL: mysql://cms:cms@database:3306/cms?serverVersion=11.4.0-MariaDB&charset=utf8mb4
+
+  front:
+    image: node:22-bookworm-slim
+    working_dir: /app/front
+    command: npm run dev -- --host 0.0.0.0
+    ports:
+      - "${CMS_FRONT_PORT:-5174}:5173"
+    environment:
+      VITE_PUBLIC_SITE_URL: http://localhost:8080
+    volumes:
+      - .:/app
+      - front_node_modules:/app/front/node_modules
+    depends_on:
+      - app
+
+volumes:
+  database_data:
+  front_node_modules:
+  media_data:

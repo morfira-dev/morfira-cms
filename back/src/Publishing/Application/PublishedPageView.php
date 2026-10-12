@@ -1,0 +1,53 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Cms\Publishing\Application;
+
+use Cms\Publishing\Domain\PublishedPage;
+
+final readonly class PublishedPageView
+{
+    /** @param list<array{id: string, type: string, data: array<string, string>}> $blocks */
+    public function __construct(
+        public string $snapshotId,
+        public string $pageId,
+        public int $sourceRevision,
+        public string $title,
+        public string $slug,
+        public array $blocks,
+        /** @var array{title: string, description: string, noIndex: bool, openGraphImageAssetId: ?string} */
+        public array $seo,
+        public string $publishedAt,
+    ) {
+    }
+
+    public static function fromPublishedPage(PublishedPage $page): self
+    {
+        return new self(
+            $page->snapshotId,
+            $page->pageId,
+            $page->sourceRevision,
+            $page->title,
+            $page->slug,
+            $page->blocks,
+            $page->seo,
+            $page->publishedAt->format(DATE_ATOM),
+        );
+    }
+
+    /** @return array{snapshotId: string, pageId: string, sourceRevision: int, title: string, slug: string, blocks: list<array{id: string, type: string, data: array<string, string>}>, seo: array{title: string, description: string, noIndex: bool, openGraphImageAssetId: ?string}, publishedAt: string} */
+    public function toArray(): array
+    {
+        return [
+            'snapshotId' => $this->snapshotId,
+            'pageId' => $this->pageId,
+            'sourceRevision' => $this->sourceRevision,
+            'title' => $this->title,
+            'slug' => $this->slug,
+            'blocks' => $this->blocks,
+            'seo' => $this->seo,
+            'publishedAt' => $this->publishedAt,
+        ];
+    }
+}
