@@ -29,6 +29,8 @@ use Cms\Publishing\Domain\PublicationScheduleRepository;
 use Cms\Publishing\Infrastructure\Persistence\DoctrinePublicationScheduleRepository;
 use Cms\Taxonomy\Domain\TaxonomyRepository;
 use Cms\Taxonomy\Infrastructure\Persistence\DoctrineTaxonomyRepository;
+use Cms\Schema\Application\RelationTargetLookup;
+use Cms\Content\Infrastructure\Persistence\DoctrineRelationTargetLookup;
 
 return static function (ContainerConfigurator $container): void {
     $services = $container->services()
@@ -56,4 +58,5 @@ return static function (ContainerConfigurator $container): void {
     $services->alias(PublishedEntryRepository::class, DoctrinePublishedEntryRepository::class);
     $services->alias(PublicationScheduleRepository::class, DoctrinePublicationScheduleRepository::class);
     $services->alias(TaxonomyRepository::class, DoctrineTaxonomyRepository::class);
+    $services->alias(RelationTargetLookup::class, DoctrineRelationTargetLookup::class);
 };

@@ -46,6 +46,6 @@ lives under `/api/v1/content/entries`.
   cacheable reads and future rollback;
 - changing or removing a field can make an old draft invalid until an editor fixes
   its values, but it cannot invalidate an existing published snapshot;
-- relations, localization, rich HTML and deletion are explicitly deferred and
+- multi-entry/reverse relations, localization, rich HTML and deletion are explicitly deferred and
   require separate contracts and migration policies;
 - scheduled publishing is defined separately by ADR 0011.

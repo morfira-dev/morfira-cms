@@ -194,9 +194,10 @@ export function ContentTypesWorkspace({ contentTypes, loading, onChange }: Conte
                     <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
                       <TextField label="Label" value={field.label} onChange={(event) => changeFields(updateContentField(editing.fields, field.id, { label: event.target.value }))} required fullWidth />
                       <TextField label="Key" value={field.key} onChange={(event) => changeFields(updateContentField(editing.fields, field.id, { key: event.target.value }))} required fullWidth helperText="camelCase, for example: heroImage" />
-                      <TextField select label="Type" value={field.type} onChange={(event) => changeFields(updateContentField(editing.fields, field.id, { type: event.target.value as ContentField['type'] }))} fullWidth>
+                      <TextField select label="Type" value={field.type} onChange={(event) => { const type=event.target.value as ContentField['type'];changeFields(editing.fields.map(item=>item.id===field.id?{...item,type,targetContentTypeId:type==='relation'?(item.targetContentTypeId??contentTypes[0]?.id??null):null}:item)) }} fullWidth>
                         {contentFieldTypes.map((type) => <MenuItem key={type} value={type}>{type}</MenuItem>)}
                       </TextField>
+                      {field.type==='relation'&&<TextField select label="Target type" value={field.targetContentTypeId??''} onChange={event=>changeFields(editing.fields.map(item=>item.id===field.id?{...item,targetContentTypeId:event.target.value}:item))} required fullWidth>{contentTypes.map(type=><MenuItem key={type.id} value={type.id}>{type.name}</MenuItem>)}</TextField>}
                       <FormControlLabel control={<Switch checked={field.required} onChange={(event) => changeFields(updateContentField(editing.fields, field.id, { required: event.target.checked }))} />} label="Required" />
                     </Stack>
                   </Stack>

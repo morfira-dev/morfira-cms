@@ -27,4 +27,4 @@ export function moveContentField(fields: ContentField[], id: string, offset: -1 
   return moved
 }
 
-export const contentFieldTypes: ContentFieldType[] = ['text', 'textarea', 'number', 'boolean', 'date', 'media']
+export const contentFieldTypes: ContentFieldType[] = ['text', 'textarea', 'number', 'boolean', 'date', 'media', 'relation']

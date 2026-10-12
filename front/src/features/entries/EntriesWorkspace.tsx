@@ -182,7 +182,7 @@ export function EntriesWorkspace({ contentTypes, mediaAssets, taxonomies }: Entr
                   <TextField label="Slug" value={editing.slug} onChange={(event) => { setEditing({ ...editing, slug: event.target.value.toLowerCase() }); setDirty(true); setPublishedUrl(null) }} fullWidth required helperText="Lowercase letters, numbers and hyphens" />
                 </Stack>
                 {contentType.fields.length === 0 && <Alert severity="info">This schema has no custom fields.</Alert>}
-                {contentType.fields.map((field) => <EntryField key={field.id} field={field} value={editing.values[field.key] ?? null} mediaAssets={mediaAssets} onChange={(value) => changeValue(field.key, value)} />)}
+                {contentType.fields.map((field) => <EntryField key={field.id} field={field} value={editing.values[field.key] ?? null} mediaAssets={mediaAssets} contentTypes={contentTypes} onChange={(value) => changeValue(field.key, value)} />)}
               </Stack>
             </CardContent></Card>
           )}
@@ -192,11 +192,19 @@ export function EntriesWorkspace({ contentTypes, mediaAssets, taxonomies }: Entr
   )
 }
 
-function EntryField({ field, value, mediaAssets, onChange }: { field: ContentField; value: EntryValue; mediaAssets: MediaAsset[]; onChange: (value: EntryValue) => void }) {
+function EntryField({ field, value, mediaAssets, contentTypes, onChange }: { field: ContentField; value: EntryValue; mediaAssets: MediaAsset[]; contentTypes: ContentType[]; onChange: (value: EntryValue) => void }) {
   if (field.type === 'boolean') return <FormControlLabel control={<Switch checked={value === true} onChange={(event) => onChange(event.target.checked)} />} label={`${field.label}${field.required ? ' *' : ''}`} />
   if (field.type === 'media') return <TextField select label={field.label} value={typeof value === 'string' ? value : ''} onChange={(event) => onChange(event.target.value || null)} required={field.required} helperText="Choose an image from the media library"><MenuItem value="">None</MenuItem>{mediaAssets.map((asset) => <MenuItem key={asset.id} value={asset.id}>{asset.originalName}</MenuItem>)}</TextField>
   if (field.type === 'number') return <TextField type="number" label={field.label} value={typeof value === 'number' ? value : ''} onChange={(event) => onChange(event.target.value === '' ? null : Number(event.target.value))} required={field.required} />
+  if(field.type==='relation') return <RelationField field={field} value={value} contentTypes={contentTypes} onChange={onChange}/>
   return <TextField type={field.type === 'date' ? 'date' : 'text'} label={field.label} value={typeof value === 'string' ? value : ''} onChange={(event) => onChange(event.target.value || null)} required={field.required} multiline={field.type === 'textarea'} minRows={field.type === 'textarea' ? 5 : undefined} slotProps={field.type === 'date' ? { inputLabel: { shrink: true } } : undefined} />
+}
+
+function RelationField({field,value,contentTypes,onChange}:{field:ContentField;value:EntryValue;contentTypes:ContentType[];onChange:(value:EntryValue)=>void}){
+  const [options,setOptions]=useState<Entry[]>([])
+  useEffect(()=>{if(!field.targetContentTypeId)return;const c=new AbortController();getEntries(field.targetContentTypeId,c.signal).then(setOptions).catch(()=>setOptions([]));return()=>c.abort()},[field.targetContentTypeId])
+  const target=contentTypes.find(type=>type.id===field.targetContentTypeId)
+  return <TextField select label={field.label} value={typeof value==='string'?value:''} onChange={event=>onChange(event.target.value||null)} required={field.required} helperText={`Choose an entry from ${target?.name??'the target type'}`}><MenuItem value="">None</MenuItem>{options.map(entry=><MenuItem key={entry.id} value={entry.id}>{entry.title}</MenuItem>)}</TextField>
 }
 
 function toForm(entry: Entry, type: ContentType): EntryForm { return { id: entry.id, title: entry.title, slug: entry.slug, values: initializeEntryValues(type.fields, entry.values), version: entry.version } }

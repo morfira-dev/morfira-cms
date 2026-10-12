@@ -585,11 +585,16 @@ export interface components {
             key: string;
             label: string;
             /**
-             * @description Determines value validation: text is a string of at most 255 characters; textarea is a string of at most 20000 characters; number is a JSON number; boolean is a JSON boolean; date is an ISO calendar-date string (YYYY-MM-DD); media is a media asset UUID string.
+             * @description Determines value validation: text is a string of at most 255 characters; textarea is a string of at most 20000 characters; number is a JSON number; boolean is a JSON boolean; date is an ISO calendar-date string (YYYY-MM-DD); media is a media asset UUID string; relation is an entry UUID for the declared target content type.
              * @enum {string}
              */
-            type: "text" | "textarea" | "number" | "boolean" | "date" | "media";
+            type: "text" | "textarea" | "number" | "boolean" | "date" | "media" | "relation";
             required: boolean;
+            /**
+             * Format: uuid
+             * @description Required only when type is relation.
+             */
+            targetContentTypeId?: string | null;
         };
         /** @description Field identifiers and keys must each be unique within the content type. */
         ContentFieldCollection: components["schemas"]["ContentField"][];

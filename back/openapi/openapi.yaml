@@ -1540,14 +1540,19 @@ components:
           maxLength: 120
         type:
           type: string
-          enum: [text, textarea, number, boolean, date, media]
+          enum: [text, textarea, number, boolean, date, media, relation]
           description: >-
             Determines value validation: text is a string of at most 255
             characters; textarea is a string of at most 20000 characters;
             number is a JSON number; boolean is a JSON boolean; date is an ISO
-            calendar-date string (YYYY-MM-DD); media is a media asset UUID string.
+            calendar-date string (YYYY-MM-DD); media is a media asset UUID string;
+            relation is an entry UUID for the declared target content type.
         required:
           type: boolean
+        targetContentTypeId:
+          type: [string, 'null']
+          format: uuid
+          description: Required only when type is relation.
     ContentFieldCollection:
       type: array
       maxItems: 50

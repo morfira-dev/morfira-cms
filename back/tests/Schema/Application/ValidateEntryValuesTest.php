@@ -7,6 +7,7 @@ namespace Cms\Tests\Schema\Application;
 use Cms\Schema\Application\CreateContentType;
 use Cms\Schema\Application\GetContentTypeDefinition;
 use Cms\Schema\Application\ValidateEntryValues;
+use Cms\Schema\Application\RelationTargetLookup;
 use Cms\Tests\Schema\InMemoryContentTypeRepository;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -28,6 +29,26 @@ final class ValidateEntryValuesTest extends TestCase
         [$validator, $id] = $this->validator();
         $this->expectExceptionMessage('Unknown entry field');
         $validator($id, ['unknown' => 'x']);
+    }
+
+    #[Test]
+    public function it_accepts_only_existing_relations_of_the_configured_type(): void
+    {
+        $repository = new InMemoryContentTypeRepository();
+        $targetType = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+        $entryId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+        $type = (new CreateContentType($repository))('Landing', 'landings', [[
+            'id' => '55555555-5555-4555-8555-555555555555', 'key' => 'author', 'label' => 'Author',
+            'type' => 'relation', 'required' => true, 'targetContentTypeId' => $targetType,
+        ]]);
+        $lookup = new class($entryId, $targetType) implements RelationTargetLookup {
+            public function __construct(private string $entryId, private string $typeId) {}
+            public function exists(string $entryId, string $contentTypeId): bool { return $entryId === $this->entryId && $contentTypeId === $this->typeId; }
+        };
+        $validator = new ValidateEntryValues(new GetContentTypeDefinition($repository), $lookup);
+        self::assertSame(['author' => $entryId], $validator($type->id, ['author' => $entryId]));
+        $this->expectException(\InvalidArgumentException::class);
+        $validator($type->id, ['author' => 'cccccccc-cccc-4ccc-8ccc-cccccccccccc']);
     }
 
     /** @return array{ValidateEntryValues, string} */

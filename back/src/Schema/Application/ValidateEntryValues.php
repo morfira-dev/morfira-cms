@@ -6,7 +6,7 @@ namespace Cms\Schema\Application;
 
 final readonly class ValidateEntryValues
 {
-    public function __construct(private GetContentTypeDefinition $definitions)
+    public function __construct(private GetContentTypeDefinition $definitions, private ?RelationTargetLookup $relations = null)
     {
     }
 
@@ -39,14 +39,19 @@ final readonly class ValidateEntryValues
                 $normalized[$key] = null;
                 continue;
             }
-            $normalized[$key] = $this->validateValue($key, $field['type'], $value);
+            $normalized[$key] = $this->validateValue($key, $field, $value);
         }
 
         return $normalized;
     }
 
-    private function validateValue(string $key, string $type, mixed $value): string|int|float|bool
+    /** @param array<string,mixed> $field */
+    private function validateValue(string $key, array $field, mixed $value): string|int|float|bool
     {
+        $type = $field['type'] ?? null;
+        if (!is_string($type)) {
+            throw new \UnexpectedValueException('Schema field type must be a string.');
+        }
         if ('text' === $type && is_string($value) && mb_strlen($value) <= 255) {
             return $value;
         }
@@ -63,6 +68,10 @@ final readonly class ValidateEntryValues
             return $value;
         }
         if ('media' === $type && is_string($value) && 1 === preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/', $value)) {
+            return $value;
+        }
+        $target = $field['targetContentTypeId'] ?? null;
+        if ('relation' === $type && is_string($value) && is_string($target) && preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/', $value) === 1 && ($this->relations === null || $this->relations->exists($value, $target))) {
             return $value;
         }
         throw new \InvalidArgumentException(sprintf('Field "%s" has an invalid %s value.', $key, $type));

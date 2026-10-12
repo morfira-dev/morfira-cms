@@ -83,10 +83,11 @@ The initial foundation contains:
 - versioned custom content schemas, schema-validated entry drafts and immutable public entry snapshots;
 - brokerless scheduled publication for exact page revisions and entry versions;
 - flat or hierarchical entry taxonomies embedded in immutable public snapshots;
+- schema-validated single-entry relations stored by stable identifier;
 - versioned `/api/v1` contracts with frontend types generated from OpenAPI 3.1;
 - architectural decision records.
 
-Relations between entries, localization, rich HTML fields, deletion, taxonomy editing/deletion and public term archive pages, menu placement/theme bindings, manual redirect editing, extension/plugin execution and advanced editorial workflows are intentionally deferred. They will be introduced through vertical slices and explicit ADRs.
+Multi-entry and reverse relations, localization, rich HTML fields, deletion, taxonomy editing/deletion and public term archive pages, menu placement/theme bindings, manual redirect editing, extension/plugin execution and advanced editorial workflows are intentionally deferred. They will be introduced through vertical slices and explicit ADRs.
 
 ## Architecture
 
