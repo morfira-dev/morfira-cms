@@ -1,3 +1,9 @@
+## [1.7.0](https://github.com/nuykon/morfira-cms/compare/v1.6.0...v1.7.0) (2026-10-12)
+
+### Features
+
+* **cms:** add routed rich text and user management ([aa08cf3](https://github.com/nuykon/morfira-cms/commit/aa08cf3bdfa3a3b3e9d5cb4fe576b01d9d746cde))
+
 ## [1.6.0](https://github.com/nuykon/morfira-cms/compare/v1.5.0...v1.6.0) (2026-10-12)
 
 ### Features
