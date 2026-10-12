@@ -27,6 +27,15 @@ final class InMemoryPublishedEntryRepository implements PublishedEntryRepository
         return $snapshot;
     }
 
+    public function unpublish(string $entryId): void
+    {
+        foreach ($this->routes as $route => $key) {
+            if (str_starts_with($key, $entryId.':')) {
+                unset($this->routes[$route]);
+            }
+        }
+    }
+
     public function find(string $apiName, string $slug): ?PublishedEntry
     {
         $key = $this->routes[$apiName.'/'.$slug] ?? null;

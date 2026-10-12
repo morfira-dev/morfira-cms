@@ -32,6 +32,7 @@ import {
   type PublishedPage,
   type PublishedRedirect,
   publishPage,
+  unpublishPage,
   updatePage,
 } from './api'
 
@@ -48,6 +49,7 @@ export function PagesWorkspace({ mediaAssets }: PagesWorkspaceProps) {
   const [saving, setSaving] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
   const [title, setTitle] = useState('')
   const [slug, setSlug] = useState('')
   const [editing, setEditing] = useState<PageSummary | null>(null)
@@ -119,6 +121,7 @@ export function PagesWorkspace({ mediaAssets }: PagesWorkspaceProps) {
 
     setPublishing(true)
     setError(null)
+    setSuccess(null)
 
     try {
       const published = await publishPage(editing.id, editing.version)
@@ -135,10 +138,29 @@ export function PagesWorkspace({ mediaAssets }: PagesWorkspaceProps) {
     }
   }
 
+  async function unpublishCurrentPage() {
+    if (!editing || !window.confirm('Unpublish this page? Its draft and publication history will be preserved.')) return
+
+    setPublishing(true)
+    setError(null)
+    setSuccess(null)
+    try {
+      await unpublishPage(editing.id)
+      setPublication(null)
+      setRedirects([])
+      setSuccess('The page is no longer publicly available.')
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not unpublish the page.')
+    } finally {
+      setPublishing(false)
+    }
+  }
+
   function openEditor(page: PageSummary) {
     setEditing(structuredClone(page))
     setEditingDirty(false)
     setPublication(null)
+    setSuccess(null)
     setRedirects([])
     getPageRedirects(page.id)
       .then(setRedirects)
@@ -234,6 +256,7 @@ export function PagesWorkspace({ mediaAssets }: PagesWorkspaceProps) {
       </div>
 
       {error && <Alert severity="error">{error}</Alert>}
+      {success && <Alert severity="success">{success}</Alert>}
 
       <Card variant="outlined">
         <CardContent>
@@ -329,6 +352,9 @@ export function PagesWorkspace({ mediaAssets }: PagesWorkspaceProps) {
                     onClick={publishCurrentRevision}
                   >
                     {publishing ? 'Publishing…' : 'Publish'}
+                  </Button>
+                  <Button color="warning" variant="outlined" disabled={publishing} onClick={() => void unpublishCurrentPage()}>
+                    Unpublish
                   </Button>
                 </Stack>
               </Stack>

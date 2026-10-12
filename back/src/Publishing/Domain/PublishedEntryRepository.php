@@ -8,6 +8,8 @@ interface PublishedEntryRepository
 {
     public function publish(PublishedEntry $entry): PublishedEntry;
 
+    public function unpublish(string $entryId): void;
+
     public function findByVersion(string $entryId, int $sourceVersion): ?PublishedEntry;
 
     public function find(string $apiName, string $slug): ?PublishedEntry;

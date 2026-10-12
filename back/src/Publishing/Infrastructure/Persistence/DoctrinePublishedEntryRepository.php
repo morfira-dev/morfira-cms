@@ -45,6 +45,11 @@ final readonly class DoctrinePublishedEntryRepository implements PublishedEntryR
         return $e;
     }
 
+    public function unpublish(string $entryId): void
+    {
+        $this->connection->delete('published_entry_routes', ['entry_id' => $entryId]);
+    }
+
     public function find(string $apiName, string $slug): ?PublishedEntry
     {
         $r = $this->connection->fetchAssociative('SELECT s.* FROM published_entry_routes r JOIN published_entry_snapshots s ON s.id=r.snapshot_id WHERE r.api_name=? AND r.slug=?', [$apiName, $slug]);

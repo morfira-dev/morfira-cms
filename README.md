@@ -82,6 +82,7 @@ The initial foundation contains:
 - versioned three-level navigation trees with optimistic editing and immutable public snapshots;
 - versioned custom content schemas, schema-validated entry drafts and immutable public entry snapshots;
 - brokerless scheduled publication for exact page revisions and entry versions;
+- idempotent page and entry unpublishing that preserves immutable snapshots;
 - flat or hierarchical entry taxonomies embedded in immutable public snapshots;
 - schema-validated single-entry relations stored by stable identifier;
 - versioned `/api/v1` contracts with frontend types generated from OpenAPI 3.1;

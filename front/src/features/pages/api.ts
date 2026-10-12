@@ -61,6 +61,14 @@ export async function publishPage(id: string, version: number): Promise<Publishe
   return (await response.json()) as PublishedPage
 }
 
+export async function unpublishPage(id: string): Promise<void> {
+  const response = await apiFetch(`/api/v1/admin/pages/${id}/publish`, { method: 'DELETE' })
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response))
+  }
+}
+
 export async function getPageRedirects(id: string): Promise<PublishedRedirect[]> {
   const response = await apiFetch(`/api/v1/admin/pages/${id}/redirects`)
 

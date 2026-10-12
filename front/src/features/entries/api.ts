@@ -35,6 +35,11 @@ export async function publishEntry(id: string, version: number): Promise<Publish
   return sendJson(`/api/v1/admin/entries/${id}/publish`, 'POST', { version })
 }
 
+export async function unpublishEntry(id: string): Promise<void> {
+  const response = await apiFetch(`/api/v1/admin/entries/${id}/publish`, { method: 'DELETE' })
+  if (!response.ok) throw new Error(await readApiError(response))
+}
+
 async function sendJson<T>(url: string, method: 'POST' | 'PUT', payload: unknown): Promise<T> {
   const response = await apiFetch(url, {
     method,

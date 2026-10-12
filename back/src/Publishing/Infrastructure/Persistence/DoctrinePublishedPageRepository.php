@@ -54,6 +54,14 @@ final readonly class DoctrinePublishedPageRepository implements PublishedPageRep
         return $page;
     }
 
+    public function unpublish(string $pageId): void
+    {
+        $this->connection->transactional(function (Connection $connection) use ($pageId): void {
+            $connection->delete('published_page_routes', ['page_id' => $pageId]);
+            $connection->delete('published_page_redirects', ['page_id' => $pageId]);
+        });
+    }
+
     public function findBySlug(string $slug): ?PublishedPage
     {
         $row = $this->connection->fetchAssociative(<<<'SQL'

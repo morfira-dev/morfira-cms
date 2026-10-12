@@ -51,6 +51,20 @@ final class InMemoryPublishedPageRepository implements PublishedPageRepository
         return $snapshot;
     }
 
+    public function unpublish(string $pageId): void
+    {
+        foreach ($this->routes as $slug => $revisionKey) {
+            if (str_starts_with($revisionKey, $pageId . ':')) {
+                unset($this->routes[$slug]);
+            }
+        }
+        foreach ($this->redirects as $slug => $redirectPageId) {
+            if ($redirectPageId === $pageId) {
+                unset($this->redirects[$slug]);
+            }
+        }
+    }
+
     public function findBySlug(string $slug): ?PublishedPage
     {
         $revisionKey = $this->routes[$slug] ?? null;

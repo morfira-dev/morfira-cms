@@ -379,6 +379,29 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+    delete:
+      operationId: unpublishPage
+      tags: [Publishing]
+      summary: Remove the active public page route while preserving snapshots
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfTokenHeader'
+      responses:
+        '204':
+          description: Page is unpublished and any pending schedule is cancelled.
+        '404':
+          description: Draft page not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Invalid page identifier.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /api/v1/admin/pages/{id}/schedule:
     parameters:
       - name: id
@@ -863,6 +886,29 @@ paths:
                 $ref: '#/components/schemas/Error'
         '422':
           description: Entry no longer satisfies the current content-type schema.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      operationId: unpublishEntry
+      tags: [Entries]
+      summary: Remove the active public entry route while preserving snapshots
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfTokenHeader'
+      responses:
+        '204':
+          description: Entry is unpublished and any pending schedule is cancelled.
+        '404':
+          description: Draft entry not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Invalid entry identifier.
           content:
             application/json:
               schema:

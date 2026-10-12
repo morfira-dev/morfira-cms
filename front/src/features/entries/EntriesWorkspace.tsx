@@ -27,6 +27,7 @@ import {
   getEntries,
   getEntry,
   publishEntry,
+  unpublishEntry,
   updateEntry,
 } from './api'
 import { initializeEntryValues, publishedEntryUrl, setEntryValue, validateEntryValues } from './values'
@@ -135,6 +136,17 @@ export function EntriesWorkspace({ contentTypes, mediaAssets, taxonomies }: Entr
     finally { setPublishing(false) }
   }
 
+  async function unpublish() {
+    if (!editing?.id || !window.confirm('Unpublish this entry? Its draft and publication history will be preserved.')) return
+    setPublishing(true); setError(null); setSuccess(null)
+    try {
+      await unpublishEntry(editing.id)
+      setPublishedUrl(null)
+      setSuccess('The entry is no longer publicly available.')
+    } catch (reason) { setError(errorMessage(reason, 'Could not unpublish entry.')) }
+    finally { setPublishing(false) }
+  }
+
   function changeValue(key: string, value: EntryValue) {
     if (!editing) return
     setEditing({ ...editing, values: setEntryValue(editing.values, key, value) })
@@ -172,6 +184,7 @@ export function EntriesWorkspace({ contentTypes, mediaAssets, taxonomies }: Entr
                     {publishedUrl && <Button component="a" href={publishedUrl} target="_blank" variant="outlined">Open published API</Button>}
                     <Button type="submit" variant="contained" disabled={!dirty || saving}>{saving ? 'Saving…' : 'Save'}</Button>
                     <Button color="success" variant="contained" disabled={!editing.id || dirty || publishing} onClick={() => void publish()}>{publishing ? 'Publishing…' : 'Publish'}</Button>
+                    <Button color="warning" variant="outlined" disabled={!editing.id || publishing} onClick={() => void unpublish()}>Unpublish</Button>
                   </Stack>
                 </Stack>
                 {dirty && editing.id && <Alert severity="warning">Save this version before publishing it.</Alert>}

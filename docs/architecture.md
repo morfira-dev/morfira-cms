@@ -73,6 +73,8 @@ Components produce view models. They do not create nested HTTP requests or call 
 
 Draft edits append immutable revisions and use an integer version for optimistic locking. Preview renders the current draft through Twig with private, no-store caching and must never be indexed. Publishing copies an approved revision into a separate immutable delivery snapshot and atomically activates its public slug. Public HTML and headless delivery never read mutable drafts.
 
+Unpublishing removes the active delivery route and cancels a pending schedule while retaining drafts, revisions and publication snapshots. Page redirect history is removed with its route so redirects cannot resolve to unpublished content.
+
 Scheduled publishing stores the exact draft version and UTC due time inside the
 `Publishing` module. An idempotent console worker delegates to the same immediate
 publication services, so a small installation needs only cron and never a broker.

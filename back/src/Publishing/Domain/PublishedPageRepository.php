@@ -8,6 +8,8 @@ interface PublishedPageRepository
 {
     public function publish(PublishedPage $page): PublishedPage;
 
+    public function unpublish(string $pageId): void;
+
     public function findBySlug(string $slug): ?PublishedPage;
 
     public function findRedirectTargetBySlug(string $slug): ?PublishedPage;

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resetCsrfToken } from '../../api/http'
-import { getPageRedirects, updatePage, type PageSummary, type PageUpdate } from './api'
+import { getPageRedirects, unpublishPage, updatePage, type PageSummary, type PageUpdate } from './api'
 
 const revision: PageUpdate = {
   title: 'Landing',
@@ -55,5 +55,21 @@ describe('getPageRedirects', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(fetchMock.mock.calls[0][0]).toBe(`/api/v1/admin/pages/${page.id}/redirects`)
+  })
+})
+
+describe('unpublishPage', () => {
+  it('uses an authenticated DELETE request', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ token: 'csrf-token' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await unpublishPage(page.id)
+
+    expect(fetchMock.mock.calls[1][0]).toBe(`/api/v1/admin/pages/${page.id}/publish`)
+    expect(fetchMock.mock.calls[1][1]?.method).toBe('DELETE')
+    expect(new Headers(fetchMock.mock.calls[1][1]?.headers).get('X-CSRF-Token')).toBe('csrf-token')
   })
 })

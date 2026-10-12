@@ -162,7 +162,8 @@ export interface paths {
         put?: never;
         /** Publish an exact draft revision */
         post: operations["publishPage"];
-        delete?: never;
+        /** Remove the active public page route while preserving snapshots */
+        delete: operations["unpublishPage"];
         options?: never;
         head?: never;
         patch?: never;
@@ -297,7 +298,8 @@ export interface paths {
         put?: never;
         /** Publish an exact entry version with its current schema */
         post: operations["publishEntry"];
-        delete?: never;
+        /** Remove the active public entry route while preserving snapshots */
+        delete: operations["unpublishEntry"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1487,6 +1489,47 @@ export interface operations {
             };
         };
     };
+    unpublishPage: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Session-bound token obtained from `/api/v1/auth/csrf`. */
+                "X-CSRF-Token": components["parameters"]["CsrfTokenHeader"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Page is unpublished and any pending schedule is cancelled. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Draft page not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid page identifier. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     getPagePublicationSchedule: {
         parameters: {
             query?: never;
@@ -2163,6 +2206,47 @@ export interface operations {
                 };
             };
             /** @description Entry no longer satisfies the current content-type schema. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    unpublishEntry: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Session-bound token obtained from `/api/v1/auth/csrf`. */
+                "X-CSRF-Token": components["parameters"]["CsrfTokenHeader"];
+            };
+            path: {
+                id: components["parameters"]["EntryId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Entry is unpublished and any pending schedule is cancelled. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Draft entry not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid entry identifier. */
             422: {
                 headers: {
                     [name: string]: unknown;
