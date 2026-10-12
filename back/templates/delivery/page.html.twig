@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="{{ page.locale }}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -7,6 +7,7 @@
     {% set ogImage = page.seo.openGraphImageAssetId ? media_asset(page.seo.openGraphImageAssetId) : null %}
     <title>{{ seoTitle }}</title>
     {% if canonicalUrl %}<link rel="canonical" href="{{ canonicalUrl }}">{% endif %}
+    {% for alternate in page.alternates %}<link rel="alternate" hreflang="{{ alternate.locale }}" href="{{ publicSiteUrl ~ alternate.url }}">{% endfor %}
     {% if page.seo.description %}<meta name="description" content="{{ page.seo.description }}">{% endif %}
     <meta name="robots" content="{{ (notFound or page.seo.noIndex) ? 'noindex,nofollow' : 'index,follow' }}">
     <meta property="og:type" content="website">
@@ -47,6 +48,12 @@
         .image-block { max-width: 1200px; margin: 0 auto; padding: 32px 24px 64px; }
         .image-block img { display: block; width: 100%; height: auto; border-radius: 20px; }
         .image-block figcaption { margin-top: 12px; color: #667085; font-size: 14px; text-align: center; }
+        .theme-atelier { background: #f5f0e8; color: #241f1a; }
+        .theme-atelier .site-header, .theme-atelier .site-footer { background: #241f1a; }
+        .theme-atelier .hero { background: #d9c7aa; text-align: left; }
+        .theme-atelier .hero h1, .theme-atelier .hero p { margin-left: auto; margin-right: auto; }
+        .theme-atelier.template-showcase .hero h1 { max-width: 1100px; font-family: Georgia, serif; }
+        .theme-atelier .rich-text { color: #51483f; }
     </style>
 </head>
 <body class="theme-{{ page.layout.theme }} template-{{ page.layout.template }}">

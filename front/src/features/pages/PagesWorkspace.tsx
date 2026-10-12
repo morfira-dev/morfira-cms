@@ -44,8 +44,15 @@ import {
 } from './api'
 import { RichTextEditor } from './RichTextEditor'
 import { createUuid } from '../../utils/createUuid'
+import { createReusableSection, deleteReusableSection, getReusableSections, getThemes, type ReusableSection, type Theme } from './catalogApi'
+import { copySectionBlocks, duplicatePageBlock, movePageBlock } from './pageBuilder'
+import { getSiteSettings } from '../settings/api'
 
 const publicSiteUrl = import.meta.env.VITE_PUBLIC_SITE_URL || window.location.origin
+
+function richTextPreview(content: string): string {
+  return content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+}
 
 interface PagesWorkspaceProps {
   mediaAssets: MediaAsset[]
@@ -63,6 +70,9 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
   const [success, setSuccess] = useState<string | null>(null)
   const [title, setTitle] = useState('')
   const [slug, setSlug] = useState('')
+  const [locale, setLocale] = useState('en')
+  const [defaultLocale, setDefaultLocale] = useState('en')
+  const [translationSourceId, setTranslationSourceId] = useState('')
   const [editing, setEditing] = useState<PageSummary | null>(null)
   const [editingDirty, setEditingDirty] = useState(false)
   const [publication, setPublication] = useState<PublishedPage | null>(null)
@@ -71,6 +81,12 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
   const [redirectBusy, setRedirectBusy] = useState(false)
   const [revisions, setRevisions] = useState<PageRevision[]>([])
   const [restoringRevision, setRestoringRevision] = useState<number | null>(null)
+  const [themes, setThemes] = useState<Theme[]>([])
+  const [sections, setSections] = useState<ReusableSection[]>([])
+  const [sectionName, setSectionName] = useState('')
+  const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null)
+  const [draggedBlockId, setDraggedBlockId] = useState<string | null>(null)
+  const [builderViewport, setBuilderViewport] = useState<'desktop' | 'tablet' | 'mobile'>('desktop')
 
   useEffect(() => {
     const controller = new AbortController()
@@ -89,16 +105,29 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
     return () => controller.abort()
   }, [])
 
+  useEffect(() => {
+    const controller = new AbortController()
+    Promise.all([getThemes(controller.signal), getReusableSections(controller.signal), getSiteSettings(controller.signal)])
+      .then(([themeCatalog, sectionCatalog, settings]) => { setThemes(themeCatalog); setSections(sectionCatalog); setLocale(settings.defaultLocale); setDefaultLocale(settings.defaultLocale) })
+      .catch((reason: unknown) => {
+        if (!(reason instanceof DOMException && reason.name === 'AbortError')) setError(reason instanceof Error ? reason.message : 'Could not load page builder catalogs.')
+      })
+    return () => controller.abort()
+  }, [])
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setSubmitting(true)
     setError(null)
 
     try {
-      const page = await createPage(title, slug)
+      const source = pages.find((page) => page.id === translationSourceId)
+      const page = await createPage(title, slug, locale, source?.translationGroupId)
       setPages((current) => [page, ...current])
       setTitle('')
       setSlug('')
+      setLocale(defaultLocale)
+      setTranslationSourceId('')
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not create the page.')
     } finally {
@@ -120,6 +149,8 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
         blocks: editing.blocks,
         seo: editing.seo,
         layout: editing.layout,
+        locale: editing.locale,
+        translationGroupId: editing.translationGroupId,
         version: editing.version,
       })
       setEditing(saved)
@@ -200,6 +231,7 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
     setSuccess(null)
     setRedirects([])
     setRevisions([])
+    setSelectedBlockId(page.blocks[0]?.id ?? null)
     getPageRedirects(page.id)
       .then(setRedirects)
       .catch((reason: unknown) => {
@@ -312,6 +344,52 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
     if (!editing) return
     setEditing({ ...editing, blocks: editing.blocks.filter((block) => block.id !== id) })
     setEditingDirty(true)
+    if (selectedBlockId === id) setSelectedBlockId(null)
+  }
+
+  function moveBlock(id: string, offset: -1 | 1) {
+    if (!editing) return
+    const blocks = movePageBlock(editing.blocks, id, offset)
+    if (blocks === editing.blocks) return
+    setEditing({ ...editing, blocks }); setEditingDirty(true)
+  }
+
+  function duplicateBlock(id: string) {
+    if (!editing) return
+    const blocks = duplicatePageBlock(editing.blocks, id)
+    if (blocks === editing.blocks) return
+    setEditing({ ...editing, blocks }); setSelectedBlockId(blocks[blocks.findIndex((block) => block.id === id) + 1].id); setEditingDirty(true)
+  }
+
+  function dropBlock(targetId: string) {
+    if (!editing || !draggedBlockId || draggedBlockId === targetId) return
+    const blocks = [...editing.blocks]
+    const from = blocks.findIndex((block) => block.id === draggedBlockId)
+    const to = blocks.findIndex((block) => block.id === targetId)
+    if (from < 0 || to < 0) return
+    const [block] = blocks.splice(from, 1)
+    blocks.splice(to, 0, block)
+    setEditing({ ...editing, blocks }); setEditingDirty(true); setDraggedBlockId(null)
+  }
+
+  function insertSection(section: ReusableSection) {
+    if (!editing) return
+    const copies = copySectionBlocks(section.blocks)
+    setEditing({ ...editing, blocks: [...editing.blocks, ...copies] }); setEditingDirty(true)
+  }
+
+  async function saveSection() {
+    if (!editing || !sectionName.trim() || editing.blocks.length === 0) return
+    try {
+      const section = await createReusableSection(sectionName.trim(), editing.blocks)
+      setSections((current) => [...current, section].sort((left, right) => left.name.localeCompare(right.name)))
+      setSectionName(''); setSuccess('Reusable section created.')
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not create reusable section.') }
+  }
+
+  async function removeSection(section: ReusableSection) {
+    try { await deleteReusableSection(section.id); setSections((current) => current.filter((item) => item.id !== section.id)) }
+    catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not delete reusable section.') }
   }
 
   return (
@@ -353,6 +431,11 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
               slotProps={{ htmlInput: { maxLength: 191, pattern: '[a-z0-9]+(?:-[a-z0-9]+)*' } }}
               helperText="Lowercase letters, numbers and hyphens"
             />
+            <TextField label="Locale" value={locale} onChange={(event) => setLocale(event.target.value)} required sx={{ minWidth: 120 }} helperText="en or ru-RU" />
+            <TextField select label="Translation of" value={translationSourceId} onChange={(event) => setTranslationSourceId(event.target.value)} sx={{ minWidth: 190 }}>
+              <MenuItem value="">New translation group</MenuItem>
+              {pages.map((page) => <MenuItem key={page.id} value={page.id}>{page.title} ({page.locale})</MenuItem>)}
+            </TextField>
             <Button type="submit" variant="contained" disabled={submitting} sx={{ minWidth: 140, alignSelf: 'flex-start' }}>
               {submitting ? 'Creating…' : 'Create draft'}
             </Button>
@@ -376,6 +459,7 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
                 <TableRow>
                   <TableCell>Title</TableCell>
                   <TableCell>Slug</TableCell>
+                  <TableCell>Locale</TableCell>
                   <TableCell>Status</TableCell>
                   <TableCell>Created</TableCell>
                   <TableCell align="right">Actions</TableCell>
@@ -385,7 +469,8 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
                 {pages.map((page) => (
                   <TableRow key={page.id} hover>
                     <TableCell sx={{ fontWeight: 700 }}>{page.title}</TableCell>
-                    <TableCell>/{page.slug}</TableCell>
+                    <TableCell>{page.locale === 'en' ? `/${page.slug}` : `/${page.locale}/${page.slug}`}</TableCell>
+                    <TableCell><Chip label={page.locale} size="small" variant="outlined" /></TableCell>
                     <TableCell><Chip label={page.status} size="small" /></TableCell>
                     <TableCell>{new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(page.createdAt))}</TableCell>
                     <TableCell align="right">
@@ -439,9 +524,9 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
               {publication && (
                 <Alert severity="success">
                   Revision {publication.sourceRevision} is live at{' '}
-                  <a href={`${publicSiteUrl}/${publication.slug}`} target="_blank" rel="noreferrer">/{publication.slug}</a>
+                  <a href={`${publicSiteUrl}${publication.url}`} target="_blank" rel="noreferrer">{publication.url}</a>
                   {' '}and available through the{' '}
-                  <a href={`/api/v1/content/pages/${publication.slug}`} target="_blank" rel="noreferrer">public API</a>.
+                  <a href={`/api/v1/content/pages${publication.url}`} target="_blank" rel="noreferrer">public API</a>.
                 </Alert>
               )}
 
@@ -484,6 +569,10 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
                   required
                   helperText="After publishing, previous slugs become permanent redirects"
                 />
+                <TextField label="Locale" value={editing.locale} onChange={(event) => { setEditing({ ...editing, locale: event.target.value }); setEditingDirty(true) }} required helperText="Localized variants publish independently" />
+                <TextField select label="Translation group" value={editing.translationGroupId} onChange={(event) => { setEditing({ ...editing, translationGroupId: event.target.value }); setEditingDirty(true) }} sx={{ minWidth: 220 }}>
+                  {pages.filter((page, index, all) => all.findIndex((candidate) => candidate.translationGroupId === page.translationGroupId) === index).map((page) => <MenuItem key={page.translationGroupId} value={page.translationGroupId}>{page.title}</MenuItem>)}
+                </TextField>
               </Stack>
 
               <Alert severity="info">
@@ -512,12 +601,18 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
                   </Typography>
                 </div>
                 <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-                  <TextField select label="Template" value={editing.layout.template} onChange={(event) => {
-                    setEditing({ ...editing, layout: { ...editing.layout, template: event.target.value as 'standard' | 'wide' } })
+                  <TextField select label="Theme" value={editing.layout.theme} onChange={(event) => {
+                    const theme = themes.find((candidate) => candidate.id === event.target.value)
+                    setEditing({ ...editing, layout: { ...editing.layout, theme: event.target.value, template: theme?.templates[0]?.id ?? editing.layout.template } })
                     setEditingDirty(true)
                   }} fullWidth>
-                    <MenuItem value="standard">Standard</MenuItem>
-                    <MenuItem value="wide">Wide</MenuItem>
+                    {themes.map((theme) => <MenuItem key={theme.id} value={theme.id}>{theme.name}</MenuItem>)}
+                  </TextField>
+                  <TextField select label="Template" value={editing.layout.template} onChange={(event) => {
+                    setEditing({ ...editing, layout: { ...editing.layout, template: event.target.value } })
+                    setEditingDirty(true)
+                  }} fullWidth>
+                    {(themes.find((theme) => theme.id === editing.layout.theme)?.templates ?? []).map((template) => <MenuItem key={template.id} value={template.id}>{template.name}</MenuItem>)}
                   </TextField>
                   <TextField select label="Header navigation" value={editing.layout.headerNavigationCode ?? ''} onChange={(event) => {
                     setEditing({ ...editing, layout: { ...editing.layout, headerNavigationCode: event.target.value || null } })
@@ -606,7 +701,7 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
 
                 <Box sx={{ p: 2.5, border: 1, borderColor: 'divider', borderRadius: 2, maxWidth: 720 }}>
                   <Typography variant="body2" color="success.main" noWrap>
-                    {`${publicSiteUrl}/${editing.slug}`}
+                    {`${publicSiteUrl}${editing.locale === 'en' ? '' : `/${editing.locale}`}/${editing.slug}`}
                   </Typography>
                   <Typography sx={{ color: '#1a0dab', fontSize: 20, mt: 0.5 }}>
                     {editing.seo.title || editing.title}
@@ -619,13 +714,62 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
 
               <Divider />
 
-              <Stack direction="row" spacing={1}>
+              <Typography variant="h6">Visual page builder</Typography>
+              <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
                 <Button variant="outlined" onClick={() => addBlock('hero')}>Add Hero</Button>
                 <Button variant="outlined" onClick={() => addBlock('richText')}>Add RichText</Button>
                 <Button variant="outlined" onClick={() => addBlock('image')} disabled={mediaAssets.length === 0}>
                   Add Image
                 </Button>
               </Stack>
+
+              <Card variant="outlined"><CardContent><Stack spacing={2}>
+                <div><Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Reusable sections</Typography><Typography variant="body2" color="text.secondary">Insertion copies blocks with fresh IDs, so later section changes never rewrite this page.</Typography></div>
+                <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}><TextField size="small" label="Save current canvas as" value={sectionName} onChange={(event) => setSectionName(event.target.value)} /><Button variant="outlined" disabled={!sectionName.trim() || editing.blocks.length === 0} onClick={() => void saveSection()}>Save section</Button></Stack>
+                <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>{sections.map((section) => <Chip key={section.id} label={`${section.name} · ${section.blocks.length} blocks`} onClick={() => insertSection(section)} onDelete={() => void removeSection(section)} />)}</Stack>
+              </Stack></CardContent></Card>
+
+              <Card variant="outlined">
+                <CardContent>
+                  <Stack spacing={2}>
+                    <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ justifyContent: 'space-between', gap: 1 }}>
+                      <div>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Live layout preview</Typography>
+                        <Typography variant="body2" color="text.secondary">Safe text and media representation; server preview remains authoritative.</Typography>
+                      </div>
+                      <Stack direction="row" spacing={1}>
+                        {(['desktop', 'tablet', 'mobile'] as const).map((viewport) => (
+                          <Button key={viewport} size="small" variant={builderViewport === viewport ? 'contained' : 'outlined'} onClick={() => setBuilderViewport(viewport)}>
+                            {viewport[0].toUpperCase() + viewport.slice(1)}
+                          </Button>
+                        ))}
+                      </Stack>
+                    </Stack>
+                    <Box sx={{ overflowX: 'auto', bgcolor: 'grey.100', p: 2, borderRadius: 2 }}>
+                      <Box sx={{ width: builderViewport === 'desktop' ? '100%' : builderViewport === 'tablet' ? 720 : 360, maxWidth: '100%', mx: 'auto', bgcolor: editing.layout.theme === 'atelier' ? '#fffaf3' : 'background.paper', border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden', transition: 'width 160ms ease' }}>
+                        {editing.blocks.length === 0 ? (
+                          <Typography color="text.secondary" sx={{ p: 4, textAlign: 'center' }}>Add blocks to preview the page composition.</Typography>
+                        ) : editing.blocks.map((block) => {
+                          const asset = block.type === 'image' ? mediaAssets.find((candidate) => candidate.id === block.data.assetId) : undefined
+                          return (
+                            <Box key={block.id} onClick={() => setSelectedBlockId(block.id)} sx={{ p: block.type === 'hero' ? 5 : 3, textAlign: block.type === 'hero' ? 'center' : 'left', border: selectedBlockId === block.id ? 2 : 0, borderColor: 'primary.main', cursor: 'pointer' }}>
+                              {block.type === 'hero' ? (
+                                <><Typography variant="h4" sx={{ fontFamily: editing.layout.theme === 'atelier' ? 'serif' : 'inherit' }}>{block.data.heading || 'Hero heading'}</Typography><Typography color="text.secondary" sx={{ mt: 1 }}>{block.data.text || 'Supporting text'}</Typography></>
+                              ) : block.type === 'richText' ? (
+                                <Typography sx={{ whiteSpace: 'pre-wrap' }}>{richTextPreview(block.data.content) || 'Rich text content'}</Typography>
+                              ) : asset ? (
+                                <Box component="img" src={getMediaThumbnail(asset)} alt={block.data.alt} sx={{ display: 'block', width: '100%', maxHeight: 420, objectFit: 'cover' }} />
+                              ) : (
+                                <Typography color="text.secondary">Select an image asset.</Typography>
+                              )}
+                            </Box>
+                          )
+                        })}
+                      </Box>
+                    </Box>
+                  </Stack>
+                </CardContent>
+              </Card>
 
               {mediaAssets.length === 0 && (
                 <Typography variant="body2" color="text.secondary">
@@ -638,14 +782,19 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
               )}
 
               {editing.blocks.map((block, index) => (
-                <Card key={block.id} variant="outlined">
+                <Card key={block.id} variant="outlined" draggable onDragStart={() => setDraggedBlockId(block.id)} onDragOver={(event) => event.preventDefault()} onDrop={() => dropBlock(block.id)} onClick={() => setSelectedBlockId(block.id)} sx={{ borderColor: selectedBlockId === block.id ? 'primary.main' : 'divider', borderWidth: selectedBlockId === block.id ? 2 : 1, cursor: 'grab' }}>
                   <CardContent>
                     <Stack spacing={2}>
                       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
                         <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
                           {index + 1}. {block.type === 'hero' ? 'Hero' : block.type === 'richText' ? 'RichText' : 'Image'}
                         </Typography>
-                        <Button color="error" size="small" onClick={() => removeBlock(block.id)}>Remove</Button>
+                        <Stack direction="row" spacing={.5}>
+                          <Button size="small" disabled={index === 0} onClick={() => moveBlock(block.id, -1)}>Up</Button>
+                          <Button size="small" disabled={index === editing.blocks.length - 1} onClick={() => moveBlock(block.id, 1)}>Down</Button>
+                          <Button size="small" onClick={() => duplicateBlock(block.id)}>Duplicate</Button>
+                          <Button color="error" size="small" onClick={() => removeBlock(block.id)}>Remove</Button>
+                        </Stack>
                       </Stack>
 
                       {block.type === 'hero' ? (

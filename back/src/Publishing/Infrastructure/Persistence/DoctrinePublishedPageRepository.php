@@ -38,6 +38,9 @@ final readonly class DoctrinePublishedPageRepository implements PublishedPageRep
                     'seo' => json_encode($page->seo, JSON_THROW_ON_ERROR),
                     'layout' => json_encode($page->resolvedLayout(), JSON_THROW_ON_ERROR),
                     'published_at' => $page->publishedAt->format('Y-m-d H:i:s.u'),
+                    'locale' => $page->locale,
+                    'translation_group_id' => $page->resolvedTranslationGroupId(),
+                    'public_path' => $page->resolvedPublicPath(),
                 ]);
                 $this->activateUsing($connection, $page);
             });
@@ -45,7 +48,7 @@ final readonly class DoctrinePublishedPageRepository implements PublishedPageRep
             $existing = $this->findByRevision($page->pageId, $page->sourceRevision);
 
             if ($existing === null) {
-                throw new PublishedSlugAlreadyExists($page->slug);
+                throw new PublishedSlugAlreadyExists($page->resolvedPublicPath());
             }
 
             $this->activate($existing);
@@ -146,6 +149,19 @@ SQL);
         return array_map($this->hydrate(...), $rows);
     }
 
+    public function activeTranslations(string $translationGroupId): array
+    {
+        $rows = $this->connection->fetchAllAssociative(<<<'SQL'
+SELECT snapshot.*
+FROM published_page_routes route
+JOIN published_page_snapshots snapshot ON snapshot.id = route.snapshot_id
+WHERE snapshot.translation_group_id = ?
+ORDER BY snapshot.locale ASC
+SQL, [$translationGroupId]);
+
+        return array_map($this->hydrate(...), $rows);
+    }
+
     private function findByRevision(string $pageId, int $revision): ?PublishedPage
     {
         $row = $this->connection->fetchAssociative(
@@ -163,7 +179,7 @@ SQL);
                 $this->activateUsing($connection, $page);
             });
         } catch (UniqueConstraintViolationException) {
-            throw new PublishedSlugAlreadyExists($page->slug);
+            throw new PublishedSlugAlreadyExists($page->resolvedPublicPath());
         }
     }
 
@@ -175,14 +191,14 @@ SQL);
         );
         $redirectOwner = $connection->fetchOne(
             'SELECT page_id FROM published_page_redirects WHERE source_slug = ? FOR UPDATE',
-            [$page->slug],
+            [$page->resolvedPublicPath()],
         );
 
         if (is_string($redirectOwner) && $redirectOwner !== $page->pageId) {
-            throw new PublishedSlugAlreadyExists($page->slug);
+            throw new PublishedSlugAlreadyExists($page->resolvedPublicPath());
         }
 
-        if (is_string($previousSlug) && $previousSlug !== $page->slug) {
+        if (is_string($previousSlug) && $previousSlug !== $page->resolvedPublicPath()) {
             $previousOwner = $connection->fetchOne(
                 'SELECT page_id FROM published_page_redirects WHERE source_slug = ? FOR UPDATE',
                 [$previousSlug],
@@ -200,12 +216,12 @@ SQL);
         }
 
         $connection->delete('published_page_redirects', [
-            'source_slug' => $page->slug,
+            'source_slug' => $page->resolvedPublicPath(),
             'page_id' => $page->pageId,
         ]);
         $connection->delete('published_page_routes', ['page_id' => $page->pageId]);
         $connection->insert('published_page_routes', [
-            'slug' => $page->slug,
+            'slug' => $page->resolvedPublicPath(),
             'page_id' => $page->pageId,
             'snapshot_id' => $page->snapshotId,
         ]);
@@ -270,6 +286,9 @@ SQL);
             self::seoValue($seo),
             new \DateTimeImmutable(self::stringValue($row, 'published_at'), new \DateTimeZone('UTC')),
             ['theme' => $theme, 'template' => $template, 'headerNavigationCode' => $header, 'footerNavigationCode' => $footer],
+            self::stringValue($row, 'locale'),
+            self::stringValue($row, 'translation_group_id'),
+            self::stringValue($row, 'public_path'),
         );
     }
 

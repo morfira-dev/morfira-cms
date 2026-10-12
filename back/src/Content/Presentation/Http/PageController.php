@@ -13,6 +13,7 @@ use Cms\Content\Domain\PageNotFound;
 use Cms\Content\Domain\PageLayout;
 use Cms\Content\Domain\PageSeo;
 use Cms\Content\Domain\PageSlugAlreadyExists;
+use Cms\Content\Domain\PageTranslationAlreadyExists;
 use Cms\Content\Domain\PageVersionConflict;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -56,14 +57,16 @@ final readonly class PageController
         $payload = $request->toArray();
         $title = $payload['title'] ?? null;
         $slug = $payload['slug'] ?? null;
+        $locale = $payload['locale'] ?? null;
+        $translationGroupId = $payload['translationGroupId'] ?? null;
 
-        if (!is_string($title) || !is_string($slug)) {
-            return new JsonResponse(['error' => 'Fields "title" and "slug" must be strings.'], 422);
+        if (!is_string($title) || !is_string($slug) || ($locale !== null && !is_string($locale)) || ($translationGroupId !== null && !is_string($translationGroupId))) {
+            return new JsonResponse(['error' => 'Title, slug and locale must be strings.'], 422);
         }
 
         try {
-            $page = ($this->createPage)($title, $slug);
-        } catch (PageSlugAlreadyExists $exception) {
+            $page = ($this->createPage)($title, $slug, $locale, $translationGroupId);
+        } catch (PageSlugAlreadyExists|PageTranslationAlreadyExists $exception) {
             return new JsonResponse(['error' => $exception->getMessage()], 409);
         } catch (\InvalidArgumentException $exception) {
             return new JsonResponse(['error' => $exception->getMessage()], 422);
@@ -82,8 +85,10 @@ final readonly class PageController
         $seo = $payload['seo'] ?? null;
         $layout = $payload['layout'] ?? null;
         $version = $payload['version'] ?? null;
+        $locale = $payload['locale'] ?? null;
+        $translationGroupId = $payload['translationGroupId'] ?? null;
 
-        if (!is_string($title) || !is_string($slug) || !is_array($blocks) || !array_is_list($blocks) || !is_array($seo) || array_is_list($seo) || !is_array($layout) || array_is_list($layout) || !is_int($version)) {
+        if (!is_string($title) || !is_string($slug) || !is_array($blocks) || !array_is_list($blocks) || !is_array($seo) || array_is_list($seo) || !is_array($layout) || array_is_list($layout) || !is_int($version) || ($locale !== null && !is_string($locale)) || ($translationGroupId !== null && !is_string($translationGroupId))) {
             return new JsonResponse(['error' => 'Invalid page revision payload.'], 422);
         }
 
@@ -99,10 +104,10 @@ final readonly class PageController
         try {
             /** @var array<string, mixed> $seo */
             /** @var array<string, mixed> $layout */
-            $page = ($this->updatePage)($id, $title, $slug, $blockPayloads, PageSeo::fromArray($seo), $version, PageLayout::fromArray($layout));
+            $page = ($this->updatePage)($id, $title, $slug, $blockPayloads, PageSeo::fromArray($seo), $version, PageLayout::fromArray($layout), $locale, $translationGroupId);
         } catch (PageNotFound) {
             return new JsonResponse(['error' => 'Page not found.'], 404);
-        } catch (PageSlugAlreadyExists|PageVersionConflict $exception) {
+        } catch (PageSlugAlreadyExists|PageTranslationAlreadyExists|PageVersionConflict $exception) {
             return new JsonResponse(['error' => $exception->getMessage()], 409);
         } catch (\InvalidArgumentException $exception) {
             return new JsonResponse(['error' => $exception->getMessage()], 422);

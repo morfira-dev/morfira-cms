@@ -119,13 +119,18 @@ The initial foundation contains:
 - manually managed direct permanent redirects for active page routes;
 - owner-managed site identity and regional defaults with optimistic locking;
 - visible immutable page revision history and append-only draft restoration;
+- locale-aware page variants grouped as translations, with stable default and prefixed public URLs, canonical links and `hreflang` alternates;
+- a visual page canvas with selection, drag-and-drop ordering, keyboard move controls, duplication and removal;
+- deployment-trusted theme packages with catalog-backed template selection and two bundled themes;
+- versioned reusable sections that insert independent block copies into page drafts;
+- a versioned, container-registered extension API with declared capabilities, typed publication hooks and owner-visible diagnostics;
 - authenticated self-service password rotation;
 - a live Admin Studio content overview with direct workspace navigation;
 - a single-image production deployment, readiness/maintenance controls, backup and restore scripts, and a production browser journey;
 - versioned `/api/v1` contracts with frontend types generated from OpenAPI 3.1;
 - architectural decision records.
 
-Multi-entry and reverse relation editing, localization, rich HTML fields, menu placement/theme bindings, extension/plugin execution and advanced editorial workflows are intentionally deferred. They will be introduced through vertical slices and explicit ADRs.
+Multi-entry and reverse relation editing, rich HTML fields, remote theme/extension installation, live-linked sections and advanced editorial workflows are intentionally deferred. They will be introduced through vertical slices and explicit ADRs.
 
 ## Architecture
 

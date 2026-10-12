@@ -7,6 +7,7 @@ import {
   type PublicationTargetType,
   putPublicationSchedule,
 } from './api'
+import { useAdminLocale } from '../../i18n/AdminLocaleProvider'
 
 interface PublicationSchedulerProps {
   target: PublicationTargetType
@@ -16,6 +17,7 @@ interface PublicationSchedulerProps {
 }
 
 export function PublicationScheduler({ target, targetId, sourceVersion, dirty }: PublicationSchedulerProps) {
+  const { formatDateTime, t } = useAdminLocale()
   const [schedule, setSchedule] = useState<PublicationSchedule | null>(null)
   const [scheduledAt, setScheduledAt] = useState(defaultLocalDateTime)
   const [loading, setLoading] = useState(true)
@@ -33,7 +35,7 @@ export function PublicationScheduler({ target, targetId, sourceVersion, dirty }:
       })
       .catch((reason: unknown) => {
         if (!(reason instanceof DOMException && reason.name === 'AbortError')) {
-          setError(reason instanceof Error ? reason.message : 'Could not load the publication schedule.')
+          setError(reason instanceof Error ? reason.message : t('Could not load the publication schedule.'))
         }
       })
       .finally(() => setLoading(false))
@@ -43,7 +45,7 @@ export function PublicationScheduler({ target, targetId, sourceVersion, dirty }:
   async function plan() {
     const parsed = new Date(scheduledAt)
     if (!scheduledAt || Number.isNaN(parsed.getTime()) || parsed <= new Date()) {
-      setError('Choose a future publication date and time.')
+      setError(t('Choose a future publication date and time.'))
       return
     }
     setSubmitting(true)
@@ -51,7 +53,7 @@ export function PublicationScheduler({ target, targetId, sourceVersion, dirty }:
     try {
       setSchedule(await putPublicationSchedule(target, targetId, sourceVersion, parsed.toISOString()))
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not schedule publication.')
+      setError(reason instanceof Error ? reason.message : t('Could not schedule publication.'))
     } finally {
       setSubmitting(false)
     }
@@ -63,7 +65,7 @@ export function PublicationScheduler({ target, targetId, sourceVersion, dirty }:
     try {
       setSchedule(await cancelPublicationSchedule(target, targetId))
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not cancel the publication schedule.')
+      setError(reason instanceof Error ? reason.message : t('Could not cancel the publication schedule.'))
     } finally {
       setSubmitting(false)
     }
@@ -73,20 +75,20 @@ export function PublicationScheduler({ target, targetId, sourceVersion, dirty }:
     <Stack spacing={1.5} sx={{ p: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
       <Stack direction={{ xs: 'column', md: 'row' }} sx={{ justifyContent: 'space-between', gap: 1 }}>
         <div>
-          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Scheduled publication</Typography>
-          <Typography variant="body2" color="text.secondary">The exact saved version will be published by the scheduler.</Typography>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{t('Scheduled publication')}</Typography>
+          <Typography variant="body2" color="text.secondary">{t('The exact saved version will be published by the scheduler.')}</Typography>
         </div>
-        {schedule && <Chip label={schedule.status} color={schedule.status === 'failed' ? 'error' : schedule.status === 'pending' ? 'warning' : 'default'} size="small" />}
+        {schedule && <Chip label={t(schedule.status)} color={schedule.status === 'failed' ? 'error' : schedule.status === 'pending' ? 'warning' : 'default'} size="small" />}
       </Stack>
       {error && <Alert severity="error">{error}</Alert>}
       {schedule?.failureReason && <Alert severity="error">{schedule.failureReason}</Alert>}
       {schedule?.status === 'pending' && (
-        <Alert severity="info">Version {schedule.sourceVersion} is scheduled for {formatDate(schedule.scheduledAt)}.</Alert>
+        <Alert severity="info">{t('Version {{version}} is scheduled for {{date}}.', { version: schedule.sourceVersion, date: formatDateTime(schedule.scheduledAt) })}</Alert>
       )}
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
         <TextField
           type="datetime-local"
-          label="Publish at"
+          label={t('Publish at')}
           value={scheduledAt}
           onChange={(event) => setScheduledAt(event.target.value)}
           disabled={loading || submitting}
@@ -94,13 +96,13 @@ export function PublicationScheduler({ target, targetId, sourceVersion, dirty }:
           fullWidth
         />
         <Button type="button" variant="outlined" disabled={loading || submitting || dirty} onClick={() => void plan()} sx={{ minWidth: 170 }}>
-          {submitting ? 'Working…' : schedule?.status === 'pending' ? 'Reschedule' : 'Schedule'}
+          {submitting ? t('Working…') : schedule?.status === 'pending' ? t('Reschedule') : t('Schedule')}
         </Button>
         {schedule?.status === 'pending' && (
-          <Button type="button" color="error" disabled={submitting} onClick={() => void cancel()}>Cancel</Button>
+          <Button type="button" color="error" disabled={submitting} onClick={() => void cancel()}>{t('Cancel')}</Button>
         )}
       </Stack>
-      {dirty && <Typography variant="caption" color="warning.main">Save the draft before scheduling it.</Typography>}
+      {dirty && <Typography variant="caption" color="warning.main">{t('Save the draft before scheduling it.')}</Typography>}
     </Stack>
   )
 }
@@ -113,8 +115,4 @@ function toLocalDateTime(value: string): string {
   const date = new Date(value)
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
   return local.toISOString().slice(0, 16)
-}
-
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
 }

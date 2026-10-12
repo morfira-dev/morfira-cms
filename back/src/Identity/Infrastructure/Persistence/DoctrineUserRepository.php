@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cms\Identity\Infrastructure\Persistence;
 
 use Cms\Identity\Domain\User;
+use Cms\Identity\Domain\AdminLocale;
 use Cms\Identity\Domain\UserEmailAlreadyExists;
 use Cms\Identity\Domain\UserMutationResult;
 use Cms\Identity\Domain\UserRepository;
@@ -42,6 +43,7 @@ final readonly class DoctrineUserRepository implements UserRepository
                 'password_hash' => $user->passwordHash,
                 'roles' => json_encode($user->roles, JSON_THROW_ON_ERROR),
                 'created_at' => $user->createdAt->format('Y-m-d H:i:s.u'),
+                'admin_locale' => $user->adminLocale->value,
             ]);
 
             return true;
@@ -88,6 +90,11 @@ final readonly class DoctrineUserRepository implements UserRepository
     public function replacePasswordHash(string $id, string $passwordHash): void
     {
         $this->connection->update('identity_users', ['password_hash' => $passwordHash], ['id' => $id]);
+    }
+
+    public function replaceAdminLocale(string $id, AdminLocale $locale): void
+    {
+        $this->connection->update('identity_users', ['admin_locale' => $locale->value], ['id' => $id]);
     }
 
     public function changeRolePreservingOwner(string $id, UserRole $role): UserMutationResult
@@ -139,6 +146,7 @@ final readonly class DoctrineUserRepository implements UserRepository
             self::stringValue($row, 'password_hash'),
             self::roles($row),
             new \DateTimeImmutable(self::stringValue($row, 'created_at'), new \DateTimeZone('UTC')),
+            AdminLocale::from(self::stringValue($row, 'admin_locale')),
         );
     }
 
@@ -173,6 +181,7 @@ final readonly class DoctrineUserRepository implements UserRepository
             'password_hash' => $user->passwordHash,
             'roles' => json_encode($user->roles, JSON_THROW_ON_ERROR),
             'created_at' => $user->createdAt->format('Y-m-d H:i:s.u'),
+            'admin_locale' => $user->adminLocale->value,
         ];
     }
 

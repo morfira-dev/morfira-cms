@@ -17,12 +17,14 @@ import {
   Typography,
 } from '../../ui'
 import { createUser, deleteUser, getUsers, updateUserRole, type CmsUser, type UserRole } from './api'
+import { useAdminLocale } from '../../i18n/AdminLocaleProvider'
 
 interface UsersWorkspaceProps {
   currentUserId: string
 }
 
 export function UsersWorkspace({ currentUserId }: UsersWorkspaceProps) {
+  const { t, formatDateTime } = useAdminLocale()
   const [users, setUsers] = useState<CmsUser[]>([])
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
@@ -37,11 +39,11 @@ export function UsersWorkspace({ currentUserId }: UsersWorkspaceProps) {
     getUsers(controller.signal)
       .then(setUsers)
       .catch((reason: unknown) => {
-        if (!(reason instanceof DOMException && reason.name === 'AbortError')) setError(reason instanceof Error ? reason.message : 'Could not load users.')
+        if (!(reason instanceof DOMException && reason.name === 'AbortError')) setError(reason instanceof Error ? reason.message : t('Could not load users.'))
       })
       .finally(() => setLoading(false))
     return () => controller.abort()
-  }, [])
+  }, [t])
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -54,7 +56,7 @@ export function UsersWorkspace({ currentUserId }: UsersWorkspaceProps) {
       setPassword('')
       setRole('editor')
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not create the user.')
+      setError(reason instanceof Error ? reason.message : t('Could not create the user.'))
     } finally {
       setCreating(false)
     }
@@ -68,21 +70,21 @@ export function UsersWorkspace({ currentUserId }: UsersWorkspaceProps) {
       const updated = await updateUserRole(user.id, nextRole)
       setUsers((current) => current.map((candidate) => candidate.id === updated.id ? updated : candidate))
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not change the user role.')
+      setError(reason instanceof Error ? reason.message : t('Could not change the user role.'))
     } finally {
       setBusyId(null)
     }
   }
 
   async function remove(user: CmsUser) {
-    if (!window.confirm(`Delete ${user.email}? This account will lose CMS access immediately.`)) return
+    if (!window.confirm(t('Delete {{email}}? This account will lose CMS access immediately.', { email: user.email }))) return
     setBusyId(user.id)
     setError(null)
     try {
       await deleteUser(user.id)
       setUsers((current) => current.filter((candidate) => candidate.id !== user.id))
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not delete the user.')
+      setError(reason instanceof Error ? reason.message : t('Could not delete the user.'))
     } finally {
       setBusyId(null)
     }
@@ -91,21 +93,21 @@ export function UsersWorkspace({ currentUserId }: UsersWorkspaceProps) {
   return (
     <Stack spacing={3}>
       <div>
-        <Typography component="h1" variant="h1">Users</Typography>
-        <Typography color="text.secondary" sx={{ mt: 0.75 }}>Invite editors and owners without exposing credentials or password hashes.</Typography>
+        <Typography component="h1" variant="h1">{t('Users')}</Typography>
+        <Typography color="text.secondary" sx={{ mt: 0.75 }}>{t('Invite editors and owners without exposing credentials or password hashes.')}</Typography>
       </div>
       {error && <Alert severity="error">{error}</Alert>}
       <Card variant="outlined">
         <CardContent>
-          <Typography variant="h6">Create user</Typography>
+          <Typography variant="h6">{t('Create user')}</Typography>
           <Stack component="form" direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mt: 2 }} onSubmit={submit}>
-            <TextField label="Email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required fullWidth />
-            <TextField label="Temporary password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required fullWidth helperText="At least 12 characters" slotProps={{ htmlInput: { minLength: 12 } }} />
-            <TextField select label="Role" value={role} onChange={(event) => setRole(event.target.value as UserRole)} sx={{ minWidth: 150 }}>
-              <MenuItem value="editor">Editor</MenuItem>
-              <MenuItem value="owner">Owner</MenuItem>
+            <TextField label={t('Email')} type="email" value={email} onChange={(event) => setEmail(event.target.value)} required fullWidth />
+            <TextField label={t('Temporary password')} type="password" value={password} onChange={(event) => setPassword(event.target.value)} required fullWidth helperText={t('At least 12 characters')} slotProps={{ htmlInput: { minLength: 12 } }} />
+            <TextField select label={t('Role')} value={role} onChange={(event) => setRole(event.target.value as UserRole)} sx={{ minWidth: 150 }}>
+              <MenuItem value="editor">{t('Editor')}</MenuItem>
+              <MenuItem value="owner">{t('Owner')}</MenuItem>
             </TextField>
-            <Button type="submit" variant="contained" disabled={creating} sx={{ alignSelf: 'flex-start', minWidth: 130 }}>{creating ? 'Creating…' : 'Create user'}</Button>
+            <Button type="submit" variant="contained" disabled={creating} sx={{ alignSelf: 'flex-start', minWidth: 130 }}>{creating ? t('Creating…') : t('Create user')}</Button>
           </Stack>
         </CardContent>
       </Card>
@@ -115,13 +117,13 @@ export function UsersWorkspace({ currentUserId }: UsersWorkspaceProps) {
         ) : (
           <TableContainer>
             <Table>
-              <TableHead><TableRow><TableCell>Email</TableCell><TableCell>Role</TableCell><TableCell>Created</TableCell><TableCell align="right">Actions</TableCell></TableRow></TableHead>
+              <TableHead><TableRow><TableCell>{t('Email')}</TableCell><TableCell>{t('Role')}</TableCell><TableCell>{t('Created')}</TableCell><TableCell align="right">{t('Actions')}</TableCell></TableRow></TableHead>
               <TableBody>
                 {users.map((user) => {
                   const self = user.id === currentUserId
                   return (
                     <TableRow key={user.id} hover>
-                      <TableCell sx={{ fontWeight: 700 }}>{user.email}{self ? ' (you)' : ''}</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>{user.email}{self ? ` (${t('you')})` : ''}</TableCell>
                       <TableCell>
                         <TextField
                           select
@@ -129,14 +131,14 @@ export function UsersWorkspace({ currentUserId }: UsersWorkspaceProps) {
                           value={user.role}
                           disabled={self || busyId === user.id}
                           onChange={(event) => void changeRole(user, event.target.value as UserRole)}
-                          aria-label={`Role for ${user.email}`}
+                          aria-label={t('Role for {{email}}', { email: user.email })}
                         >
-                          <MenuItem value="editor">Editor</MenuItem>
-                          <MenuItem value="owner">Owner</MenuItem>
+                          <MenuItem value="editor">{t('Editor')}</MenuItem>
+                          <MenuItem value="owner">{t('Owner')}</MenuItem>
                         </TextField>
                       </TableCell>
-                      <TableCell>{new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(user.createdAt))}</TableCell>
-                      <TableCell align="right"><Button color="error" size="small" disabled={self || busyId === user.id} onClick={() => void remove(user)}>Delete</Button></TableCell>
+                      <TableCell>{formatDateTime(user.createdAt)}</TableCell>
+                      <TableCell align="right"><Button color="error" size="small" disabled={self || busyId === user.id} onClick={() => void remove(user)}>{t('Delete')}</Button></TableCell>
                     </TableRow>
                   )
                 })}

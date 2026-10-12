@@ -9,7 +9,9 @@ import {
   Toolbar,
   Typography,
 } from '@mui/material'
-import type { PropsWithChildren } from 'react'
+import { type PropsWithChildren, useState } from 'react'
+import { useAdminLocale } from '../../i18n/AdminLocaleProvider'
+import type { AdminLocale } from '../../i18n/AdminLocaleProvider'
 
 interface NavigationItem {
   id: string
@@ -23,11 +25,28 @@ interface AdminShellProps extends PropsWithChildren {
   userEmail: string
   onNavigate: (path: string) => void
   onLogout: () => void
+  onLocaleChange: (locale: AdminLocale) => Promise<void>
 }
 
 const sidebarWidth = 240
 
-export function AdminShell({ navigation, userEmail, onNavigate, onLogout, children }: AdminShellProps) {
+export function AdminShell({ navigation, userEmail, onNavigate, onLogout, onLocaleChange, children }: AdminShellProps) {
+  const { locale, t } = useAdminLocale()
+  const [changingLocale, setChangingLocale] = useState(false)
+  const [localeError, setLocaleError] = useState(false)
+
+  async function changeLocale() {
+    setChangingLocale(true)
+    setLocaleError(false)
+    try {
+      await onLocaleChange(locale === 'en' ? 'ru' : 'en')
+    } catch {
+      setLocaleError(true)
+    } finally {
+      setChangingLocale(false)
+    }
+  }
+
   return (
     <Box
       sx={{
@@ -54,7 +73,7 @@ export function AdminShell({ navigation, userEmail, onNavigate, onLogout, childr
 
         <List
           component="nav"
-          aria-label="Main navigation"
+          aria-label={t('Main navigation')}
           sx={{ display: { xs: 'flex', md: 'block' }, gap: { xs: 0.5, md: 0 }, overflowX: 'auto' }}
         >
           {navigation.map((item) => (
@@ -86,16 +105,25 @@ export function AdminShell({ navigation, userEmail, onNavigate, onLogout, childr
         <AppBar position="static" color="inherit" elevation={0} sx={{ borderBottom: 1, borderColor: 'divider' }}>
           <Toolbar sx={{ justifyContent: 'space-between', gap: 2 }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-              Admin Studio
+              {t('Admin Studio')}
             </Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              <Button
+                size="small"
+                aria-label={t('Interface language')}
+                disabled={changingLocale}
+                onClick={() => void changeLocale()}
+              >
+                {locale === 'en' ? t('Russian') : t('English')}
+              </Button>
               <Typography variant="body2" color="text.secondary">{userEmail}</Typography>
-              <Button size="small" onClick={onLogout}>Sign out</Button>
+              <Button size="small" onClick={onLogout}>{t('Sign out')}</Button>
             </Box>
           </Toolbar>
         </AppBar>
 
         <Container component="main" maxWidth="xl" sx={{ py: 4 }}>
+          {localeError && <Typography color="error" sx={{ mb: 2 }}>{t('Could not save the Admin Studio language.')}</Typography>}
           {children}
         </Container>
       </Box>

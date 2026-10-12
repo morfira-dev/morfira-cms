@@ -14,17 +14,19 @@ use Cms\Content\Domain\PageRepository;
 use Cms\Content\Domain\PageSeo;
 use Cms\Content\Domain\PageSlug;
 use Cms\Content\Domain\PageTitle;
+use Cms\Theme\Application\ThemeCatalog;
 
 final readonly class UpdatePage
 {
     public function __construct(
         private PageRepository $pages,
         private RichTextSanitizer $richTextSanitizer,
+        private ?ThemeCatalog $themes = null,
     ) {
     }
 
     /** @param list<array<string, mixed>> $blocks */
-    public function __invoke(string $id, string $title, string $slug, array $blocks, PageSeo $seo, int $version, ?PageLayout $layout = null): PageView
+    public function __invoke(string $id, string $title, string $slug, array $blocks, PageSeo $seo, int $version, ?PageLayout $layout = null, ?string $locale = null, ?string $translationGroupId = null): PageView
     {
         $page = $this->pages->get(PageId::fromString($id));
 
@@ -36,13 +38,20 @@ final readonly class UpdatePage
             throw new \Cms\Content\Domain\PageVersionConflict();
         }
 
+        $resolvedLayout = $layout ?? $page->layout;
+        if ($this->themes !== null && !$this->themes->supports($resolvedLayout->theme, $resolvedLayout->template)) {
+            throw new \InvalidArgumentException('Unsupported theme or template.');
+        }
+
         $revised = $page->revise(
             new PageTitle($title),
             new PageSlug($slug),
             array_map(PageBlock::fromArray(...), $this->sanitizeRichTextBlocks($blocks)),
             $seo,
             new \DateTimeImmutable('now', new \DateTimeZone('UTC')),
-            $layout,
+            $resolvedLayout,
+            $locale,
+            $translationGroupId,
         );
 
         $this->pages->save($revised, $version);

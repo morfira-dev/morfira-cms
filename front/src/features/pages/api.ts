@@ -20,11 +20,11 @@ export async function getPages(signal?: AbortSignal): Promise<PageSummary[]> {
   return body.items
 }
 
-export async function createPage(title: string, slug: string): Promise<PageSummary> {
+export async function createPage(title: string, slug: string, locale = 'en', translationGroupId?: string): Promise<PageSummary> {
   const response = await apiFetch('/api/v1/admin/pages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title, slug }),
+    body: JSON.stringify({ title, slug, locale, ...(translationGroupId ? { translationGroupId } : {}) }),
   })
 
   if (!response.ok) {

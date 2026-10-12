@@ -40,7 +40,7 @@ final readonly class SeoController
         $urls = array_map(
             static fn (PublishedPageView $page): string => sprintf(
                 "  <url><loc>%s</loc><lastmod>%s</lastmod></url>",
-                htmlspecialchars($baseUrl . ($page->slug === 'home' ? '/' : '/' . $page->slug), ENT_XML1 | ENT_QUOTES, 'UTF-8'),
+                htmlspecialchars($baseUrl . ($page->url === '/home' ? '/' : $page->url), ENT_XML1 | ENT_QUOTES, 'UTF-8'),
                 htmlspecialchars($page->publishedAt, ENT_XML1 | ENT_QUOTES, 'UTF-8'),
             ),
             $pages,

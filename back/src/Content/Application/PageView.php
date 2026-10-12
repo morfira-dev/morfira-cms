@@ -22,6 +22,8 @@ final readonly class PageView
         public int $version,
         public string $createdAt,
         public string $updatedAt,
+        public string $locale,
+        public string $translationGroupId,
     ) {
     }
 
@@ -38,10 +40,12 @@ final readonly class PageView
             $page->version,
             $page->createdAt->format(DATE_ATOM),
             $page->updatedAt->format(DATE_ATOM),
+            $page->locale,
+            $page->translationGroupId,
         );
     }
 
-    /** @return array{id: string, title: string, slug: string, status: string, blocks: list<array{id: string, type: string, data: array<string, string>}>, seo: array{title: string, description: string, noIndex: bool, openGraphImageAssetId: ?string}, layout: array{theme: string, template: string, headerNavigationCode: ?string, footerNavigationCode: ?string}, version: int, createdAt: string, updatedAt: string} */
+    /** @return array{id: string, title: string, slug: string, status: string, blocks: list<array{id: string, type: string, data: array<string, string>}>, seo: array{title: string, description: string, noIndex: bool, openGraphImageAssetId: ?string}, layout: array{theme: string, template: string, headerNavigationCode: ?string, footerNavigationCode: ?string}, version: int, createdAt: string, updatedAt: string, locale: string, translationGroupId: string} */
     public function toArray(): array
     {
         return [
@@ -55,6 +59,8 @@ final readonly class PageView
             'version' => $this->version,
             'createdAt' => $this->createdAt,
             'updatedAt' => $this->updatedAt,
+            'locale' => $this->locale,
+            'translationGroupId' => $this->translationGroupId,
         ];
     }
 }

@@ -90,6 +90,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update the authenticated user's Admin Studio preferences */
+        put: operations["updateAuthenticatedUserPreferences"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/logout": {
         parameters: {
             query?: never;
@@ -216,6 +233,74 @@ export interface paths {
         post?: never;
         /** Delete an unreferenced media asset and its immutable files */
         delete: operations["deleteMedia"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/themes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List trusted installed theme packages */
+        get: operations["listThemes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/extensions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List trusted container-registered extensions */
+        get: operations["listExtensions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/sections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listReusableSections"];
+        put?: never;
+        post: operations["createReusableSection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/sections/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["updateReusableSection"];
+        post?: never;
+        delete: operations["deleteReusableSection"];
         options?: never;
         head?: never;
         patch?: never;
@@ -730,6 +815,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/content/pages/{locale}/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                locale: components["schemas"]["Locale"];
+                slug: string;
+            };
+            cookie?: never;
+        };
+        /** Get an active locale-prefixed published page snapshot */
+        get: operations["getLocalizedPublishedPage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/robots.txt": {
         parameters: {
             query?: never;
@@ -809,6 +914,15 @@ export interface components {
             /** Format: email */
             email: string;
             roles: ("ROLE_OWNER" | "ROLE_EDITOR")[];
+            adminLocale: components["schemas"]["AdminLocale"];
+        };
+        /** @enum {string} */
+        AdminLocale: "en" | "ru";
+        UpdateAdminPreferencesRequest: {
+            adminLocale: components["schemas"]["AdminLocale"];
+        };
+        AdminPreferences: {
+            adminLocale: components["schemas"]["AdminLocale"];
         };
         /** @enum {string} */
         UserRole: "owner" | "editor";
@@ -1064,6 +1178,9 @@ export interface components {
         CreatePageRequest: {
             title: string;
             slug: string;
+            locale?: components["schemas"]["Locale"];
+            /** Format: uuid */
+            translationGroupId?: string;
         };
         UpdatePageRequest: {
             title: string;
@@ -1072,16 +1189,17 @@ export interface components {
             seo: components["schemas"]["PageSeo"];
             layout: components["schemas"]["PageLayout"];
             version: number;
+            locale: components["schemas"]["Locale"];
+            /** Format: uuid */
+            translationGroupId: string;
         };
         PublishPageRequest: {
             version: number;
         };
         PageBlock: components["schemas"]["HeroBlock"] | components["schemas"]["RichTextBlock"] | components["schemas"]["ImageBlock"];
         PageLayout: {
-            /** @constant */
-            theme: "morfira";
-            /** @enum {string} */
-            template: "standard" | "wide";
+            theme: string;
+            template: string;
             headerNavigationCode: components["schemas"]["NavigationCode"] | null;
             footerNavigationCode: components["schemas"]["NavigationCode"] | null;
         };
@@ -1218,6 +1336,9 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+            locale: components["schemas"]["Locale"];
+            /** Format: uuid */
+            translationGroupId: string;
         };
         PageCollection: {
             items: components["schemas"]["Page"][];
@@ -1231,6 +1352,9 @@ export interface components {
             layout: components["schemas"]["PageLayout"];
             /** Format: date-time */
             createdAt: string;
+            locale: components["schemas"]["Locale"];
+            /** Format: uuid */
+            translationGroupId: string;
         };
         PageRevisionCollection: {
             items: components["schemas"]["PageRevision"][];
@@ -1251,6 +1375,72 @@ export interface components {
             layout: components["schemas"]["PageLayout"];
             /** Format: date-time */
             publishedAt: string;
+            locale: components["schemas"]["Locale"];
+            /** Format: uuid */
+            translationGroupId: string;
+            /** Format: uri-reference */
+            url: string;
+            alternates: components["schemas"]["LocalizedPageLink"][];
+        };
+        /**
+         * @example en
+         * @example ru-RU
+         */
+        Locale: string;
+        LocalizedPageLink: {
+            locale: components["schemas"]["Locale"];
+            /** Format: uri-reference */
+            url: string;
+        };
+        Theme: {
+            id: string;
+            name: string;
+            version: string;
+            templates: {
+                id: string;
+                name: string;
+            }[];
+            regions: string[];
+        };
+        ThemeCollection: {
+            items: components["schemas"]["Theme"][];
+        };
+        Extension: {
+            id: string;
+            name: string;
+            version: string;
+            provider: string;
+            /** @constant */
+            apiVersion: 1;
+            capabilities: string[];
+            /** @enum {string} */
+            status: "enabled";
+        };
+        ExtensionCollection: {
+            /** @constant */
+            apiVersion: 1;
+            items: components["schemas"]["Extension"][];
+        };
+        ReusableSection: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            blocks: components["schemas"]["PageBlock"][];
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ReusableSectionCollection: {
+            items: components["schemas"]["ReusableSection"][];
+        };
+        CreateReusableSectionRequest: {
+            name: string;
+            blocks: components["schemas"]["PageBlock"][];
+        };
+        UpdateReusableSectionRequest: components["schemas"]["CreateReusableSectionRequest"] & {
+            version: number;
         };
         PutPublicationScheduleRequest: {
             /** @description Exact page revision or entry version to publish. */
@@ -1486,6 +1676,51 @@ export interface operations {
             };
             /** @description No authenticated session. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    updateAuthenticatedUserPreferences: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Session-bound token obtained from `/api/v1/auth/csrf`. */
+                "X-CSRF-Token": components["parameters"]["CsrfTokenHeader"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAdminPreferencesRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated Admin Studio preferences. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminPreferences"];
+                };
+            };
+            /** @description No authenticated session. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unsupported Admin Studio locale. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2053,6 +2288,187 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MediaAssetInUseError"];
                 };
+            };
+        };
+    };
+    listThemes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Registered theme catalog. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThemeCollection"];
+                };
+            };
+        };
+    };
+    listExtensions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Compatible enabled extension catalog. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExtensionCollection"];
+                };
+            };
+            /** @description Owner role required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listReusableSections: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reusable sections ordered by name. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReusableSectionCollection"];
+                };
+            };
+        };
+    };
+    createReusableSection: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Session-bound token obtained from `/api/v1/auth/csrf`. */
+                "X-CSRF-Token": components["parameters"]["CsrfTokenHeader"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateReusableSectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Section created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReusableSection"];
+                };
+            };
+            /** @description Section name conflict. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid name or blocks. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateReusableSection: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Session-bound token obtained from `/api/v1/auth/csrf`. */
+                "X-CSRF-Token": components["parameters"]["CsrfTokenHeader"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateReusableSectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Section revised. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReusableSection"];
+                };
+            };
+            /** @description Section not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale version or name conflict. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deleteReusableSection: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Session-bound token obtained from `/api/v1/auth/csrf`. */
+                "X-CSRF-Token": components["parameters"]["CsrfTokenHeader"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Section deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Section not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -4250,6 +4666,43 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Error"];
                 };
+            };
+        };
+    };
+    getLocalizedPublishedPage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                locale: components["schemas"]["Locale"];
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Localized immutable delivery snapshot. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublishedPage"];
+                };
+            };
+            /** @description Historical localized path redirect. */
+            301: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No active localized page exists. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

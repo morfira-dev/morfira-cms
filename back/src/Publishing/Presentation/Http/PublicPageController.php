@@ -15,6 +15,7 @@ use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Twig\Environment;
+use Cms\Theme\Application\ThemeCatalog;
 
 final readonly class PublicPageController
 {
@@ -25,6 +26,7 @@ final readonly class PublicPageController
         #[Autowire('%env(PUBLIC_SITE_URL)%')]
         private string $publicSiteUrl,
         private ?GetPublishedNavigation $getPublishedNavigation = null,
+        private ?ThemeCatalog $themes = null,
     ) {
     }
 
@@ -40,6 +42,12 @@ final readonly class PublicPageController
         return $this->render($slug, $request);
     }
 
+    #[Route('/{locale}/{slug}', name: 'publishing.pages.localized_web', requirements: ['locale' => '[a-z]{2,3}(?:-[A-Z]{2})?', 'slug' => '[a-z0-9]+(?:-[a-z0-9]+)*'], methods: ['GET'], priority: -90)]
+    public function localizedPage(string $locale, string $slug, Request $request): Response
+    {
+        return $this->render($locale . '/' . $slug, $request);
+    }
+
     private function render(string $slug, Request $request): Response
     {
         $published = ($this->getPublishedPage)($slug);
@@ -47,7 +55,7 @@ final readonly class PublicPageController
         if ($published === null) {
             $redirectTarget = ($this->getPublishedRedirect)($slug);
             if ($redirectTarget !== null) {
-                $targetUrl = $this->publicUrl($redirectTarget->slug);
+                $targetUrl = $this->publicUrl($redirectTarget->url);
                 $response = new RedirectResponse($targetUrl, 301);
                 $response->setPublic();
                 $response->setMaxAge(300);
@@ -86,10 +94,11 @@ final readonly class PublicPageController
         $baseUrl = rtrim($this->publicSiteUrl, '/');
         $headerNavigation = $this->navigation($published->layout['headerNavigationCode']);
         $footerNavigation = $this->navigation($published->layout['footerNavigationCode']);
-        $response = new Response($this->twig->render('delivery/page.html.twig', [
+        $template = $this->themes?->templatePath($published->layout['theme'], $published->layout['template']) ?? 'delivery/page.html.twig';
+        $response = new Response($this->twig->render($template, [
             'page' => $published,
             'publicSiteUrl' => $baseUrl,
-            'canonicalUrl' => $notFound ? null : $this->publicUrl($published->slug),
+            'canonicalUrl' => $notFound ? null : $this->publicUrl($published->url),
             'notFound' => $notFound,
             'headerNavigation' => $headerNavigation,
             'footerNavigation' => $footerNavigation,
@@ -111,10 +120,11 @@ final readonly class PublicPageController
         return $code === null || $this->getPublishedNavigation === null ? null : ($this->getPublishedNavigation)($code);
     }
 
-    private function publicUrl(string $slug): string
+    private function publicUrl(string $path): string
     {
         $baseUrl = rtrim($this->publicSiteUrl, '/');
 
-        return $baseUrl . ($slug === 'home' ? '/' : '/' . $slug);
+        $path = ltrim($path, '/');
+        return $baseUrl . ($path === 'home' ? '/' : '/' . $path);
     }
 }

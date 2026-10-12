@@ -151,6 +151,40 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /api/v1/auth/preferences:
+    put:
+      operationId: updateAuthenticatedUserPreferences
+      tags: [Identity]
+      summary: Update the authenticated user's Admin Studio preferences
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAdminPreferencesRequest'
+      responses:
+        '200':
+          description: Updated Admin Studio preferences.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminPreferences'
+        '401':
+          description: No authenticated session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Unsupported Admin Studio locale.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /api/v1/auth/logout:
     post:
       operationId: logout
@@ -550,6 +584,89 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MediaAssetInUseError'
+  /api/v1/admin/themes:
+    get:
+      operationId: listThemes
+      tags: [Themes]
+      summary: List trusted installed theme packages
+      security: [{ sessionCookie: [] }]
+      responses:
+        '200':
+          description: Registered theme catalog.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ThemeCollection' }
+  /api/v1/admin/extensions:
+    get:
+      operationId: listExtensions
+      tags: [Extensions]
+      summary: List trusted container-registered extensions
+      security: [{ sessionCookie: [] }]
+      responses:
+        '200':
+          description: Compatible enabled extension catalog.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExtensionCollection' }
+        '403': { description: Owner role required. }
+  /api/v1/admin/sections:
+    get:
+      operationId: listReusableSections
+      tags: [Admin Content]
+      security: [{ sessionCookie: [] }]
+      responses:
+        '200':
+          description: Reusable sections ordered by name.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReusableSectionCollection' }
+    post:
+      operationId: createReusableSection
+      tags: [Admin Content]
+      security: [{ sessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/CsrfTokenHeader' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateReusableSectionRequest' }
+      responses:
+        '201':
+          description: Section created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReusableSection' }
+        '409': { description: Section name conflict. }
+        '422': { description: Invalid name or blocks. }
+  /api/v1/admin/sections/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      operationId: updateReusableSection
+      tags: [Admin Content]
+      security: [{ sessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/CsrfTokenHeader' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateReusableSectionRequest' }
+      responses:
+        '200':
+          description: Section revised.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReusableSection' }
+        '404': { description: Section not found. }
+        '409': { description: Stale version or name conflict. }
+    delete:
+      operationId: deleteReusableSection
+      tags: [Admin Content]
+      security: [{ sessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/CsrfTokenHeader' }]
+      responses:
+        '204': { description: Section deleted. }
+        '404': { description: Section not found. }
   /api/v1/admin/pages:
     get:
       operationId: listPages
@@ -1924,6 +2041,22 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /api/v1/content/pages/{locale}/{slug}:
+    parameters:
+      - { name: locale, in: path, required: true, schema: { $ref: '#/components/schemas/Locale' } }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' } }
+    get:
+      operationId: getLocalizedPublishedPage
+      tags: [Delivery]
+      summary: Get an active locale-prefixed published page snapshot
+      responses:
+        '200':
+          description: Localized immutable delivery snapshot.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PublishedPage' }
+        '301': { description: Historical localized path redirect. }
+        '404': { description: No active localized page exists. }
   /robots.txt:
     get:
       operationId: getRobotsTxt
@@ -2094,7 +2227,7 @@ components:
     AuthenticatedUser:
       type: object
       additionalProperties: false
-      required: [id, email, roles]
+      required: [id, email, roles, adminLocale]
       properties:
         id:
           type: string
@@ -2107,6 +2240,25 @@ components:
           items:
             type: string
             enum: [ROLE_OWNER, ROLE_EDITOR]
+        adminLocale:
+          $ref: '#/components/schemas/AdminLocale'
+    AdminLocale:
+      type: string
+      enum: [en, ru]
+    UpdateAdminPreferencesRequest:
+      type: object
+      additionalProperties: false
+      required: [adminLocale]
+      properties:
+        adminLocale:
+          $ref: '#/components/schemas/AdminLocale'
+    AdminPreferences:
+      type: object
+      additionalProperties: false
+      required: [adminLocale]
+      properties:
+        adminLocale:
+          $ref: '#/components/schemas/AdminLocale'
     UserRole:
       type: string
       enum: [owner, editor]
@@ -2670,10 +2822,15 @@ components:
           type: string
           maxLength: 191
           pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+        locale:
+          $ref: '#/components/schemas/Locale'
+        translationGroupId:
+          type: string
+          format: uuid
     UpdatePageRequest:
       type: object
       additionalProperties: false
-      required: [title, slug, blocks, seo, layout, version]
+      required: [title, slug, blocks, seo, layout, version, locale, translationGroupId]
       properties:
         title:
           type: string
@@ -2694,6 +2851,11 @@ components:
         version:
           type: integer
           minimum: 1
+        locale:
+          $ref: '#/components/schemas/Locale'
+        translationGroupId:
+          type: string
+          format: uuid
     PublishPageRequest:
       type: object
       additionalProperties: false
@@ -2720,10 +2882,10 @@ components:
       properties:
         theme:
           type: string
-          const: morfira
+          pattern: '^[a-z][a-z0-9-]{0,63}$'
         template:
           type: string
-          enum: [standard, wide]
+          pattern: '^[a-z][a-z0-9-]{0,63}$'
         headerNavigationCode:
           oneOf:
             - $ref: '#/components/schemas/NavigationCode'
@@ -2981,7 +3143,7 @@ components:
     Page:
       type: object
       additionalProperties: false
-      required: [id, title, slug, status, blocks, seo, layout, version, createdAt, updatedAt]
+      required: [id, title, slug, status, blocks, seo, layout, version, createdAt, updatedAt, locale, translationGroupId]
       properties:
         id:
           type: string
@@ -3009,6 +3171,11 @@ components:
         updatedAt:
           type: string
           format: date-time
+        locale:
+          $ref: '#/components/schemas/Locale'
+        translationGroupId:
+          type: string
+          format: uuid
     PageCollection:
       type: object
       additionalProperties: false
@@ -3021,7 +3188,7 @@ components:
     PageRevision:
       type: object
       additionalProperties: false
-      required: [revision, title, slug, blocks, seo, layout, createdAt]
+      required: [revision, title, slug, blocks, seo, layout, createdAt, locale, translationGroupId]
       properties:
         revision: { type: integer, minimum: 1 }
         title: { type: string }
@@ -3035,6 +3202,8 @@ components:
         layout:
           $ref: '#/components/schemas/PageLayout'
         createdAt: { type: string, format: date-time }
+        locale: { $ref: '#/components/schemas/Locale' }
+        translationGroupId: { type: string, format: uuid }
     PageRevisionCollection:
       type: object
       additionalProperties: false
@@ -3053,7 +3222,7 @@ components:
     PublishedPage:
       type: object
       additionalProperties: false
-      required: [snapshotId, pageId, sourceRevision, title, slug, blocks, seo, layout, publishedAt]
+      required: [snapshotId, pageId, sourceRevision, title, slug, blocks, seo, layout, publishedAt, locale, translationGroupId, url, alternates]
       properties:
         snapshotId:
           type: string
@@ -3079,6 +3248,103 @@ components:
         publishedAt:
           type: string
           format: date-time
+        locale:
+          $ref: '#/components/schemas/Locale'
+        translationGroupId:
+          type: string
+          format: uuid
+        url:
+          type: string
+          format: uri-reference
+        alternates:
+          type: array
+          items:
+            $ref: '#/components/schemas/LocalizedPageLink'
+    Locale:
+      type: string
+      pattern: '^[a-z]{2,3}(?:-[A-Z]{2})?$'
+      examples: [en, ru-RU]
+    LocalizedPageLink:
+      type: object
+      additionalProperties: false
+      required: [locale, url]
+      properties:
+        locale: { $ref: '#/components/schemas/Locale' }
+        url: { type: string, format: uri-reference }
+    Theme:
+      type: object
+      additionalProperties: false
+      required: [id, name, version, templates, regions]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        version: { type: string }
+        templates:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, name]
+            properties:
+              id: { type: string }
+              name: { type: string }
+        regions: { type: array, items: { type: string } }
+    ThemeCollection:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Theme' } }
+    Extension:
+      type: object
+      additionalProperties: false
+      required: [id, name, version, provider, apiVersion, capabilities, status]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        version: { type: string }
+        provider: { type: string }
+        apiVersion: { type: integer, const: 1 }
+        capabilities: { type: array, uniqueItems: true, items: { type: string } }
+        status: { type: string, enum: [enabled] }
+    ExtensionCollection:
+      type: object
+      additionalProperties: false
+      required: [apiVersion, items]
+      properties:
+        apiVersion: { type: integer, const: 1 }
+        items: { type: array, items: { $ref: '#/components/schemas/Extension' } }
+    ReusableSection:
+      type: object
+      additionalProperties: false
+      required: [id, name, blocks, version, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        blocks: { type: array, minItems: 1, items: { $ref: '#/components/schemas/PageBlock' } }
+        version: { type: integer, minimum: 1 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ReusableSectionCollection:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/ReusableSection' } }
+    CreateReusableSectionRequest:
+      type: object
+      additionalProperties: false
+      required: [name, blocks]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        blocks: { type: array, minItems: 1, items: { $ref: '#/components/schemas/PageBlock' } }
+    UpdateReusableSectionRequest:
+      allOf:
+        - $ref: '#/components/schemas/CreateReusableSectionRequest'
+        - type: object
+          required: [version]
+          properties:
+            version: { type: integer, minimum: 1 }
     PutPublicationScheduleRequest:
       type: object
       additionalProperties: false

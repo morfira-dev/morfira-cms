@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
 import { CmsThemeProvider } from './ui'
+import { AdminLocaleProvider } from './i18n/AdminLocaleProvider'
 
 const root = document.getElementById('root')
 
@@ -11,8 +12,10 @@ if (!root) {
 
 createRoot(root).render(
   <StrictMode>
-    <CmsThemeProvider>
-      <App />
-    </CmsThemeProvider>
+    <AdminLocaleProvider>
+      <CmsThemeProvider>
+        <App />
+      </CmsThemeProvider>
+    </AdminLocaleProvider>
   </StrictMode>,
 )

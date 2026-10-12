@@ -15,6 +15,8 @@ final readonly class PageRevision
         public PageSeo $seo,
         public \DateTimeImmutable $createdAt,
         public ?PageLayout $layout = null,
+        public string $locale = 'en',
+        public ?string $translationGroupId = null,
     ) {
         if ($revision < 1) {
             throw new \InvalidArgumentException('Page revision number must be positive.');
@@ -24,5 +26,10 @@ final readonly class PageRevision
     public function resolvedLayout(): PageLayout
     {
         return $this->layout ?? PageLayout::defaults();
+    }
+
+    public function resolvedTranslationGroupId(): string
+    {
+        return $this->translationGroupId ?? throw new \LogicException('Stored page revision has no translation group.');
     }
 }

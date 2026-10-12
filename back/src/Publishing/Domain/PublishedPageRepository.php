@@ -23,4 +23,7 @@ interface PublishedPageRepository
 
     /** @return list<PublishedPage> */
     public function allActive(): array;
+
+    /** @return list<PublishedPage> */
+    public function activeTranslations(string $translationGroupId): array;
 }

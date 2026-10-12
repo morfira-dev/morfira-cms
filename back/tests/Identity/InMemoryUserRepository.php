@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cms\Tests\Identity;
 
 use Cms\Identity\Domain\User;
+use Cms\Identity\Domain\AdminLocale;
 use Cms\Identity\Domain\UserEmailAlreadyExists;
 use Cms\Identity\Domain\UserMutationResult;
 use Cms\Identity\Domain\UserRepository;
@@ -69,7 +70,16 @@ final class InMemoryUserRepository implements UserRepository
         if ($user === null) {
             return;
         }
-        $this->users[$id] = new User($user->id, $user->email, $passwordHash, $user->roles, $user->createdAt);
+        $this->users[$id] = new User($user->id, $user->email, $passwordHash, $user->roles, $user->createdAt, $user->adminLocale);
+    }
+
+    public function replaceAdminLocale(string $id, AdminLocale $locale): void
+    {
+        $user = $this->users[$id] ?? null;
+        if ($user === null) {
+            return;
+        }
+        $this->users[$id] = new User($user->id, $user->email, $user->passwordHash, $user->roles, $user->createdAt, $locale);
     }
 
     public function changeRolePreservingOwner(string $id, UserRole $role): UserMutationResult
@@ -82,7 +92,7 @@ final class InMemoryUserRepository implements UserRepository
             return UserMutationResult::LastOwner;
         }
 
-        $this->users[$id] = new User($user->id, $user->email, $user->passwordHash, $role->securityRoles(), $user->createdAt);
+        $this->users[$id] = new User($user->id, $user->email, $user->passwordHash, $role->securityRoles(), $user->createdAt, $user->adminLocale);
 
         return UserMutationResult::Applied;
     }

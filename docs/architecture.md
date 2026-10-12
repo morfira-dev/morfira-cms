@@ -44,10 +44,11 @@ Admin Studio authenticates with a server-side session cookie. Mutating setup, au
 - `Delivery`: public read models, routing and rendering.
 - `Identity`: users, roles and permissions.
 - `Media`: assets and transformations.
-- `Extensions`: extension manifests, capabilities and lifecycle.
+- `Extensions`: trusted extension manifests, capabilities and typed lifecycle hooks.
+- `Theme`: deployment-registered theme and template manifests.
 - `Settings`: typed installation identity and regional defaults.
 
-Implemented vertical slices currently cover `System`, `Schema`, `Content`, `Publishing`, `Identity`, `Media`, `Navigation` and `Settings`. The remaining modules are created when their first concrete capability is implemented.
+Implemented vertical slices currently cover `System`, `Schema`, `Content`, `Publishing`, `Identity`, `Media`, `Navigation`, `Settings`, `Theme` and `Extensions`. The remaining modules are created when their first concrete capability is implemented.
 
 ## Rules
 
@@ -73,6 +74,12 @@ Page -> Region -> Block -> Component
 Components produce view models. They do not create nested HTTP requests or call other controllers.
 
 Draft edits append immutable revisions and use an integer version for optimistic locking. Preview renders the current draft through Twig with private, no-store caching and must never be indexed. Publishing copies an approved revision into a separate immutable delivery snapshot and atomically activates its public slug. Public HTML and headless delivery never read mutable drafts.
+
+Each localized page is an independent aggregate linked by a stable translation-group identifier. Locale is revisioned and frozen into the published snapshot. The configured default locale keeps the unprefixed `/{slug}` route; other locales use `/{locale}/{slug}`. Alternate links are derived only from active immutable routes.
+
+Themes and executable extensions are operator-installed trusted code. Content stores only catalog-validated theme and template identifiers, never executable source or template paths. Extensions declare a versioned manifest and allow-listed capabilities, then receive typed immutable hook contexts through application ports. Admin Studio cannot upload or evaluate PHP, Twig or JavaScript packages.
+
+Reusable sections are versioned authoring resources. Inserting one creates fresh block identifiers and independent draft content, so later section edits cannot mutate existing drafts or published snapshots.
 
 Unpublishing removes the active delivery route and cancels a pending schedule while retaining drafts, revisions and publication snapshots. Page redirect history is removed with its route so redirects cannot resolve to unpublished content.
 

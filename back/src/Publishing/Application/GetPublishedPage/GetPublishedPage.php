@@ -17,6 +17,14 @@ final readonly class GetPublishedPage
     {
         $page = $this->pages->findBySlug($slug);
 
-        return $page === null ? null : PublishedPageView::fromPublishedPage($page);
+        if ($page === null) {
+            return null;
+        }
+        $alternates = array_map(
+            static fn ($translation): array => ['locale' => $translation->locale, 'url' => '/' . $translation->resolvedPublicPath()],
+            $this->pages->activeTranslations($page->resolvedTranslationGroupId()),
+        );
+
+        return PublishedPageView::fromPublishedPage($page, $alternates);
     }
 }

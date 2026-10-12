@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resetCsrfToken } from '../../api/http'
-import { createPageRedirect, deletePage, deletePageRedirect, getPageRedirects, getPageRevisions, restorePageRevision, unpublishPage, updatePage, type PageSummary, type PageUpdate } from './api'
+import { createPage, createPageRedirect, deletePage, deletePageRedirect, getPageRedirects, getPageRevisions, restorePageRevision, unpublishPage, updatePage, type PageSummary, type PageUpdate } from './api'
 
 const revision: PageUpdate = {
   title: 'Landing',
@@ -19,6 +19,8 @@ const revision: PageUpdate = {
     footerNavigationCode: null,
   },
   version: 1,
+  locale: 'en',
+  translationGroupId: '61ee498b-f19c-43a4-9961-aa32c9da3ec2',
 }
 
 const page: PageSummary = {
@@ -46,6 +48,19 @@ describe('updatePage', () => {
 
     const [, request] = fetchMock.mock.calls[1]
     expect(JSON.parse(String(request?.body))).toEqual(revision)
+  })
+})
+
+describe('createPage', () => {
+  it('sends locale and translation group metadata', async () => {
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ token: 'csrf-token' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(page), { status: 201 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await createPage('Landing', 'landing', 'ru-RU', page.translationGroupId)
+
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body))).toEqual({ title: 'Landing', slug: 'landing', locale: 'ru-RU', translationGroupId: page.translationGroupId })
   })
 })
 

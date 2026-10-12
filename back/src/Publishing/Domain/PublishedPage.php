@@ -19,6 +19,9 @@ final readonly class PublishedPage
         public \DateTimeImmutable $publishedAt,
         /** @var array{theme: string, template: string, headerNavigationCode: ?string, footerNavigationCode: ?string}|null */
         public ?array $layout = null,
+        public string $locale = 'en',
+        public ?string $translationGroupId = null,
+        public ?string $publicPath = null,
     ) {
     }
 
@@ -26,5 +29,15 @@ final readonly class PublishedPage
     public function resolvedLayout(): array
     {
         return $this->layout ?? ['theme' => 'morfira', 'template' => 'standard', 'headerNavigationCode' => null, 'footerNavigationCode' => null];
+    }
+
+    public function resolvedTranslationGroupId(): string
+    {
+        return $this->translationGroupId ?? $this->pageId;
+    }
+
+    public function resolvedPublicPath(): string
+    {
+        return $this->publicPath ?? $this->slug;
     }
 }

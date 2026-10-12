@@ -7,10 +7,12 @@ namespace Cms\Tests\Content\Application;
 use Cms\Content\Application\CreatePage\CreatePage;
 use Cms\Content\Application\UpdatePage\UpdatePage;
 use Cms\Content\Domain\PageVersionConflict;
+use Cms\Content\Domain\PageLayout;
 use Cms\Content\Domain\PageSeo;
 use Cms\Content\Infrastructure\Html\SymfonyRichTextSanitizer;
 use Cms\Tests\Content\InMemoryPageRepository;
 use Cms\Tests\Content\PassThroughRichTextSanitizer;
+use Cms\Theme\Infrastructure\BuiltInThemeCatalog;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -104,6 +106,26 @@ final class UpdatePageTest extends TestCase
             ]],
             PageSeo::defaults(),
             $created->version,
+        );
+    }
+
+    #[Test]
+    public function it_rejects_an_unregistered_theme_when_saving(): void
+    {
+        $pages = new InMemoryPageRepository();
+        $created = (new CreatePage($pages))('Landing', 'landing');
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Unsupported theme or template.');
+
+        (new UpdatePage($pages, new PassThroughRichTextSanitizer(), new BuiltInThemeCatalog()))(
+            $created->id,
+            'Landing',
+            'landing',
+            [],
+            PageSeo::defaults(),
+            $created->version,
+            new PageLayout('unknown', 'standard', null, null),
         );
     }
 }

@@ -21,10 +21,16 @@ final readonly class PublishedPageView
         /** @var array{theme: string, template: string, headerNavigationCode: ?string, footerNavigationCode: ?string} */
         public array $layout,
         public string $publishedAt,
+        public string $locale,
+        public string $translationGroupId,
+        public string $url,
+        /** @var list<array{locale: string, url: string}> */
+        public array $alternates = [],
     ) {
     }
 
-    public static function fromPublishedPage(PublishedPage $page): self
+    /** @param list<array{locale: string, url: string}> $alternates */
+    public static function fromPublishedPage(PublishedPage $page, array $alternates = []): self
     {
         return new self(
             $page->snapshotId,
@@ -36,10 +42,14 @@ final readonly class PublishedPageView
             $page->seo,
             $page->resolvedLayout(),
             $page->publishedAt->format(DATE_ATOM),
+            $page->locale,
+            $page->resolvedTranslationGroupId(),
+            '/' . $page->resolvedPublicPath(),
+            $alternates,
         );
     }
 
-    /** @return array{snapshotId: string, pageId: string, sourceRevision: int, title: string, slug: string, blocks: list<array{id: string, type: string, data: array<string, string>}>, seo: array{title: string, description: string, noIndex: bool, openGraphImageAssetId: ?string}, layout: array{theme: string, template: string, headerNavigationCode: ?string, footerNavigationCode: ?string}, publishedAt: string} */
+    /** @return array{snapshotId: string, pageId: string, sourceRevision: int, title: string, slug: string, blocks: list<array{id: string, type: string, data: array<string, string>}>, seo: array{title: string, description: string, noIndex: bool, openGraphImageAssetId: ?string}, layout: array{theme: string, template: string, headerNavigationCode: ?string, footerNavigationCode: ?string}, publishedAt: string, locale: string, translationGroupId: string, url: string, alternates: list<array{locale: string, url: string}>} */
     public function toArray(): array
     {
         return [
@@ -52,6 +62,10 @@ final readonly class PublishedPageView
             'seo' => $this->seo,
             'layout' => $this->layout,
             'publishedAt' => $this->publishedAt,
+            'locale' => $this->locale,
+            'translationGroupId' => $this->translationGroupId,
+            'url' => $this->url,
+            'alternates' => $this->alternates,
         ];
     }
 }

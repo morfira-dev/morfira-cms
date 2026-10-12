@@ -58,12 +58,23 @@ final readonly class PublishingApiController
     #[Route('/api/v1/content/pages/{slug}', name: 'publishing.pages.api', methods: ['GET'])]
     public function get(string $slug, Request $request): Response
     {
-        $published = ($this->getPublishedPage)($slug);
+        return $this->getByPath($slug, $request);
+    }
+
+    #[Route('/api/v1/content/pages/{locale}/{slug}', name: 'publishing.pages.localized_api', requirements: ['locale' => '[a-z]{2,3}(?:-[A-Z]{2})?', 'slug' => '[a-z0-9]+(?:-[a-z0-9]+)*'], methods: ['GET'])]
+    public function getLocalized(string $locale, string $slug, Request $request): Response
+    {
+        return $this->getByPath($locale . '/' . $slug, $request);
+    }
+
+    private function getByPath(string $path, Request $request): Response
+    {
+        $published = ($this->getPublishedPage)($path);
 
         if ($published === null) {
-            $redirectTarget = ($this->getPublishedRedirect)($slug);
+            $redirectTarget = ($this->getPublishedRedirect)($path);
             if ($redirectTarget !== null) {
-                $response = new RedirectResponse('/api/v1/content/pages/' . $redirectTarget->slug, 301);
+                $response = new RedirectResponse('/api/v1/content/pages' . $redirectTarget->url, 301);
                 $response->setPublic();
                 $response->setMaxAge(300);
 

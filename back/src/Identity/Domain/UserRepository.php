@@ -22,6 +22,8 @@ interface UserRepository
 
     public function replacePasswordHash(string $id, string $passwordHash): void;
 
+    public function replaceAdminLocale(string $id, AdminLocale $locale): void;
+
     public function changeRolePreservingOwner(string $id, UserRole $role): UserMutationResult;
 
     public function removePreservingOwner(string $id): UserMutationResult;

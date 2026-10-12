@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Cms\Tests\Identity\Application;
 
 use Cms\Identity\Application\ChangeUserRole;
+use Cms\Identity\Application\ChangeAdminLocale;
 use Cms\Identity\Application\CreateUser;
 use Cms\Identity\Application\DeleteUser;
 use Cms\Identity\Application\ListUsers;
 use Cms\Identity\Domain\LastOwnerRequired;
+use Cms\Identity\Domain\AdminLocale;
 use Cms\Identity\Domain\SelfManagementForbidden;
 use Cms\Identity\Domain\UserEmailAlreadyExists;
 use Cms\Identity\Domain\UserRole;
@@ -113,5 +115,17 @@ final class UserManagementTest extends TestCase
 
         $this->expectException(\InvalidArgumentException::class);
         $create('person@example.test', 'a-secure-password', 'administrator');
+    }
+
+    #[Test]
+    public function it_changes_the_users_admin_locale_independently_from_site_settings(): void
+    {
+        $users = new InMemoryUserRepository();
+        $user = (new CreateUser($users, new FakePasswordHasher()))('editor@example.test', 'a-secure-password', 'editor');
+
+        $locale = (new ChangeAdminLocale($users))($user->id, 'ru');
+
+        self::assertSame(AdminLocale::Russian, $locale);
+        self::assertSame(AdminLocale::Russian, $users->findById($user->id)?->adminLocale);
     }
 }

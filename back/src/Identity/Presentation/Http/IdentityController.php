@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cms\Identity\Presentation\Http;
 
 use Cms\Identity\Application\SetupOwner\SetupOwner;
+use Cms\Identity\Application\ChangeAdminLocale;
 use Cms\Identity\Domain\IdentityAlreadyInstalled;
 use Cms\Identity\Domain\UserRepository;
 use Cms\Identity\Infrastructure\Security\SecurityUser;
@@ -21,6 +22,7 @@ final readonly class IdentityController
         private SetupOwner $setupOwner,
         private CsrfTokenManagerInterface $csrfTokens,
         private Security $security,
+        private ChangeAdminLocale $changeAdminLocale,
     ) {
     }
 
@@ -53,6 +55,7 @@ final readonly class IdentityController
             'id' => $user->id,
             'email' => $user->email,
             'roles' => $user->roles,
+            'adminLocale' => $user->adminLocale->value,
         ], 201);
     }
 
@@ -75,7 +78,31 @@ final readonly class IdentityController
             'id' => $user->id,
             'email' => $user->email,
             'roles' => $user->getRoles(),
+            'adminLocale' => $user->adminLocale->value,
         ]);
+    }
+
+    #[Route('/api/v1/auth/preferences', name: 'identity.auth.preferences', methods: ['PUT'])]
+    public function preferences(Request $request): JsonResponse
+    {
+        $user = $this->security->getUser();
+        if (!$user instanceof SecurityUser) {
+            return new JsonResponse(['error' => 'Authentication required.'], 401);
+        }
+
+        $payload = $request->toArray();
+        $adminLocale = $payload['adminLocale'] ?? null;
+        if (!is_string($adminLocale) || array_keys($payload) !== ['adminLocale']) {
+            return new JsonResponse(['error' => 'Admin locale is required.'], 422);
+        }
+
+        try {
+            $locale = ($this->changeAdminLocale)($user->id, $adminLocale);
+        } catch (\InvalidArgumentException $exception) {
+            return new JsonResponse(['error' => $exception->getMessage()], 422);
+        }
+
+        return new JsonResponse(['adminLocale' => $locale->value]);
     }
 
     #[Route('/api/v1/auth/login', name: 'identity.auth.login', methods: ['POST'])]

@@ -33,7 +33,7 @@ final readonly class CsrfRequestSubscriber implements EventSubscriberInterface
             return;
         }
 
-        if (preg_match('#^/api/v1/(?:admin|setup|auth/(?:login|logout|password))(?:/|$)#', $request->getPathInfo()) !== 1) {
+        if (preg_match('#^/api/v1/(?:admin|setup|auth/(?:login|logout|password|preferences))(?:/|$)#', $request->getPathInfo()) !== 1) {
             return;
         }
 

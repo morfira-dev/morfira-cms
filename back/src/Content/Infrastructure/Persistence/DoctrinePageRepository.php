@@ -15,6 +15,7 @@ use Cms\Content\Domain\PageSlug;
 use Cms\Content\Domain\PageSlugAlreadyExists;
 use Cms\Content\Domain\PageStatus;
 use Cms\Content\Domain\PageTitle;
+use Cms\Content\Domain\PageTranslationAlreadyExists;
 use Cms\Content\Domain\PageVersionConflict;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
@@ -32,8 +33,8 @@ final readonly class DoctrinePageRepository implements PageRepository
                 $connection->insert('content_pages', $this->row($page));
                 $this->insertRevision($connection, $page);
             });
-        } catch (UniqueConstraintViolationException) {
-            throw new PageSlugAlreadyExists($page->slug);
+        } catch (UniqueConstraintViolationException $exception) {
+            $this->throwConflict($exception, $page);
         }
     }
 
@@ -63,8 +64,8 @@ final readonly class DoctrinePageRepository implements PageRepository
 
                 $this->insertRevision($connection, $page);
             });
-        } catch (UniqueConstraintViolationException) {
-            throw new PageSlugAlreadyExists($page->slug);
+        } catch (UniqueConstraintViolationException $exception) {
+            $this->throwConflict($exception, $page);
         }
     }
 
@@ -111,6 +112,8 @@ final readonly class DoctrinePageRepository implements PageRepository
             'version' => $page->version,
             'created_at' => $page->createdAt->format('Y-m-d H:i:s.u'),
             'updated_at' => $page->updatedAt->format('Y-m-d H:i:s.u'),
+            'locale' => $page->locale,
+            'translation_group_id' => $page->translationGroupId,
         ];
     }
 
@@ -125,7 +128,18 @@ final readonly class DoctrinePageRepository implements PageRepository
             'seo' => json_encode($page->seo->toArray(), JSON_THROW_ON_ERROR),
             'layout' => json_encode($page->layout->toArray(), JSON_THROW_ON_ERROR),
             'created_at' => $page->updatedAt->format('Y-m-d H:i:s.u'),
+            'locale' => $page->locale,
+            'translation_group_id' => $page->translationGroupId,
         ]);
+    }
+
+    private function throwConflict(UniqueConstraintViolationException $exception, Page $page): never
+    {
+        if (str_contains($exception->getMessage(), 'uniq_content_translation_locale')) {
+            throw new PageTranslationAlreadyExists($page->translationGroupId, $page->locale);
+        }
+
+        throw new PageSlugAlreadyExists($page->slug);
     }
 
     /** @param array<string, mixed> $row */
@@ -162,6 +176,8 @@ final readonly class DoctrinePageRepository implements PageRepository
             new \DateTimeImmutable(self::stringValue($row, 'created_at'), new \DateTimeZone('UTC')),
             new \DateTimeImmutable(self::stringValue($row, 'updated_at'), new \DateTimeZone('UTC')),
             PageLayout::fromArray($layout),
+            self::stringValue($row, 'locale'),
+            self::stringValue($row, 'translation_group_id'),
         );
     }
 
@@ -190,6 +206,8 @@ final readonly class DoctrinePageRepository implements PageRepository
             PageSeo::fromArray($seo),
             new \DateTimeImmutable(self::stringValue($row, 'created_at'), new \DateTimeZone('UTC')),
             PageLayout::fromArray($layout),
+            self::stringValue($row, 'locale'),
+            self::stringValue($row, 'translation_group_id'),
         );
     }
 

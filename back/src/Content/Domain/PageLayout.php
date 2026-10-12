@@ -12,11 +12,8 @@ final readonly class PageLayout
         public ?string $headerNavigationCode,
         public ?string $footerNavigationCode,
     ) {
-        if ($theme !== 'morfira') {
-            throw new \InvalidArgumentException('Unsupported page theme.');
-        }
-        if (!in_array($template, ['standard', 'wide'], true)) {
-            throw new \InvalidArgumentException('Unsupported page template.');
+        if (preg_match('/^[a-z][a-z0-9-]{0,63}$/', $theme) !== 1 || preg_match('/^[a-z][a-z0-9-]{0,63}$/', $template) !== 1) {
+            throw new \InvalidArgumentException('Theme and template identifiers must be lowercase slugs.');
         }
         foreach ([$headerNavigationCode, $footerNavigationCode] as $code) {
             if ($code !== null && preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/', $code) !== 1) {

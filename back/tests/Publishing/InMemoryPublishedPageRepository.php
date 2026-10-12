@@ -141,4 +141,9 @@ final class InMemoryPublishedPageRepository implements PublishedPageRepository
 
         return $pages;
     }
+
+    public function activeTranslations(string $translationGroupId): array
+    {
+        return array_values(array_filter($this->allActive(), static fn (PublishedPage $page): bool => $page->resolvedTranslationGroupId() === $translationGroupId));
+    }
 }

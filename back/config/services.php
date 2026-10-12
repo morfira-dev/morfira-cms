@@ -41,6 +41,16 @@ use Cms\Settings\Infrastructure\Persistence\DoctrineSiteSettingsRepository;
 use Cms\Content\Infrastructure\Persistence\DoctrineContentMediaUsageLookup;
 use Cms\Publishing\Application\PublishedMediaUsageLookup;
 use Cms\Publishing\Infrastructure\Persistence\DoctrinePublishedMediaUsageLookup;
+use Cms\Extensions\Application\ExtensionCatalog;
+use Cms\Extensions\Application\PagePublishedHookBus;
+use Cms\Extensions\Infrastructure\CoreExtension;
+use Cms\Extensions\Infrastructure\RegisteredExtensionCatalog;
+use Cms\Extensions\Infrastructure\SynchronousPagePublishedHookBus;
+use Cms\Theme\Application\ThemeCatalog;
+use Cms\Theme\Infrastructure\BuiltInThemeCatalog;
+use Cms\Content\Domain\ReusableSectionRepository;
+use Cms\Content\Infrastructure\Persistence\DoctrineReusableSectionRepository;
+use function Symfony\Component\DependencyInjection\Loader\Configurator\tagged_iterator;
 
 return static function (ContainerConfigurator $container): void {
     $services = $container->services()
@@ -74,4 +84,15 @@ return static function (ContainerConfigurator $container): void {
     $services->alias(SiteSettingsRepository::class, DoctrineSiteSettingsRepository::class);
     $services->alias(ContentMediaUsageLookup::class, DoctrineContentMediaUsageLookup::class);
     $services->alias(PublishedMediaUsageLookup::class, DoctrinePublishedMediaUsageLookup::class);
+    $services->alias(ExtensionCatalog::class, RegisteredExtensionCatalog::class);
+    $services->alias(PagePublishedHookBus::class, SynchronousPagePublishedHookBus::class);
+    $services->alias(ThemeCatalog::class, BuiltInThemeCatalog::class);
+    $services->alias(ReusableSectionRepository::class, DoctrineReusableSectionRepository::class);
+    $services->set(RegisteredExtensionCatalog::class)
+        ->arg('$providers', tagged_iterator('cms.extension'));
+    $services->set(SynchronousPagePublishedHookBus::class)
+        ->arg('$subscribers', tagged_iterator('cms.extension.page_published'));
+    $services->set(CoreExtension::class)
+        ->tag('cms.extension')
+        ->tag('cms.extension.page_published');
 };

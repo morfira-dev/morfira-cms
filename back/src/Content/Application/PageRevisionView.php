@@ -19,6 +19,8 @@ final readonly class PageRevisionView
         /** @var array{theme: string, template: string, headerNavigationCode: ?string, footerNavigationCode: ?string} */
         public array $layout,
         public string $createdAt,
+        public string $locale,
+        public string $translationGroupId,
     ) {
     }
 
@@ -32,12 +34,14 @@ final readonly class PageRevisionView
             $revision->seo->toArray(),
             $revision->resolvedLayout()->toArray(),
             $revision->createdAt->format(DATE_ATOM),
+            $revision->locale,
+            $revision->resolvedTranslationGroupId(),
         );
     }
 
-    /** @return array{revision: int, title: string, slug: string, blocks: list<array{id: string, type: string, data: array<string, string>}>, seo: array{title: string, description: string, noIndex: bool, openGraphImageAssetId: ?string}, layout: array{theme: string, template: string, headerNavigationCode: ?string, footerNavigationCode: ?string}, createdAt: string} */
+    /** @return array{revision: int, title: string, slug: string, blocks: list<array{id: string, type: string, data: array<string, string>}>, seo: array{title: string, description: string, noIndex: bool, openGraphImageAssetId: ?string}, layout: array{theme: string, template: string, headerNavigationCode: ?string, footerNavigationCode: ?string}, createdAt: string, locale: string, translationGroupId: string} */
     public function toArray(): array
     {
-        return ['revision' => $this->revision, 'title' => $this->title, 'slug' => $this->slug, 'blocks' => $this->blocks, 'seo' => $this->seo, 'layout' => $this->layout, 'createdAt' => $this->createdAt];
+        return ['revision' => $this->revision, 'title' => $this->title, 'slug' => $this->slug, 'blocks' => $this->blocks, 'seo' => $this->seo, 'layout' => $this->layout, 'createdAt' => $this->createdAt, 'locale' => $this->locale, 'translationGroupId' => $this->translationGroupId];
     }
 }

@@ -14,6 +14,7 @@ final class CsrfProtectionTest extends WebTestCase
     public static function protectedMutationProvider(): iterable
     {
         yield 'password rotation' => ['/api/v1/auth/password', '{"currentPassword":"current-password","newPassword":"replacement-password"}'];
+        yield 'admin locale preference' => ['/api/v1/auth/preferences', '{"adminLocale":"ru"}'];
         yield 'site settings' => ['/api/v1/admin/settings', '{"siteName":"Morfira","defaultLocale":"en","timezone":"UTC","version":1}'];
     }
 

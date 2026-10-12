@@ -12,6 +12,7 @@ import {
   Typography,
 } from '../../ui'
 import { deleteMedia, type MediaAsset, updateMediaMetadata, uploadMedia } from './api'
+import { useAdminLocale } from '../../i18n/AdminLocaleProvider'
 
 interface MediaLibraryProps {
   assets: MediaAsset[]
@@ -24,6 +25,7 @@ export function getMediaThumbnail(asset: MediaAsset): string | undefined {
 }
 
 export function MediaLibrary({ assets, loading, onChange }: MediaLibraryProps) {
+  const { t } = useAdminLocale()
   const [file, setFile] = useState<File | null>(null)
   const [alt, setAlt] = useState('')
   const [uploading, setUploading] = useState(false)
@@ -52,12 +54,12 @@ export function MediaLibrary({ assets, loading, onChange }: MediaLibraryProps) {
     if (!file) return
 
     if (file.size > 10 * 1024 * 1024) {
-      setError('Images must be 10 MB or smaller.')
+      setError(t('Images must be 10 MB or smaller.'))
       return
     }
 
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-      setError('Choose a JPEG, PNG or WebP image.')
+      setError(t('Choose a JPEG, PNG or WebP image.'))
       return
     }
 
@@ -71,7 +73,7 @@ export function MediaLibrary({ assets, loading, onChange }: MediaLibraryProps) {
       setAlt('')
       setInputKey((current) => current + 1)
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not upload the image.')
+      setError(reason instanceof Error ? reason.message : t('Could not upload the image.'))
     } finally {
       setUploading(false)
     }
@@ -97,21 +99,21 @@ export function MediaLibrary({ assets, loading, onChange }: MediaLibraryProps) {
       onChange(assets.map((item) => item.id === updated.id ? updated : item))
       setEditingId(null)
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not update media metadata.')
+      setError(reason instanceof Error ? reason.message : t('Could not update media metadata.'))
     } finally {
       setSaving(false)
     }
   }
 
   async function removeAsset(asset: MediaAsset) {
-    if (!window.confirm(`Delete ${asset.originalName}? This is only allowed when it is unused.`)) return
+    if (!window.confirm(t('Delete {{name}}? This is only allowed when it is unused.', { name: asset.originalName }))) return
     setSaving(true)
     setError(null)
     try {
       await deleteMedia(asset.id)
       onChange(assets.filter((item) => item.id !== asset.id))
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not delete the media asset.')
+      setError(reason instanceof Error ? reason.message : t('Could not delete the media asset.'))
     } finally {
       setSaving(false)
     }
@@ -130,7 +132,7 @@ export function MediaLibrary({ assets, loading, onChange }: MediaLibraryProps) {
       <div>
         <Typography component="h1" variant="h1">Media</Typography>
         <Typography color="text.secondary" sx={{ mt: 0.75 }}>
-          Upload reusable images once. The CMS creates safe, responsive variants for pages and APIs.
+          {t('Upload reusable images once. The CMS creates safe, responsive variants for pages and APIs.')}
         </Typography>
       </div>
 
@@ -140,15 +142,15 @@ export function MediaLibrary({ assets, loading, onChange }: MediaLibraryProps) {
         <CardContent>
           <Stack component="form" spacing={2} onSubmit={submit}>
             <div>
-              <Typography variant="h6">Upload image</Typography>
+              <Typography variant="h6">{t('Upload image')}</Typography>
               <Typography color="text.secondary" sx={{ mt: 0.5 }}>
-                JPEG, PNG or WebP, up to 10 MB. Alternative text is required for accessibility and SEO.
+                {t('JPEG, PNG or WebP, up to 10 MB. Alternative text is required for accessibility and SEO.')}
               </Typography>
             </div>
 
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ alignItems: { md: 'flex-start' } }}>
               <Button component="label" variant="outlined" sx={{ minWidth: 160 }}>
-                {file ? 'Change image' : 'Choose image'}
+                {file ? t('Change image') : t('Choose image')}
                 <input
                   key={inputKey}
                   hidden
@@ -158,13 +160,13 @@ export function MediaLibrary({ assets, loading, onChange }: MediaLibraryProps) {
                 />
               </Button>
               <TextField
-                label="Alternative text"
+                label={t('Alternative text')}
                 value={alt}
                 onChange={(event) => setAlt(event.target.value)}
                 required
                 fullWidth
                 slotProps={{ htmlInput: { maxLength: 300 } }}
-                helperText={file?.name ?? 'Describe the image, not its filename'}
+                helperText={file?.name ?? t('Describe the image, not its filename')}
               />
               <Button
                 type="submit"
@@ -172,7 +174,7 @@ export function MediaLibrary({ assets, loading, onChange }: MediaLibraryProps) {
                 disabled={!file || !alt.trim() || uploading}
                 sx={{ minWidth: 140 }}
               >
-                {uploading ? 'Uploading…' : 'Upload'}
+                {uploading ? t('Uploading…') : t('Upload')}
               </Button>
             </Stack>
           </Stack>
@@ -181,14 +183,14 @@ export function MediaLibrary({ assets, loading, onChange }: MediaLibraryProps) {
 
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
         <TextField
-          label="Search media"
+          label={t('Search media')}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Filename, alt text, collection or tag"
+          placeholder={t('Filename, alt text, collection or tag')}
           fullWidth
         />
-        <TextField select label="Collection" value={collectionFilter} onChange={(event) => setCollectionFilter(event.target.value)} sx={{ minWidth: 220 }}>
-          <MenuItem value="">All collections</MenuItem>
+        <TextField select label={t('Collection')} value={collectionFilter} onChange={(event) => setCollectionFilter(event.target.value)} sx={{ minWidth: 220 }}>
+          <MenuItem value="">{t('All collections')}</MenuItem>
           {collections.map((value) => <MenuItem key={value} value={value}>{value}</MenuItem>)}
         </TextField>
       </Stack>
@@ -196,9 +198,9 @@ export function MediaLibrary({ assets, loading, onChange }: MediaLibraryProps) {
       {loading ? (
         <Stack sx={{ py: 5, alignItems: 'center' }}><CircularProgress size={28} /></Stack>
       ) : assets.length === 0 ? (
-        <Alert severity="info">No images yet. Upload the first asset above.</Alert>
+        <Alert severity="info">{t('No images yet. Upload the first asset above.')}</Alert>
       ) : visibleAssets.length === 0 ? (
-        <Alert severity="info">No media matches this search.</Alert>
+        <Alert severity="info">{t('No media matches this search.')}</Alert>
       ) : (
         <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: 2 }}>
           {visibleAssets.map((asset) => {
@@ -221,22 +223,22 @@ export function MediaLibrary({ assets, loading, onChange }: MediaLibraryProps) {
                   </Typography>
                   {editingId === asset.id ? (
                     <Stack spacing={1.5} sx={{ mt: 1.5 }}>
-                      <TextField label="Alternative text" value={metadataAlt} onChange={(event) => setMetadataAlt(event.target.value)} required />
-                      <TextField label="Collection" value={collection} onChange={(event) => setCollection(event.target.value)} />
-                      <TextField label="Tags" value={tags} onChange={(event) => setTags(event.target.value)} helperText="Comma-separated lowercase slugs" />
+                      <TextField label={t('Alternative text')} value={metadataAlt} onChange={(event) => setMetadataAlt(event.target.value)} required />
+                      <TextField label={t('Collection')} value={collection} onChange={(event) => setCollection(event.target.value)} />
+                      <TextField label={t('Tags')} value={tags} onChange={(event) => setTags(event.target.value)} helperText={t('Comma-separated lowercase slugs')} />
                       <Stack direction="row" spacing={1}>
-                        <Button size="small" variant="contained" disabled={saving || !metadataAlt.trim()} onClick={() => void saveMetadata(asset)}>Save</Button>
-                        <Button size="small" disabled={saving} onClick={() => setEditingId(null)}>Cancel</Button>
+                        <Button size="small" variant="contained" disabled={saving || !metadataAlt.trim()} onClick={() => void saveMetadata(asset)}>{t('Save')}</Button>
+                        <Button size="small" disabled={saving} onClick={() => setEditingId(null)}>{t('Cancel')}</Button>
                       </Stack>
                     </Stack>
                   ) : (
                     <>
                       <Typography variant="body2" sx={{ mt: 1 }}>{asset.defaultAlt}</Typography>
-                      {asset.collection && <Typography variant="caption" color="text.secondary">Collection: {asset.collection}</Typography>}
-                      {asset.tags.length > 0 && <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Tags: {asset.tags.join(', ')}</Typography>}
+                      {asset.collection && <Typography variant="caption" color="text.secondary">{t('Collection: {{collection}}', { collection: asset.collection })}</Typography>}
+                      {asset.tags.length > 0 && <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{t('Tags: {{tags}}', { tags: asset.tags.join(', ') })}</Typography>}
                       <Stack direction="row" spacing={1} sx={{ mt: 1.5 }}>
-                        <Button size="small" onClick={() => startEditing(asset)}>Edit</Button>
-                        <Button size="small" color="error" disabled={saving} onClick={() => void removeAsset(asset)}>Delete</Button>
+                        <Button size="small" onClick={() => startEditing(asset)}>{t('Edit')}</Button>
+                        <Button size="small" color="error" disabled={saving} onClick={() => void removeAsset(asset)}>{t('Delete')}</Button>
                       </Stack>
                     </>
                   )}

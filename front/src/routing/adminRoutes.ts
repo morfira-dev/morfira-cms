@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
+import type { MessageKey } from '../i18n/messages'
 
-export type AdminRouteId = 'dashboard' | 'pages' | 'media' | 'navigation' | 'content-types' | 'taxonomies' | 'entries' | 'users' | 'settings'
+export type AdminRouteId = 'dashboard' | 'pages' | 'media' | 'navigation' | 'content-types' | 'taxonomies' | 'entries' | 'users' | 'extensions' | 'settings'
 
 export interface AdminRoute {
   id: AdminRouteId
-  label: string
+  label: MessageKey
   path: string
   ownerOnly?: boolean
 }
@@ -18,6 +19,7 @@ export const adminRoutes: AdminRoute[] = [
   { id: 'taxonomies', label: 'Taxonomies', path: '/admin/taxonomies' },
   { id: 'entries', label: 'Entries', path: '/admin/entries' },
   { id: 'users', label: 'Users', path: '/admin/users', ownerOnly: true },
+  { id: 'extensions', label: 'Extensions', path: '/admin/extensions', ownerOnly: true },
   { id: 'settings', label: 'Settings', path: '/admin/settings' },
 ]
 

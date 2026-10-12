@@ -8,6 +8,7 @@ use Cms\Content\Domain\Page;
 use Cms\Content\Domain\PageRepository;
 use Cms\Content\Domain\PageId;
 use Cms\Content\Domain\PageSlugAlreadyExists;
+use Cms\Content\Domain\PageTranslationAlreadyExists;
 use Cms\Content\Domain\PageRevision;
 use Cms\Content\Domain\PageVersionConflict;
 
@@ -22,8 +23,11 @@ final class InMemoryPageRepository implements PageRepository
     public function add(Page $page): void
     {
         foreach ($this->pages as $storedPage) {
-            if ($storedPage->slug->value === $page->slug->value) {
+            if ($storedPage->slug->value === $page->slug->value && $storedPage->locale === $page->locale) {
                 throw new PageSlugAlreadyExists($page->slug);
+            }
+            if ($storedPage->translationGroupId === $page->translationGroupId && $storedPage->locale === $page->locale) {
+                throw new PageTranslationAlreadyExists($page->translationGroupId, $page->locale);
             }
         }
 
@@ -47,6 +51,14 @@ final class InMemoryPageRepository implements PageRepository
         if ($current === null || $current->version !== $expectedVersion) {
             throw new PageVersionConflict();
         }
+        foreach ($this->pages as $storedPage) {
+            if ($storedPage->id->value !== $page->id->value && $storedPage->slug->value === $page->slug->value && $storedPage->locale === $page->locale) {
+                throw new PageSlugAlreadyExists($page->slug);
+            }
+            if ($storedPage->id->value !== $page->id->value && $storedPage->translationGroupId === $page->translationGroupId && $storedPage->locale === $page->locale) {
+                throw new PageTranslationAlreadyExists($page->translationGroupId, $page->locale);
+            }
+        }
         $this->pages[$page->id->value] = $page;
         $this->record($page);
     }
@@ -65,6 +77,6 @@ final class InMemoryPageRepository implements PageRepository
 
     private function record(Page $page): void
     {
-        $this->revisions[$page->id->value][$page->version] = new PageRevision($page->version, $page->title, $page->slug, $page->blocks, $page->seo, $page->updatedAt, $page->layout);
+        $this->revisions[$page->id->value][$page->version] = new PageRevision($page->version, $page->title, $page->slug, $page->blocks, $page->seo, $page->updatedAt, $page->layout, $page->locale, $page->translationGroupId);
     }
 }

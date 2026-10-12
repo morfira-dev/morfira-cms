@@ -54,3 +54,12 @@ export async function changePassword(currentPassword: string, newPassword: strin
   })
   if (!response.ok) throw new Error(await readApiError(response))
 }
+
+export async function updateAdminLocale(adminLocale: AuthenticatedUser['adminLocale']): Promise<void> {
+  const response = await apiFetch('/api/v1/auth/preferences', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ adminLocale }),
+  })
+  if (!response.ok) throw new Error(await readApiError(response))
+}

@@ -12,12 +12,19 @@ use Cms\Content\Domain\PageVersionConflict;
 use Cms\Publishing\Application\PublishedPageView;
 use Cms\Publishing\Domain\PublishedPage;
 use Cms\Publishing\Domain\PublishedPageRepository;
+use Cms\Extensions\Application\PagePublishedContext;
+use Cms\Extensions\Application\PagePublishedHookBus;
+use Cms\Theme\Application\ThemeCatalog;
+use Cms\Settings\Application\GetSiteSettings;
 
 final readonly class PublishPage
 {
     public function __construct(
         private PageRepository $drafts,
         private PublishedPageRepository $publishedPages,
+        private ?ThemeCatalog $themes = null,
+        private ?PagePublishedHookBus $extensions = null,
+        private ?GetSiteSettings $siteSettings = null,
     ) {
     }
 
@@ -32,7 +39,12 @@ final readonly class PublishPage
         if ($draft->version !== $expectedVersion) {
             throw new PageVersionConflict();
         }
+        if ($this->themes !== null && !$this->themes->supports($draft->layout->theme, $draft->layout->template)) {
+            throw new \InvalidArgumentException('Unsupported theme or template.');
+        }
 
+        $defaultLocale = $this->siteSettings === null ? 'en' : ($this->siteSettings)()->defaultLocale;
+        $publicPath = $draft->locale === $defaultLocale ? $draft->slug->value : $draft->locale . '/' . $draft->slug->value;
         $snapshot = new PublishedPage(
             self::newUuid(),
             $draft->id->value,
@@ -43,9 +55,15 @@ final readonly class PublishPage
             $draft->seo->toArray(),
             new \DateTimeImmutable('now', new \DateTimeZone('UTC')),
             $draft->layout->toArray(),
+            $draft->locale,
+            $draft->translationGroupId,
+            $publicPath,
         );
 
-        return PublishedPageView::fromPublishedPage($this->publishedPages->publish($snapshot));
+        $published = $this->publishedPages->publish($snapshot);
+        $this->extensions?->dispatch(new PagePublishedContext($published->pageId, $published->snapshotId, $published->sourceRevision, $published->slug));
+
+        return PublishedPageView::fromPublishedPage($published);
     }
 
     private static function newUuid(): string

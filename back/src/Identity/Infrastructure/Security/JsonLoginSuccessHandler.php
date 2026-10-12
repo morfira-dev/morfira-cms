@@ -24,6 +24,7 @@ final readonly class JsonLoginSuccessHandler implements AuthenticationSuccessHan
             'id' => $user->id,
             'email' => $user->email,
             'roles' => $user->getRoles(),
+            'adminLocale' => $user->adminLocale->value,
         ]);
     }
 }

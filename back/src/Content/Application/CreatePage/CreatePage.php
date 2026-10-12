@@ -10,20 +10,24 @@ use Cms\Content\Domain\PageId;
 use Cms\Content\Domain\PageRepository;
 use Cms\Content\Domain\PageSlug;
 use Cms\Content\Domain\PageTitle;
+use Cms\Settings\Application\GetSiteSettings;
 
 final readonly class CreatePage
 {
-    public function __construct(private PageRepository $pages)
+    public function __construct(private PageRepository $pages, private ?GetSiteSettings $siteSettings = null)
     {
     }
 
-    public function __invoke(string $title, string $slug): PageView
+    public function __invoke(string $title, string $slug, ?string $locale = null, ?string $translationGroupId = null): PageView
     {
+        $locale ??= $this->siteSettings === null ? 'en' : ($this->siteSettings)()->defaultLocale;
         $page = Page::draft(
             PageId::new(),
             new PageTitle($title),
             new PageSlug($slug),
             new \DateTimeImmutable('now', new \DateTimeZone('UTC')),
+            $locale,
+            $translationGroupId,
         );
 
         $this->pages->add($page);
