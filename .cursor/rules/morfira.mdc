@@ -1,0 +1,13 @@
+---
+description: Canonical Morfira CMS architecture, workflow, skills, and specification rules
+globs:
+alwaysApply: true
+---
+
+Before planning, reviewing, or editing, read and follow these canonical project files completely:
+
+@AGENTS.md
+@docs/agents/SKILLS.md
+@docs/agents/SDD.md
+
+Do not duplicate or override their rules in this adapter.
