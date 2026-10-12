@@ -16,6 +16,7 @@ import {
 } from '../../ui'
 import type { ContentField, ContentType } from '../contentTypes/api'
 import type { MediaAsset } from '../media/api'
+import { PublicationScheduler } from '../publishing/PublicationScheduler'
 import {
   createEntry,
   type Entry,
@@ -172,6 +173,7 @@ export function EntriesWorkspace({ contentTypes, mediaAssets }: EntriesWorkspace
                   </Stack>
                 </Stack>
                 {dirty && editing.id && <Alert severity="warning">Save this version before publishing it.</Alert>}
+                {editing.id && editing.version !== null && <PublicationScheduler target="entry" targetId={editing.id} sourceVersion={editing.version} dirty={dirty} />}
                 <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
                   <TextField label="Title" value={editing.title} onChange={(event) => { setEditing({ ...editing, title: event.target.value }); setDirty(true); setPublishedUrl(null) }} fullWidth required />
                   <TextField label="Slug" value={editing.slug} onChange={(event) => { setEditing({ ...editing, slug: event.target.value.toLowerCase() }); setDirty(true); setPublishedUrl(null) }} fullWidth required helperText="Lowercase letters, numbers and hyphens" />

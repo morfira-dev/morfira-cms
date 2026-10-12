@@ -168,6 +168,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/pages/{id}/schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** Get the current page publication schedule */
+        get: operations["getPagePublicationSchedule"];
+        /** Create or replace a page publication schedule */
+        put: operations["putPagePublicationSchedule"];
+        post?: never;
+        /** Cancel a pending page publication schedule */
+        delete: operations["cancelPagePublicationSchedule"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/pages/{id}/redirects": {
         parameters: {
             query?: never;
@@ -277,6 +298,27 @@ export interface paths {
         /** Publish an exact entry version with its current schema */
         post: operations["publishEntry"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/entries/{id}/schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["EntryId"];
+            };
+            cookie?: never;
+        };
+        /** Get the current entry publication schedule */
+        get: operations["getEntryPublicationSchedule"];
+        /** Create or replace an entry publication schedule */
+        put: operations["putEntryPublicationSchedule"];
+        post?: never;
+        /** Cancel a pending entry publication schedule */
+        delete: operations["cancelEntryPublicationSchedule"];
         options?: never;
         head?: never;
         patch?: never;
@@ -787,6 +829,33 @@ export interface components {
             /** Format: date-time */
             publishedAt: string;
         };
+        PutPublicationScheduleRequest: {
+            /** @description Exact page revision or entry version to publish. */
+            sourceVersion: number;
+            /**
+             * Format: date-time
+             * @description Future RFC 3339 publication time. It is normalized to UTC.
+             */
+            scheduledAt: string;
+        };
+        PublicationSchedule: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            targetType: "page" | "entry";
+            /** Format: uuid */
+            targetId: string;
+            sourceVersion: number;
+            /** Format: date-time */
+            scheduledAt: string;
+            /** @enum {string} */
+            status: "pending" | "completed" | "failed" | "cancelled";
+            failureReason: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
         Error: {
             error: string;
         };
@@ -1295,6 +1364,136 @@ export interface operations {
             };
             /** @description Invalid publication request. */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getPagePublicationSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current publication schedule. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicationSchedule"];
+                };
+            };
+            /** @description No schedule exists for this page. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    putPagePublicationSchedule: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Session-bound token obtained from `/api/v1/auth/csrf`. */
+                "X-CSRF-Token": components["parameters"]["CsrfTokenHeader"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PutPublicationScheduleRequest"];
+            };
+        };
+        responses: {
+            /** @description Pending publication schedule. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicationSchedule"];
+                };
+            };
+            /** @description Draft page not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The requested source version is stale. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid version or publication date. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    cancelPagePublicationSchedule: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Session-bound token obtained from `/api/v1/auth/csrf`. */
+                "X-CSRF-Token": components["parameters"]["CsrfTokenHeader"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cancelled publication schedule. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicationSchedule"];
+                };
+            };
+            /** @description No schedule exists for this page. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The schedule is no longer pending. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1851,6 +2050,136 @@ export interface operations {
             };
             /** @description Entry no longer satisfies the current content-type schema. */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getEntryPublicationSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["EntryId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current publication schedule. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicationSchedule"];
+                };
+            };
+            /** @description No schedule exists for this entry. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    putEntryPublicationSchedule: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Session-bound token obtained from `/api/v1/auth/csrf`. */
+                "X-CSRF-Token": components["parameters"]["CsrfTokenHeader"];
+            };
+            path: {
+                id: components["parameters"]["EntryId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PutPublicationScheduleRequest"];
+            };
+        };
+        responses: {
+            /** @description Pending publication schedule. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicationSchedule"];
+                };
+            };
+            /** @description Draft entry not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The requested source version is stale. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid version or publication date. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    cancelEntryPublicationSchedule: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Session-bound token obtained from `/api/v1/auth/csrf`. */
+                "X-CSRF-Token": components["parameters"]["CsrfTokenHeader"];
+            };
+            path: {
+                id: components["parameters"]["EntryId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cancelled publication schedule. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicationSchedule"];
+                };
+            };
+            /** @description No schedule exists for this entry. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The schedule is no longer pending. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

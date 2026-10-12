@@ -379,6 +379,99 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /api/v1/admin/pages/{id}/schedule:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getPagePublicationSchedule
+      tags: [Publishing]
+      summary: Get the current page publication schedule
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Current publication schedule.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicationSchedule'
+        '404':
+          description: No schedule exists for this page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      operationId: putPagePublicationSchedule
+      tags: [Publishing]
+      summary: Create or replace a page publication schedule
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PutPublicationScheduleRequest'
+      responses:
+        '200':
+          description: Pending publication schedule.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicationSchedule'
+        '404':
+          description: Draft page not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: The requested source version is stale.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Invalid version or publication date.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      operationId: cancelPagePublicationSchedule
+      tags: [Publishing]
+      summary: Cancel a pending page publication schedule
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfTokenHeader'
+      responses:
+        '200':
+          description: Cancelled publication schedule.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicationSchedule'
+        '404':
+          description: No schedule exists for this page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: The schedule is no longer pending.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /api/v1/admin/pages/{id}/redirects:
     parameters:
       - name: id
@@ -770,6 +863,94 @@ paths:
                 $ref: '#/components/schemas/Error'
         '422':
           description: Entry no longer satisfies the current content-type schema.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/admin/entries/{id}/schedule:
+    parameters:
+      - $ref: '#/components/parameters/EntryId'
+    get:
+      operationId: getEntryPublicationSchedule
+      tags: [Entries]
+      summary: Get the current entry publication schedule
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Current publication schedule.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicationSchedule'
+        '404':
+          description: No schedule exists for this entry.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      operationId: putEntryPublicationSchedule
+      tags: [Entries]
+      summary: Create or replace an entry publication schedule
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PutPublicationScheduleRequest'
+      responses:
+        '200':
+          description: Pending publication schedule.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicationSchedule'
+        '404':
+          description: Draft entry not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: The requested source version is stale.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Invalid version or publication date.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      operationId: cancelEntryPublicationSchedule
+      tags: [Entries]
+      summary: Cancel a pending entry publication schedule
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfTokenHeader'
+      responses:
+        '200':
+          description: Cancelled publication schedule.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicationSchedule'
+        '404':
+          description: No schedule exists for this entry.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: The schedule is no longer pending.
           content:
             application/json:
               schema:
@@ -1973,6 +2154,51 @@ components:
         seo:
           $ref: '#/components/schemas/PageSeo'
         publishedAt:
+          type: string
+          format: date-time
+    PutPublicationScheduleRequest:
+      type: object
+      additionalProperties: false
+      required: [sourceVersion, scheduledAt]
+      properties:
+        sourceVersion:
+          type: integer
+          minimum: 1
+          description: Exact page revision or entry version to publish.
+        scheduledAt:
+          type: string
+          format: date-time
+          description: Future RFC 3339 publication time. It is normalized to UTC.
+    PublicationSchedule:
+      type: object
+      additionalProperties: false
+      required: [id, targetType, targetId, sourceVersion, scheduledAt, status, failureReason, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        targetType:
+          type: string
+          enum: [page, entry]
+        targetId:
+          type: string
+          format: uuid
+        sourceVersion:
+          type: integer
+          minimum: 1
+        scheduledAt:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [pending, completed, failed, cancelled]
+        failureReason:
+          type: [string, 'null']
+          maxLength: 500
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
           type: string
           format: date-time
     Error:

@@ -81,10 +81,11 @@ The initial foundation contains:
 - permanent slug history with direct `301` redirects and an optional CMS-managed `404` page;
 - versioned three-level navigation trees with optimistic editing and immutable public snapshots;
 - versioned custom content schemas, schema-validated entry drafts and immutable public entry snapshots;
+- brokerless scheduled publication for exact page revisions and entry versions;
 - versioned `/api/v1` contracts with frontend types generated from OpenAPI 3.1;
 - architectural decision records.
 
-Relations between entries, localization, rich HTML fields, deletion, scheduled publishing, taxonomy, menu placement/theme bindings, manual redirect editing, extension/plugin execution and advanced editorial workflows are intentionally deferred. They will be introduced through vertical slices and explicit ADRs.
+Relations between entries, localization, rich HTML fields, deletion, taxonomy, menu placement/theme bindings, manual redirect editing, extension/plugin execution and advanced editorial workflows are intentionally deferred. They will be introduced through vertical slices and explicit ADRs.
 
 ## Architecture
 

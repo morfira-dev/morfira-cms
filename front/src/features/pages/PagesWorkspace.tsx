@@ -23,6 +23,7 @@ import {
 } from '../../ui'
 import { type MediaAsset } from '../media/api'
 import { getMediaThumbnail } from '../media/MediaLibrary'
+import { PublicationScheduler } from '../publishing/PublicationScheduler'
 import {
   createPage,
   getPageRedirects,
@@ -344,6 +345,8 @@ export function PagesWorkspace({ mediaAssets }: PagesWorkspaceProps) {
                   <a href={`/api/v1/content/pages/${publication.slug}`} target="_blank" rel="noreferrer">public API</a>.
                 </Alert>
               )}
+
+              <PublicationScheduler target="page" targetId={editing.id} sourceVersion={editing.version} dirty={editingDirty} />
 
               <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
                 <TextField

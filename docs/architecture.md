@@ -46,7 +46,7 @@ Admin Studio authenticates with a server-side session cookie. Mutating setup, au
 - `Media`: assets and transformations.
 - `Extensions`: extension manifests, capabilities and lifecycle.
 
-Implemented vertical slices currently cover `System`, `Content`, `Publishing`, `Identity` and `Media`. The remaining modules are created when their first concrete capability is implemented.
+Implemented vertical slices currently cover `System`, `Schema`, `Content`, `Publishing`, `Identity`, `Media` and `Navigation`. The remaining modules are created when their first concrete capability is implemented.
 
 ## Rules
 
@@ -72,3 +72,7 @@ Page -> Region -> Block -> Component
 Components produce view models. They do not create nested HTTP requests or call other controllers.
 
 Draft edits append immutable revisions and use an integer version for optimistic locking. Preview renders the current draft through Twig with private, no-store caching and must never be indexed. Publishing copies an approved revision into a separate immutable delivery snapshot and atomically activates its public slug. Public HTML and headless delivery never read mutable drafts.
+
+Scheduled publishing stores the exact draft version and UTC due time inside the
+`Publishing` module. An idempotent console worker delegates to the same immediate
+publication services, so a small installation needs only cron and never a broker.
