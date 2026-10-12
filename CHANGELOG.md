@@ -1,3 +1,9 @@
+## [1.9.0](https://github.com/nuykon/morfira-cms/compare/v1.8.0...v1.9.0) (2026-10-12)
+
+### Features
+
+* **cms:** prepare public beta foundation ([676b6af](https://github.com/nuykon/morfira-cms/commit/676b6af0ca24b59293590d62a2584fd4b7896dd3))
+
 ## [1.8.0](https://github.com/nuykon/morfira-cms/compare/v1.7.0...v1.8.0) (2026-10-12)
 
 ### Features
