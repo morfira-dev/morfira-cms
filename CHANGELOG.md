@@ -1,3 +1,9 @@
+## [1.10.0](https://github.com/nuykon/morfira-cms/compare/v1.9.0...v1.10.0) (2026-10-12)
+
+### Features
+
+* **cms:** add localized extensible authoring ([8b930a8](https://github.com/nuykon/morfira-cms/commit/8b930a8df9903286097ce73230761afe5c6dbc35))
+
 ## [1.9.0](https://github.com/nuykon/morfira-cms/compare/v1.8.0...v1.9.0) (2026-10-12)
 
 ### Features
