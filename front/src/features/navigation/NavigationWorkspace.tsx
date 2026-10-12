@@ -33,8 +33,11 @@ import {
   updateNavigationItem,
 } from './tree'
 import { createUuid } from '../../utils/createUuid'
+import { useAdminLocale } from '../../i18n/AdminLocaleProvider'
+import type { MessageKey } from '../../i18n/messages'
 
 export function NavigationWorkspace() {
+  const { locale, t } = useAdminLocale()
   const [menus, setMenus] = useState<NavigationMenu[]>([])
   const [editing, setEditing] = useState<NavigationMenu | null>(null)
   const [dirty, setDirty] = useState(false)
@@ -58,7 +61,7 @@ export function NavigationWorkspace() {
         if (loaded[0]) void selectMenu(loaded[0].id)
       })
       .catch((reason: unknown) => {
-        if (!isAbortError(reason)) setError(messageFrom(reason, 'Could not load navigation menus.'))
+        if (!isAbortError(reason)) setError(localizedError(locale, reason, t('Could not load navigation menus.')))
       })
       .finally(() => setLoading(false))
 
@@ -81,7 +84,7 @@ export function NavigationWorkspace() {
       setEditing(structuredClone(menu))
       setDirty(false)
     } catch (reason) {
-      if (!isAbortError(reason)) setError(messageFrom(reason, 'Could not load this navigation menu.'))
+      if (!isAbortError(reason)) setError(localizedError(locale, reason, t('Could not load this navigation menu.')))
     } finally {
       if (selectionRequest.current === controller) setLoadingMenu(false)
     }
@@ -93,7 +96,7 @@ export function NavigationWorkspace() {
     setSuccess(null)
 
     if (!name.trim() || !isValidCode(code)) {
-      setError('Enter a name and a lowercase code containing letters, numbers and hyphens.')
+      setError(t('Enter a name and a lowercase code containing letters, numbers and hyphens.'))
       return
     }
 
@@ -105,9 +108,9 @@ export function NavigationWorkspace() {
       setDirty(false)
       setName('')
       setCode('')
-      setSuccess(`Navigation “${created.name}” was created.`)
+      setSuccess(t('Navigation “{{name}}” was created.', { name: created.name }))
     } catch (reason) {
-      setError(messageFrom(reason, 'Could not create the navigation menu.'))
+      setError(localizedError(locale, reason, t('Could not create the navigation menu.')))
     } finally {
       setCreating(false)
     }
@@ -133,7 +136,7 @@ export function NavigationWorkspace() {
 
     const validationError = validateMenu(editing)
     if (validationError) {
-      setError(validationError)
+      setError(t(validationError))
       return
     }
 
@@ -151,9 +154,9 @@ export function NavigationWorkspace() {
       setEditing(structuredClone(saved))
       setMenus((current) => current.map((menu) => menu.id === saved.id ? saved : menu))
       setDirty(false)
-      setSuccess(`Draft version ${saved.version} was saved.`)
+      setSuccess(t('Draft version {{version}} was saved.', { version: saved.version }))
     } catch (reason) {
-      setError(`${messageFrom(reason, 'Could not save this navigation menu.')} Reload the menu if another editor changed it.`)
+      setError(`${localizedError(locale, reason, t('Could not save this navigation menu.'))} ${t('Reload the menu if another editor changed it.')}`)
     } finally {
       setSaving(false)
     }
@@ -167,9 +170,9 @@ export function NavigationWorkspace() {
 
     try {
       const publication = await publishNavigationMenu(editing.id, editing.version)
-      setSuccess(`Version ${publication.sourceVersion} is published as “${publication.code}”.`)
+      setSuccess(t('Version {{version}} is published as “{{code}}”.', { version: publication.sourceVersion, code: publication.code }))
     } catch (reason) {
-      setError(messageFrom(reason, 'Could not publish this navigation menu.'))
+      setError(localizedError(locale, reason, t('Could not publish this navigation menu.')))
     } finally {
       setPublishing(false)
     }
@@ -180,9 +183,9 @@ export function NavigationWorkspace() {
   return (
     <Stack spacing={3}>
       <div>
-        <Typography component="h1" variant="h1">Navigation</Typography>
+        <Typography component="h1" variant="h1">{t('Navigation')}</Typography>
         <Typography color="text.secondary" sx={{ mt: 0.75 }}>
-          Build reusable menus visually, save versioned drafts and publish an exact revision.
+          {t('Build reusable menus visually, save versioned drafts and publish an exact revision.')}
         </Typography>
       </div>
 
@@ -193,7 +196,7 @@ export function NavigationWorkspace() {
         <CardContent>
           <Stack component="form" direction={{ xs: 'column', md: 'row' }} spacing={2} onSubmit={createMenu}>
             <TextField
-              label="Menu name"
+              label={t('Menu name')}
               value={name}
               onChange={(event) => setName(event.target.value)}
               required
@@ -201,16 +204,16 @@ export function NavigationWorkspace() {
               slotProps={{ htmlInput: { maxLength: 120 } }}
             />
             <TextField
-              label="Code"
+              label={t('Code')}
               value={code}
               onChange={(event) => setCode(event.target.value.toLowerCase())}
               required
               fullWidth
-              helperText="For example: main or footer-links"
+              helperText={t('For example: main or footer-links')}
               slotProps={{ htmlInput: { maxLength: 120, pattern: '[a-z0-9]+(?:-[a-z0-9]+)*' } }}
             />
             <Button type="submit" variant="contained" disabled={creating} sx={{ minWidth: 150, alignSelf: 'flex-start' }}>
-              {creating ? 'Creating…' : 'Create menu'}
+              {creating ? t('Creating…') : t('Create menu')}
             </Button>
           </Stack>
         </CardContent>
@@ -219,11 +222,11 @@ export function NavigationWorkspace() {
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '280px minmax(0, 1fr)' }, gap: 3 }}>
         <Card variant="outlined" sx={{ alignSelf: 'start' }}>
           <CardContent>
-            <Typography variant="h6">Menus</Typography>
+            <Typography variant="h6">{t('Menus')}</Typography>
             {loading ? (
               <Stack sx={{ py: 4, alignItems: 'center' }}><CircularProgress size={26} /></Stack>
             ) : menus.length === 0 ? (
-              <Typography color="text.secondary" sx={{ mt: 2 }}>No menus yet.</Typography>
+              <Typography color="text.secondary" sx={{ mt: 2 }}>{t('No menus yet.')}</Typography>
             ) : (
               <Stack spacing={1} sx={{ mt: 2 }}>
                 {menus.map((menu) => (
@@ -245,31 +248,31 @@ export function NavigationWorkspace() {
         {loadingMenu ? (
           <Stack sx={{ minHeight: 260, alignItems: 'center', justifyContent: 'center' }}><CircularProgress size={28} /></Stack>
         ) : !editing ? (
-          <Alert severity="info">Create or select a navigation menu to edit its items.</Alert>
+          <Alert severity="info">{t('Create or select a navigation menu to edit its items.')}</Alert>
         ) : (
           <Card variant="outlined">
             <CardContent component="form" onSubmit={saveMenu}>
               <Stack spacing={3}>
                 <Stack direction={{ xs: 'column', md: 'row' }} sx={{ justifyContent: 'space-between', gap: 2 }}>
                   <div>
-                    <Typography variant="h5">Edit menu</Typography>
-                    <Typography color="text.secondary">Draft version {editing.version} · {itemCount}/100 items</Typography>
+                    <Typography variant="h5">{t('Edit menu')}</Typography>
+                    <Typography color="text.secondary">{t('Draft version {{version}} · {{count}}/100 items', { version: editing.version, count: itemCount })}</Typography>
                   </div>
                   <Stack direction="row" spacing={1}>
                     <Button type="submit" variant="contained" disabled={!dirty || saving}>
-                      {saving ? 'Saving…' : 'Save revision'}
+                      {saving ? t('Saving…') : t('Save revision')}
                     </Button>
                     <Button color="success" variant="contained" disabled={dirty || publishing} onClick={() => void publishMenu()}>
-                      {publishing ? 'Publishing…' : 'Publish'}
+                      {publishing ? t('Publishing…') : t('Publish')}
                     </Button>
                   </Stack>
                 </Stack>
 
-                {dirty && <Alert severity="warning">Save this revision before publishing it.</Alert>}
+                {dirty && <Alert severity="warning">{t('Save this revision before publishing it.')}</Alert>}
 
                 <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
                   <TextField
-                    label="Menu name"
+                    label={t('Menu name')}
                     value={editing.name}
                     onChange={(event) => changeMenu('name', event.target.value)}
                     required
@@ -277,7 +280,7 @@ export function NavigationWorkspace() {
                     slotProps={{ htmlInput: { maxLength: 120 } }}
                   />
                   <TextField
-                    label="Code"
+                    label={t('Code')}
                     value={editing.code}
                     onChange={(event) => changeMenu('code', event.target.value.toLowerCase())}
                     required
@@ -289,18 +292,18 @@ export function NavigationWorkspace() {
                 <Divider />
 
                 <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Typography variant="h6">Menu items</Typography>
+                  <Typography variant="h6">{t('Menu items')}</Typography>
                   <Button
                     variant="outlined"
                     disabled={itemCount >= 100}
                     onClick={() => changeItems(addNavigationItem(editing.items, createNavigationItem(createUuid())))}
                   >
-                    Add root item
+                    {t('Add root item')}
                   </Button>
                 </Stack>
 
                 {editing.items.length === 0 ? (
-                  <Alert severity="info">This menu has no links. Add the first root item.</Alert>
+                  <Alert severity="info">{t('This menu has no links. Add the first root item.')}</Alert>
                 ) : (
                   <Stack spacing={2}>
                     {editing.items.map((item, index) => (
@@ -351,25 +354,26 @@ function NavigationItemEditor({
   onRemove,
   onMove,
 }: NavigationItemEditorProps) {
+  const { t } = useAdminLocale()
   return (
     <Card variant="outlined" sx={{ ml: depth * 2, bgcolor: depth === 0 ? 'background.paper' : 'grey.50' }}>
       <CardContent>
         <Stack spacing={2}>
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} sx={{ justifyContent: 'space-between' }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-              Level {depth + 1} · {item.label || 'Untitled item'}
+              {t('Level {{level}} · {{label}}', { level: depth + 1, label: item.label || t('Untitled item') })}
             </Typography>
             <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap' }}>
-              <Button size="small" disabled={index === 0} onClick={() => onMove(item.id, -1)}>Move up</Button>
-              <Button size="small" disabled={index === siblingCount - 1} onClick={() => onMove(item.id, 1)}>Move down</Button>
-              <Button size="small" disabled={depth >= 2 || totalCount >= 100} onClick={() => onAddChild(item.id)}>Add child</Button>
-              <Button size="small" color="error" onClick={() => onRemove(item.id)}>Remove</Button>
+              <Button size="small" disabled={index === 0} onClick={() => onMove(item.id, -1)}>{t('Move up')}</Button>
+              <Button size="small" disabled={index === siblingCount - 1} onClick={() => onMove(item.id, 1)}>{t('Move down')}</Button>
+              <Button size="small" disabled={depth >= 2 || totalCount >= 100} onClick={() => onAddChild(item.id)}>{t('Add child')}</Button>
+              <Button size="small" color="error" onClick={() => onRemove(item.id)}>{t('Remove')}</Button>
             </Stack>
           </Stack>
 
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
             <TextField
-              label="Label"
+              label={t('Label')}
               value={item.label}
               onChange={(event) => onChange(item.id, 'label', event.target.value)}
               required
@@ -377,12 +381,12 @@ function NavigationItemEditor({
               slotProps={{ htmlInput: { maxLength: 120 } }}
             />
             <TextField
-              label="Link"
+              label={t('Link')}
               value={item.href}
               onChange={(event) => onChange(item.id, 'href', event.target.value)}
               required
               fullWidth
-              helperText="Use /page or an absolute https:// URL"
+              helperText={t('Use /page or an absolute https:// URL')}
               slotProps={{ htmlInput: { maxLength: 2048 } }}
             />
             <FormControlLabel
@@ -392,7 +396,7 @@ function NavigationItemEditor({
                   onChange={(event) => onChange(item.id, 'openInNewTab', event.target.checked)}
                 />
               )}
-              label="New tab"
+              label={t('New tab')}
               sx={{ minWidth: 120 }}
             />
           </Stack>
@@ -421,7 +425,7 @@ function NavigationItemEditor({
   )
 }
 
-function validateMenu(menu: NavigationMenu): string | null {
+function validateMenu(menu: NavigationMenu): MessageKey | null {
   if (!menu.name.trim()) return 'Menu name is required.'
   if (!isValidCode(menu.code)) return 'Code must use lowercase letters, numbers and single hyphens.'
   if (countNavigationItems(menu.items) > 100) return 'A navigation menu can contain at most 100 items.'
@@ -432,12 +436,12 @@ function validateMenu(menu: NavigationMenu): string | null {
   return null
 }
 
-function findInvalidItem(items: NavigationItem[], depth = 1): string | null {
+function findInvalidItem(items: NavigationItem[], depth = 1): MessageKey | null {
   if (depth > 3) return 'Navigation items can be nested at most three levels deep.'
 
   for (const item of items) {
     if (!item.label.trim()) return 'Every navigation item needs a label.'
-    if (!isValidHref(item.href)) return `“${item.label}” needs a root-relative or absolute HTTP(S) link.`
+    if (!isValidHref(item.href)) return 'Every navigation link must be root-relative or absolute HTTP(S).'
     const childError = findInvalidItem(item.children, depth + 1)
     if (childError) return childError
   }
@@ -464,6 +468,6 @@ function isAbortError(reason: unknown): boolean {
   return reason instanceof DOMException && reason.name === 'AbortError'
 }
 
-function messageFrom(reason: unknown, fallback: string): string {
-  return reason instanceof Error ? reason.message : fallback
+function localizedError(locale: string, reason: unknown, fallback: string): string {
+  return locale === 'en' && reason instanceof Error ? reason.message : fallback
 }

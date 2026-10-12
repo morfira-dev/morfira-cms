@@ -4,7 +4,7 @@ import { createTaxonomy, createTerm, deleteTaxonomy, deleteTerm, type Taxonomy, 
 import { useAdminLocale } from '../../i18n/AdminLocaleProvider'
 
 export function TaxonomyWorkspace({ taxonomies, onChange }: { taxonomies: Taxonomy[]; onChange: (items: Taxonomy[]) => void }) {
-  const { t } = useAdminLocale()
+  const { errorMessage, t } = useAdminLocale()
   const [name, setName] = useState(''); const [slug, setSlug] = useState(''); const [hierarchical, setHierarchical] = useState(true)
   const [selected, setSelected] = useState(''); const [editName, setEditName] = useState(''); const [editSlug, setEditSlug] = useState(''); const [editHierarchical, setEditHierarchical] = useState(true)
   const [termName, setTermName] = useState(''); const [termSlug, setTermSlug] = useState(''); const [parentId, setParentId] = useState(''); const [editingTermId, setEditingTermId] = useState<string | null>(null)
@@ -20,14 +20,14 @@ export function TaxonomyWorkspace({ taxonomies, onChange }: { taxonomies: Taxono
   async function addTaxonomy(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError(null)
     try { const item = await createTaxonomy(name, slug, hierarchical); onChange([...taxonomies, item]); selectTaxonomy(item.id); setName(''); setSlug('') }
-    catch (reason) { setError(reason instanceof Error ? reason.message : t('Could not create taxonomy.')) }
+    catch (reason) { setError(errorMessage(reason, 'Could not create taxonomy.')) }
     finally { setBusy(false) }
   }
 
   async function saveTaxonomy() {
     if (!current) return; setBusy(true); setError(null)
     try { const updated = await updateTaxonomy(current.id, editName, editSlug, editHierarchical); onChange(taxonomies.map((item) => item.id === updated.id ? updated : item)) }
-    catch (reason) { setError(reason instanceof Error ? reason.message : t('Could not update taxonomy.')) }
+    catch (reason) { setError(errorMessage(reason, 'Could not update taxonomy.')) }
     finally { setBusy(false) }
   }
 
@@ -35,7 +35,7 @@ export function TaxonomyWorkspace({ taxonomies, onChange }: { taxonomies: Taxono
     if (!current || !window.confirm(t('Delete taxonomy “{{name}}” and its mutable assignments?', { name: current.name }))) return
     setBusy(true); setError(null)
     try { await deleteTaxonomy(current.id); onChange(taxonomies.filter((item) => item.id !== current.id)); setSelected('') }
-    catch (reason) { setError(reason instanceof Error ? reason.message : t('Could not delete taxonomy.')) }
+    catch (reason) { setError(errorMessage(reason, 'Could not delete taxonomy.')) }
     finally { setBusy(false) }
   }
 
@@ -44,7 +44,7 @@ export function TaxonomyWorkspace({ taxonomies, onChange }: { taxonomies: Taxono
     try {
       const updated = editingTermId ? await updateTerm(current.id, editingTermId, termName, termSlug, parentId || null) : await createTerm(current.id, termName, termSlug, parentId || null)
       onChange(taxonomies.map((item) => item.id === updated.id ? updated : item)); setEditingTermId(null); setTermName(''); setTermSlug(''); setParentId('')
-    } catch (reason) { setError(reason instanceof Error ? reason.message : t('Could not save term.')) }
+    } catch (reason) { setError(errorMessage(reason, 'Could not save term.')) }
     finally { setBusy(false) }
   }
 
@@ -52,7 +52,7 @@ export function TaxonomyWorkspace({ taxonomies, onChange }: { taxonomies: Taxono
     if (!current || !window.confirm(t('Delete this term and its mutable assignments?'))) return
     setBusy(true); setError(null)
     try { const updated = await deleteTerm(current.id, termId); onChange(taxonomies.map((item) => item.id === updated.id ? updated : item)); if (editingTermId === termId) setEditingTermId(null) }
-    catch (reason) { setError(reason instanceof Error ? reason.message : t('Could not delete term.')) }
+    catch (reason) { setError(errorMessage(reason, 'Could not delete term.')) }
     finally { setBusy(false) }
   }
 

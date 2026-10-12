@@ -32,11 +32,14 @@ import {
   updateEntry,
 } from './api'
 import { initializeEntryValues, publishedEntryUrl, setEntryValue, validateEntryValues } from './values'
+import { useAdminLocale } from '../../i18n/AdminLocaleProvider'
+import type { MessageKey } from '../../i18n/messages'
 
 interface EntriesWorkspaceProps { contentTypes: ContentType[]; mediaAssets: MediaAsset[]; taxonomies: Taxonomy[] }
 interface EntryForm { id: string | null; title: string; slug: string; values: EntryValues; version: number | null }
 
 export function EntriesWorkspace({ contentTypes, mediaAssets, taxonomies }: EntriesWorkspaceProps) {
+  const { locale, t } = useAdminLocale()
   const [contentTypeId, setContentTypeId] = useState('')
   const [entries, setEntries] = useState<Entry[]>([])
   const [editing, setEditing] = useState<EntryForm | null>(null)
@@ -66,7 +69,7 @@ export function EntriesWorkspace({ contentTypes, mediaAssets, taxonomies }: Entr
     getEntries(contentTypeId, controller.signal)
       .then(setEntries)
       .catch((reason: unknown) => {
-        if (!(reason instanceof DOMException && reason.name === 'AbortError')) setError(errorMessage(reason, 'Could not load entries.'))
+        if (!(reason instanceof DOMException && reason.name === 'AbortError')) setError(localizedError(locale, reason, t('Could not load entries.')))
       })
       .finally(() => { if (request.current === controller) setLoading(false) })
     setEditing(null)
@@ -90,7 +93,7 @@ export function EntriesWorkspace({ contentTypes, mediaAssets, taxonomies }: Entr
       setSuccess(null)
       setPublishedUrl(null)
     } catch (reason) {
-      if (!(reason instanceof DOMException && reason.name === 'AbortError')) setError(errorMessage(reason, 'Could not load entry.'))
+      if (!(reason instanceof DOMException && reason.name === 'AbortError')) setError(localizedError(locale, reason, t('Could not load entry.')))
     } finally {
       if (request.current === controller) setLoading(false)
     }
@@ -109,7 +112,7 @@ export function EntriesWorkspace({ contentTypes, mediaAssets, taxonomies }: Entr
     event.preventDefault()
     if (!editing || !contentType) return
     const validation = validateForm(editing, contentType)
-    if (validation) { setError(validation); return }
+    if (validation) { setError(t(validation)); return }
     setSaving(true)
     setError(null)
     try {
@@ -120,9 +123,9 @@ export function EntriesWorkspace({ contentTypes, mediaAssets, taxonomies }: Entr
       setEntries((current) => editing.id === null ? [saved, ...current] : current.map((entry) => entry.id === saved.id ? saved : entry))
       setDirty(false)
       setPublishedUrl(null)
-      setSuccess(`Draft version ${saved.version} was saved.`)
+      setSuccess(t('Draft version {{version}} was saved.', { version: saved.version }))
     } catch (reason) {
-      setError(`${errorMessage(reason, 'Could not save entry.')} Reload it if another editor changed it.`)
+      setError(`${localizedError(locale, reason, t('Could not save entry.'))} ${t('Reload it if another editor changed it.')}`)
     } finally { setSaving(false) }
   }
 
@@ -133,32 +136,32 @@ export function EntriesWorkspace({ contentTypes, mediaAssets, taxonomies }: Entr
       const published = await publishEntry(editing.id, editing.version)
       const url = publishedEntryUrl(published)
       setPublishedUrl(url)
-      setSuccess(`Version ${published.sourceVersion} is published.`)
-    } catch (reason) { setError(errorMessage(reason, 'Could not publish entry.')) }
+      setSuccess(t('Version {{version}} is published.', { version: published.sourceVersion }))
+    } catch (reason) { setError(localizedError(locale, reason, t('Could not publish entry.'))) }
     finally { setPublishing(false) }
   }
 
   async function unpublish() {
-    if (!editing?.id || !window.confirm('Unpublish this entry? Its draft and publication history will be preserved.')) return
+    if (!editing?.id || !window.confirm(t('Unpublish this entry? Its draft and publication history will be preserved.'))) return
     setPublishing(true); setError(null); setSuccess(null)
     try {
       await unpublishEntry(editing.id)
       setPublishedUrl(null)
-      setSuccess('The entry is no longer publicly available.')
-    } catch (reason) { setError(errorMessage(reason, 'Could not unpublish entry.')) }
+      setSuccess(t('The entry is no longer publicly available.'))
+    } catch (reason) { setError(localizedError(locale, reason, t('Could not unpublish entry.'))) }
     finally { setPublishing(false) }
   }
 
   async function remove() {
-    if (!editing?.id || !window.confirm('Permanently delete this entry draft and all revisions? Published snapshots will be retained.')) return
+    if (!editing?.id || !window.confirm(t('Permanently delete this entry draft and all revisions? Published snapshots will be retained.'))) return
     setDeleting(true); setError(null); setSuccess(null)
     try {
       await deleteEntry(editing.id)
       setEntries((current) => current.filter((entry) => entry.id !== editing.id))
       setEditing(null)
       setPublishedUrl(null)
-      setSuccess('The entry draft was permanently deleted.')
-    } catch (reason) { setError(errorMessage(reason, 'Could not delete entry.')) }
+      setSuccess(t('The entry draft was permanently deleted.'))
+    } catch (reason) { setError(localizedError(locale, reason, t('Could not delete entry.'))) }
     finally { setDeleting(false) }
   }
 
@@ -170,47 +173,47 @@ export function EntriesWorkspace({ contentTypes, mediaAssets, taxonomies }: Entr
 
   return (
     <Stack spacing={3}>
-      <div><Typography component="h1" variant="h1">Entries</Typography><Typography color="text.secondary" sx={{ mt: 0.75 }}>Create structured content with a form generated from its schema.</Typography></div>
+      <div><Typography component="h1" variant="h1">{t('Entries')}</Typography><Typography color="text.secondary" sx={{ mt: 0.75 }}>{t('Create structured content with a form generated from its schema.')}</Typography></div>
       {error && <Alert severity="error">{error}</Alert>}
       {success && <Alert severity="success">{success}</Alert>}
 
-      <TextField select label="Content type" value={contentTypeId} onChange={(event) => setContentTypeId(event.target.value)} helperText="Choose the schema for these entries">
+      <TextField select label={t('Content type')} value={contentTypeId} onChange={(event) => setContentTypeId(event.target.value)} helperText={t('Choose the schema for these entries')}>
         {contentTypes.map((type) => <MenuItem key={type.id} value={type.id}>{type.name} ({type.apiName})</MenuItem>)}
       </TextField>
 
-      {!contentType ? <Alert severity="info">Create and select a content type first.</Alert> : (
+      {!contentType ? <Alert severity="info">{t('Create and select a content type first.')}</Alert> : (
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '280px minmax(0, 1fr)' }, gap: 3 }}>
           <Card variant="outlined" sx={{ alignSelf: 'start' }}><CardContent>
-            <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}><Typography variant="h6">{contentType.name}</Typography><Button size="small" variant="contained" onClick={newEntry}>New</Button></Stack>
+            <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}><Typography variant="h6">{contentType.name}</Typography><Button size="small" variant="contained" onClick={newEntry}>{t('New')}</Button></Stack>
             {loading && !editing ? <Stack sx={{ py: 4, alignItems: 'center' }}><CircularProgress size={26} /></Stack> : (
               <Stack spacing={1} sx={{ mt: 2 }}>
                 {entries.map((entry) => <Button key={entry.id} variant={editing?.id === entry.id ? 'contained' : 'outlined'} onClick={() => void selectEntry(entry.id)} sx={{ justifyContent: 'space-between' }}><span>{entry.title}</span><Chip label={`v${entry.version}`} size="small" /></Button>)}
-                {entries.length === 0 && <Typography color="text.secondary">No entries yet.</Typography>}
+                {entries.length === 0 && <Typography color="text.secondary">{t('No entries yet.')}</Typography>}
               </Stack>
             )}
           </CardContent></Card>
 
-          {loading && editing ? <Stack sx={{ minHeight: 240, alignItems: 'center', justifyContent: 'center' }}><CircularProgress /></Stack> : !editing ? <Alert severity="info">Create or select an entry.</Alert> : (
+          {loading && editing ? <Stack sx={{ minHeight: 240, alignItems: 'center', justifyContent: 'center' }}><CircularProgress /></Stack> : !editing ? <Alert severity="info">{t('Create or select an entry.')}</Alert> : (
             <Card variant="outlined"><CardContent component="form" onSubmit={save}>
               <Stack spacing={3}>
                 <Stack direction={{ xs: 'column', md: 'row' }} sx={{ justifyContent: 'space-between', gap: 2 }}>
-                  <div><Typography variant="h5">{editing.id ? 'Edit entry' : 'New entry'}</Typography><Typography color="text.secondary">{editing.version ? `Draft version ${editing.version}` : 'Not saved yet'}</Typography></div>
+                  <div><Typography variant="h5">{editing.id ? t('Edit entry') : t('New entry')}</Typography><Typography color="text.secondary">{editing.version ? t('Draft version {{version}}', { version: editing.version }) : t('Not saved yet')}</Typography></div>
                   <Stack direction="row" spacing={1}>
-                    {publishedUrl && <Button component="a" href={publishedUrl} target="_blank" variant="outlined">Open published API</Button>}
-                    <Button type="submit" variant="contained" disabled={!dirty || saving}>{saving ? 'Saving…' : 'Save'}</Button>
-                    <Button color="success" variant="contained" disabled={!editing.id || dirty || publishing} onClick={() => void publish()}>{publishing ? 'Publishing…' : 'Publish'}</Button>
-                    <Button color="warning" variant="outlined" disabled={!editing.id || publishing} onClick={() => void unpublish()}>Unpublish</Button>
-                    <Button color="error" variant="outlined" disabled={!editing.id || publishing || deleting} onClick={() => void remove()}>{deleting ? 'Deleting…' : 'Delete'}</Button>
+                    {publishedUrl && <Button component="a" href={publishedUrl} target="_blank" variant="outlined">{t('Open published API')}</Button>}
+                    <Button type="submit" variant="contained" disabled={!dirty || saving}>{saving ? t('Saving…') : t('Save')}</Button>
+                    <Button color="success" variant="contained" disabled={!editing.id || dirty || publishing} onClick={() => void publish()}>{publishing ? t('Publishing…') : t('Publish')}</Button>
+                    <Button color="warning" variant="outlined" disabled={!editing.id || publishing} onClick={() => void unpublish()}>{t('Unpublish')}</Button>
+                    <Button color="error" variant="outlined" disabled={!editing.id || publishing || deleting} onClick={() => void remove()}>{deleting ? t('Deleting…') : t('Delete')}</Button>
                   </Stack>
                 </Stack>
-                {dirty && editing.id && <Alert severity="warning">Save this version before publishing it.</Alert>}
+                {dirty && editing.id && <Alert severity="warning">{t('Save this version before publishing it.')}</Alert>}
                 {editing.id && editing.version !== null && <PublicationScheduler target="entry" targetId={editing.id} sourceVersion={editing.version} dirty={dirty} />}
                 {editing.id && <EntryTaxonomyAssignments entryId={editing.id} taxonomies={taxonomies} />}
                 <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-                  <TextField label="Title" value={editing.title} onChange={(event) => { setEditing({ ...editing, title: event.target.value }); setDirty(true); setPublishedUrl(null) }} fullWidth required />
-                  <TextField label="Slug" value={editing.slug} onChange={(event) => { setEditing({ ...editing, slug: event.target.value.toLowerCase() }); setDirty(true); setPublishedUrl(null) }} fullWidth required helperText="Lowercase letters, numbers and hyphens" />
+                  <TextField label={t('Title')} value={editing.title} onChange={(event) => { setEditing({ ...editing, title: event.target.value }); setDirty(true); setPublishedUrl(null) }} fullWidth required />
+                  <TextField label={t('Slug')} value={editing.slug} onChange={(event) => { setEditing({ ...editing, slug: event.target.value.toLowerCase() }); setDirty(true); setPublishedUrl(null) }} fullWidth required helperText={t('Lowercase letters, numbers and hyphens')} />
                 </Stack>
-                {contentType.fields.length === 0 && <Alert severity="info">This schema has no custom fields.</Alert>}
+                {contentType.fields.length === 0 && <Alert severity="info">{t('This schema has no custom fields.')}</Alert>}
                 {contentType.fields.map((field) => <EntryField key={field.id} field={field} value={editing.values[field.key] ?? null} mediaAssets={mediaAssets} contentTypes={contentTypes} onChange={(value) => changeValue(field.key, value)} />)}
               </Stack>
             </CardContent></Card>
@@ -222,24 +225,26 @@ export function EntriesWorkspace({ contentTypes, mediaAssets, taxonomies }: Entr
 }
 
 function EntryField({ field, value, mediaAssets, contentTypes, onChange }: { field: ContentField; value: EntryValue; mediaAssets: MediaAsset[]; contentTypes: ContentType[]; onChange: (value: EntryValue) => void }) {
+  const { t } = useAdminLocale()
   if (field.type === 'boolean') return <FormControlLabel control={<Switch checked={value === true} onChange={(event) => onChange(event.target.checked)} />} label={`${field.label}${field.required ? ' *' : ''}`} />
-  if (field.type === 'media') return <TextField select label={field.label} value={typeof value === 'string' ? value : ''} onChange={(event) => onChange(event.target.value || null)} required={field.required} helperText="Choose an image from the media library"><MenuItem value="">None</MenuItem>{mediaAssets.map((asset) => <MenuItem key={asset.id} value={asset.id}>{asset.originalName}</MenuItem>)}</TextField>
+  if (field.type === 'media') return <TextField select label={field.label} value={typeof value === 'string' ? value : ''} onChange={(event) => onChange(event.target.value || null)} required={field.required} helperText={t('Choose an image from the media library')}><MenuItem value="">{t('None')}</MenuItem>{mediaAssets.map((asset) => <MenuItem key={asset.id} value={asset.id}>{asset.originalName}</MenuItem>)}</TextField>
   if (field.type === 'number') return <TextField type="number" label={field.label} value={typeof value === 'number' ? value : ''} onChange={(event) => onChange(event.target.value === '' ? null : Number(event.target.value))} required={field.required} />
   if(field.type==='relation') return <RelationField field={field} value={value} contentTypes={contentTypes} onChange={onChange}/>
   return <TextField type={field.type === 'date' ? 'date' : 'text'} label={field.label} value={typeof value === 'string' ? value : ''} onChange={(event) => onChange(event.target.value || null)} required={field.required} multiline={field.type === 'textarea'} minRows={field.type === 'textarea' ? 5 : undefined} slotProps={field.type === 'date' ? { inputLabel: { shrink: true } } : undefined} />
 }
 
 function RelationField({field,value,contentTypes,onChange}:{field:ContentField;value:EntryValue;contentTypes:ContentType[];onChange:(value:EntryValue)=>void}){
+  const { t } = useAdminLocale()
   const [options,setOptions]=useState<Entry[]>([])
   useEffect(()=>{if(!field.targetContentTypeId)return;const c=new AbortController();getEntries(field.targetContentTypeId,c.signal).then(setOptions).catch(()=>setOptions([]));return()=>c.abort()},[field.targetContentTypeId])
   const target=contentTypes.find(type=>type.id===field.targetContentTypeId)
-  return <TextField select label={field.label} value={typeof value==='string'?value:''} onChange={event=>onChange(event.target.value||null)} required={field.required} helperText={`Choose an entry from ${target?.name??'the target type'}`}><MenuItem value="">None</MenuItem>{options.map(entry=><MenuItem key={entry.id} value={entry.id}>{entry.title}</MenuItem>)}</TextField>
+  return <TextField select label={field.label} value={typeof value==='string'?value:''} onChange={event=>onChange(event.target.value||null)} required={field.required} helperText={t('Choose an entry from {{type}}', { type: target?.name ?? t('the target type') })}><MenuItem value="">{t('None')}</MenuItem>{options.map(entry=><MenuItem key={entry.id} value={entry.id}>{entry.title}</MenuItem>)}</TextField>
 }
 
 function toForm(entry: Entry, type: ContentType): EntryForm { return { id: entry.id, title: entry.title, slug: entry.slug, values: initializeEntryValues(type.fields, entry.values), version: entry.version } }
-function validateForm(form: EntryForm, type: ContentType): string | null {
+function validateForm(form: EntryForm, type: ContentType): MessageKey | null {
   if (!form.title.trim()) return 'Title is required.'
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(form.slug)) return 'Slug must use lowercase letters, numbers and single hyphens.'
-  return validateEntryValues(type.fields, form.values)[0] ?? null
+  return validateEntryValues(type.fields, form.values).length > 0 ? 'Check the required custom fields.' : null
 }
-function errorMessage(reason: unknown, fallback: string): string { return reason instanceof Error ? reason.message : fallback }
+function localizedError(locale: string, reason: unknown, fallback: string): string { return locale === 'en' && reason instanceof Error ? reason.message : fallback }

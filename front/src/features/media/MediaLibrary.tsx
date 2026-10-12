@@ -25,7 +25,7 @@ export function getMediaThumbnail(asset: MediaAsset): string | undefined {
 }
 
 export function MediaLibrary({ assets, loading, onChange }: MediaLibraryProps) {
-  const { t } = useAdminLocale()
+  const { errorMessage, t } = useAdminLocale()
   const [file, setFile] = useState<File | null>(null)
   const [alt, setAlt] = useState('')
   const [uploading, setUploading] = useState(false)
@@ -73,7 +73,7 @@ export function MediaLibrary({ assets, loading, onChange }: MediaLibraryProps) {
       setAlt('')
       setInputKey((current) => current + 1)
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : t('Could not upload the image.'))
+      setError(errorMessage(reason, 'Could not upload the image.'))
     } finally {
       setUploading(false)
     }
@@ -99,7 +99,7 @@ export function MediaLibrary({ assets, loading, onChange }: MediaLibraryProps) {
       onChange(assets.map((item) => item.id === updated.id ? updated : item))
       setEditingId(null)
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : t('Could not update media metadata.'))
+      setError(errorMessage(reason, 'Could not update media metadata.'))
     } finally {
       setSaving(false)
     }
@@ -113,7 +113,7 @@ export function MediaLibrary({ assets, loading, onChange }: MediaLibraryProps) {
       await deleteMedia(asset.id)
       onChange(assets.filter((item) => item.id !== asset.id))
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : t('Could not delete the media asset.'))
+      setError(errorMessage(reason, 'Could not delete the media asset.'))
     } finally {
       setSaving(false)
     }
@@ -130,7 +130,7 @@ export function MediaLibrary({ assets, loading, onChange }: MediaLibraryProps) {
   return (
     <Stack spacing={3}>
       <div>
-        <Typography component="h1" variant="h1">Media</Typography>
+        <Typography component="h1" variant="h1">{t('Media')}</Typography>
         <Typography color="text.secondary" sx={{ mt: 0.75 }}>
           {t('Upload reusable images once. The CMS creates safe, responsive variants for pages and APIs.')}
         </Typography>

@@ -4,7 +4,7 @@ import { getExtensions, type Extension } from './api'
 import { useAdminLocale } from '../../i18n/AdminLocaleProvider'
 
 export function ExtensionsWorkspace() {
-  const { t } = useAdminLocale()
+  const { errorMessage, t } = useAdminLocale()
   const [items, setItems] = useState<Extension[]>([])
   const [apiVersion, setApiVersion] = useState<number>()
   const [error, setError] = useState<string>()
@@ -15,11 +15,11 @@ export function ExtensionsWorkspace() {
     getExtensions(controller.signal)
       .then((catalog) => { setItems(catalog.items); setApiVersion(catalog.apiVersion) })
       .catch((reason: unknown) => {
-        if (!(reason instanceof DOMException && reason.name === 'AbortError')) setError(reason instanceof Error ? reason.message : t('Could not load extensions.'))
+        if (!(reason instanceof DOMException && reason.name === 'AbortError')) setError(errorMessage(reason, 'Could not load extensions.'))
       })
       .finally(() => setLoading(false))
     return () => controller.abort()
-  }, [t])
+  }, [errorMessage])
 
   return <Stack spacing={3}>
     <div><Typography component="h1" variant="h1">{t('Extensions')}</Typography><Typography color="text.secondary" sx={{ mt: .75 }}>{t('Trusted deployment-installed packages using extension API v{{version}}.', { version: apiVersion ?? '…' })}</Typography></div>

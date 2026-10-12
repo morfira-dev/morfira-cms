@@ -5,7 +5,7 @@ import { getSiteSettings, updateSiteSettings, type SiteSettings } from './api'
 import { useAdminLocale, type AdminLocale } from '../../i18n/AdminLocaleProvider'
 
 export function SettingsWorkspace({ isOwner, adminLocale, onAdminLocaleChange, onSessionEnded }: { isOwner: boolean; adminLocale: AdminLocale; onAdminLocaleChange: (locale: AdminLocale) => Promise<void>; onSessionEnded: () => void }) {
-  const { t } = useAdminLocale()
+  const { errorMessage, t } = useAdminLocale()
   const [settings, setSettings] = useState<SiteSettings | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -21,11 +21,11 @@ export function SettingsWorkspace({ isOwner, adminLocale, onAdminLocaleChange, o
     getSiteSettings(controller.signal)
       .then(setSettings)
       .catch((reason: unknown) => {
-        if (!(reason instanceof DOMException && reason.name === 'AbortError')) setError(reason instanceof Error ? reason.message : t('Could not load settings.'))
+        if (!(reason instanceof DOMException && reason.name === 'AbortError')) setError(errorMessage(reason, 'Could not load settings.'))
       })
       .finally(() => setLoading(false))
     return () => controller.abort()
-  }, [t])
+  }, [errorMessage])
 
   async function saveSettings(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -34,7 +34,7 @@ export function SettingsWorkspace({ isOwner, adminLocale, onAdminLocaleChange, o
     try {
       const saved = await updateSiteSettings({ siteName: settings.siteName, defaultLocale: settings.defaultLocale, timezone: settings.timezone, version: settings.version })
       setSettings(saved); setSuccess(t('Site settings saved.'))
-    } catch (reason) { setError(reason instanceof Error ? reason.message : t('Could not save settings.')) }
+    } catch (reason) { setError(errorMessage(reason, 'Could not save settings.')) }
     finally { setSaving(false) }
   }
 
@@ -45,7 +45,7 @@ export function SettingsWorkspace({ isOwner, adminLocale, onAdminLocaleChange, o
     try {
       await changePassword(currentPassword, newPassword)
       setCurrentPassword(''); setNewPassword(''); setConfirmPassword(''); onSessionEnded()
-    } catch (reason) { setError(reason instanceof Error ? reason.message : t('Could not change password.')) }
+    } catch (reason) { setError(errorMessage(reason, 'Could not change password.')) }
     finally { setChangingPassword(false) }
   }
 
@@ -55,7 +55,7 @@ export function SettingsWorkspace({ isOwner, adminLocale, onAdminLocaleChange, o
     {success && <Alert severity="success">{success}</Alert>}
     <Card variant="outlined"><CardContent><Stack spacing={2} sx={{ maxWidth: 680 }}>
       <div><Typography variant="h6">{t('Admin Studio language')}</Typography><Typography variant="body2" color="text.secondary">{t('This personal preference is stored in your user profile and does not change the site language.')}</Typography></div>
-      <TextField select label={t('Interface language')} value={adminLocale} onChange={(event) => { const locale = event.target.value as AdminLocale; onAdminLocaleChange(locale).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : t('Could not save the Admin Studio language.'))) }}>
+      <TextField select label={t('Interface language')} value={adminLocale} onChange={(event) => { const locale = event.target.value as AdminLocale; onAdminLocaleChange(locale).catch((reason: unknown) => setError(errorMessage(reason, 'Could not save the Admin Studio language.'))) }}>
         <MenuItem value="en">{t('English')}</MenuItem><MenuItem value="ru">{t('Russian')}</MenuItem>
       </TextField>
     </Stack></CardContent></Card>

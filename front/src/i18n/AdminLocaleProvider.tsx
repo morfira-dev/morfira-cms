@@ -7,6 +7,7 @@ interface AdminLocaleContextValue {
   locale: AdminLocale
   setLocale: (locale: AdminLocale) => void
   t: (key: MessageKey, parameters?: Record<string, string | number>) => string
+  errorMessage: (reason: unknown, fallback: MessageKey) => string
   formatDateTime: (value: string | Date) => string
 }
 
@@ -32,6 +33,9 @@ export function AdminLocaleProvider({ children }: PropsWithChildren) {
     locale,
     setLocale: setLocaleState,
     t: (key, parameters = {}) => interpolate(locale === 'ru' ? russianMessages[key] : key, parameters),
+    errorMessage: (reason, fallback) => locale === 'en' && reason instanceof Error
+      ? reason.message
+      : interpolate(locale === 'ru' ? russianMessages[fallback] : fallback, {}),
     formatDateTime: (input) => new Intl.DateTimeFormat(locale === 'ru' ? 'ru-RU' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(input)),
   }), [locale])
 

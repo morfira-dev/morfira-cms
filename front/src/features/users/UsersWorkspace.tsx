@@ -24,7 +24,7 @@ interface UsersWorkspaceProps {
 }
 
 export function UsersWorkspace({ currentUserId }: UsersWorkspaceProps) {
-  const { t, formatDateTime } = useAdminLocale()
+  const { errorMessage, t, formatDateTime } = useAdminLocale()
   const [users, setUsers] = useState<CmsUser[]>([])
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
@@ -39,11 +39,11 @@ export function UsersWorkspace({ currentUserId }: UsersWorkspaceProps) {
     getUsers(controller.signal)
       .then(setUsers)
       .catch((reason: unknown) => {
-        if (!(reason instanceof DOMException && reason.name === 'AbortError')) setError(reason instanceof Error ? reason.message : t('Could not load users.'))
+        if (!(reason instanceof DOMException && reason.name === 'AbortError')) setError(errorMessage(reason, 'Could not load users.'))
       })
       .finally(() => setLoading(false))
     return () => controller.abort()
-  }, [t])
+  }, [errorMessage])
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -56,7 +56,7 @@ export function UsersWorkspace({ currentUserId }: UsersWorkspaceProps) {
       setPassword('')
       setRole('editor')
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : t('Could not create the user.'))
+      setError(errorMessage(reason, 'Could not create the user.'))
     } finally {
       setCreating(false)
     }
@@ -70,7 +70,7 @@ export function UsersWorkspace({ currentUserId }: UsersWorkspaceProps) {
       const updated = await updateUserRole(user.id, nextRole)
       setUsers((current) => current.map((candidate) => candidate.id === updated.id ? updated : candidate))
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : t('Could not change the user role.'))
+      setError(errorMessage(reason, 'Could not change the user role.'))
     } finally {
       setBusyId(null)
     }
@@ -84,7 +84,7 @@ export function UsersWorkspace({ currentUserId }: UsersWorkspaceProps) {
       await deleteUser(user.id)
       setUsers((current) => current.filter((candidate) => candidate.id !== user.id))
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : t('Could not delete the user.'))
+      setError(errorMessage(reason, 'Could not delete the user.'))
     } finally {
       setBusyId(null)
     }

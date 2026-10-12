@@ -17,7 +17,7 @@ interface PublicationSchedulerProps {
 }
 
 export function PublicationScheduler({ target, targetId, sourceVersion, dirty }: PublicationSchedulerProps) {
-  const { formatDateTime, t } = useAdminLocale()
+  const { errorMessage, formatDateTime, t } = useAdminLocale()
   const [schedule, setSchedule] = useState<PublicationSchedule | null>(null)
   const [scheduledAt, setScheduledAt] = useState(defaultLocalDateTime)
   const [loading, setLoading] = useState(true)
@@ -35,12 +35,12 @@ export function PublicationScheduler({ target, targetId, sourceVersion, dirty }:
       })
       .catch((reason: unknown) => {
         if (!(reason instanceof DOMException && reason.name === 'AbortError')) {
-          setError(reason instanceof Error ? reason.message : t('Could not load the publication schedule.'))
+          setError(errorMessage(reason, 'Could not load the publication schedule.'))
         }
       })
       .finally(() => setLoading(false))
     return () => controller.abort()
-  }, [target, targetId])
+  }, [errorMessage, target, targetId])
 
   async function plan() {
     const parsed = new Date(scheduledAt)
@@ -53,7 +53,7 @@ export function PublicationScheduler({ target, targetId, sourceVersion, dirty }:
     try {
       setSchedule(await putPublicationSchedule(target, targetId, sourceVersion, parsed.toISOString()))
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : t('Could not schedule publication.'))
+      setError(errorMessage(reason, 'Could not schedule publication.'))
     } finally {
       setSubmitting(false)
     }
@@ -65,7 +65,7 @@ export function PublicationScheduler({ target, targetId, sourceVersion, dirty }:
     try {
       setSchedule(await cancelPublicationSchedule(target, targetId))
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : t('Could not cancel the publication schedule.'))
+      setError(errorMessage(reason, 'Could not cancel the publication schedule.'))
     } finally {
       setSubmitting(false)
     }
@@ -81,7 +81,7 @@ export function PublicationScheduler({ target, targetId, sourceVersion, dirty }:
         {schedule && <Chip label={t(schedule.status)} color={schedule.status === 'failed' ? 'error' : schedule.status === 'pending' ? 'warning' : 'default'} size="small" />}
       </Stack>
       {error && <Alert severity="error">{error}</Alert>}
-      {schedule?.failureReason && <Alert severity="error">{schedule.failureReason}</Alert>}
+      {schedule?.failureReason && <Alert severity="error">{errorMessage(new Error(schedule.failureReason), 'Scheduled publication failed.')}</Alert>}
       {schedule?.status === 'pending' && (
         <Alert severity="info">{t('Version {{version}} is scheduled for {{date}}.', { version: schedule.sourceVersion, date: formatDateTime(schedule.scheduledAt) })}</Alert>
       )}

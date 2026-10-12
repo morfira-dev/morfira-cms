@@ -29,7 +29,7 @@ interface ContentWorkspaceProps {
 }
 
 export function ContentWorkspace({ route, isOwner, currentUserId, currentAdminLocale, onAdminLocaleChange, onNavigate, onSessionEnded }: ContentWorkspaceProps) {
-  const { t } = useAdminLocale()
+  const { errorMessage, t } = useAdminLocale()
   const [assets, setAssets] = useState<MediaAsset[]>([])
   const [loadingMedia, setLoadingMedia] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -45,11 +45,11 @@ export function ContentWorkspace({ route, isOwner, currentUserId, currentAdminLo
     getMedia(controller.signal)
       .then(setAssets)
       .catch((reason: unknown) => {
-        if (!(reason instanceof DOMException && reason.name === 'AbortError')) setError(reason instanceof Error ? reason.message : t('Could not load the media library.'))
+        if (!(reason instanceof DOMException && reason.name === 'AbortError')) setError(errorMessage(reason, 'Could not load the media library.'))
       })
       .finally(() => setLoadingMedia(false))
     return () => controller.abort()
-  }, [route, t])
+  }, [errorMessage, route])
 
   useEffect(() => {
     if (route !== 'pages') return
@@ -57,10 +57,10 @@ export function ContentWorkspace({ route, isOwner, currentUserId, currentAdminLo
     getNavigationMenus(controller.signal)
       .then(setNavigationMenus)
       .catch((reason: unknown) => {
-        if (!(reason instanceof DOMException && reason.name === 'AbortError')) setError(reason instanceof Error ? reason.message : t('Could not load navigation choices.'))
+        if (!(reason instanceof DOMException && reason.name === 'AbortError')) setError(errorMessage(reason, 'Could not load navigation choices.'))
       })
     return () => controller.abort()
-  }, [route, t])
+  }, [errorMessage, route])
 
   useEffect(() => {
     if (!['taxonomies', 'entries'].includes(route)) return
@@ -68,10 +68,10 @@ export function ContentWorkspace({ route, isOwner, currentUserId, currentAdminLo
     getTaxonomies(controller.signal)
       .then(setTaxonomies)
       .catch((reason: unknown) => {
-        if (!(reason instanceof DOMException && reason.name === 'AbortError')) setError(reason instanceof Error ? reason.message : t('Could not load taxonomies.'))
+        if (!(reason instanceof DOMException && reason.name === 'AbortError')) setError(errorMessage(reason, 'Could not load taxonomies.'))
       })
     return () => controller.abort()
-  }, [route, t])
+  }, [errorMessage, route])
 
   useEffect(() => {
     if (!['content-types', 'entries'].includes(route)) return
@@ -80,11 +80,11 @@ export function ContentWorkspace({ route, isOwner, currentUserId, currentAdminLo
     getContentTypes(controller.signal)
       .then(setContentTypes)
       .catch((reason: unknown) => {
-        if (!(reason instanceof DOMException && reason.name === 'AbortError')) setError(reason instanceof Error ? reason.message : t('Could not load content types.'))
+        if (!(reason instanceof DOMException && reason.name === 'AbortError')) setError(errorMessage(reason, 'Could not load content types.'))
       })
       .finally(() => setLoadingContentTypes(false))
     return () => controller.abort()
-  }, [route, t])
+  }, [errorMessage, route])
 
   let workspace
   if (route === 'pages') workspace = <PagesWorkspace mediaAssets={assets} navigationMenus={navigationMenus} />

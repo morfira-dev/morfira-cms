@@ -47,6 +47,7 @@ import { createUuid } from '../../utils/createUuid'
 import { createReusableSection, deleteReusableSection, getReusableSections, getThemes, type ReusableSection, type Theme } from './catalogApi'
 import { copySectionBlocks, duplicatePageBlock, movePageBlock } from './pageBuilder'
 import { getSiteSettings } from '../settings/api'
+import { useAdminLocale } from '../../i18n/AdminLocaleProvider'
 
 const publicSiteUrl = import.meta.env.VITE_PUBLIC_SITE_URL || window.location.origin
 
@@ -60,6 +61,7 @@ interface PagesWorkspaceProps {
 }
 
 export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceProps) {
+  const { formatDateTime, locale: adminLocale, t } = useAdminLocale()
   const [pages, setPages] = useState<PageSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -98,7 +100,7 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
           return
         }
 
-        setError(reason instanceof Error ? reason.message : 'Could not load pages.')
+        setError(localizedError(adminLocale, reason, t('Could not load pages.')))
       })
       .finally(() => setLoading(false))
 
@@ -110,7 +112,7 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
     Promise.all([getThemes(controller.signal), getReusableSections(controller.signal), getSiteSettings(controller.signal)])
       .then(([themeCatalog, sectionCatalog, settings]) => { setThemes(themeCatalog); setSections(sectionCatalog); setLocale(settings.defaultLocale); setDefaultLocale(settings.defaultLocale) })
       .catch((reason: unknown) => {
-        if (!(reason instanceof DOMException && reason.name === 'AbortError')) setError(reason instanceof Error ? reason.message : 'Could not load page builder catalogs.')
+        if (!(reason instanceof DOMException && reason.name === 'AbortError')) setError(localizedError(adminLocale, reason, t('Could not load page builder catalogs.')))
       })
     return () => controller.abort()
   }, [])
@@ -129,7 +131,7 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
       setLocale(defaultLocale)
       setTranslationSourceId('')
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not create the page.')
+      setError(localizedError(adminLocale, reason, t('Could not create the page.')))
     } finally {
       setSubmitting(false)
     }
@@ -158,7 +160,7 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
       setPages((current) => current.map((page) => page.id === saved.id ? saved : page))
       setRevisions(await getPageRevisions(saved.id))
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not save the revision.')
+      setError(localizedError(adminLocale, reason, t('Could not save the revision.')))
     } finally {
       setSaving(false)
     }
@@ -177,17 +179,17 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
       try {
         setRedirects(await getPageRedirects(editing.id))
       } catch (reason) {
-        setError(reason instanceof Error ? reason.message : 'Published, but redirect history could not be refreshed.')
+        setError(localizedError(adminLocale, reason, t('Published, but redirect history could not be refreshed.')))
       }
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not publish the page.')
+      setError(localizedError(adminLocale, reason, t('Could not publish the page.')))
     } finally {
       setPublishing(false)
     }
   }
 
   async function unpublishCurrentPage() {
-    if (!editing || !window.confirm('Unpublish this page? Its draft and publication history will be preserved.')) return
+    if (!editing || !window.confirm(t('Unpublish this page? Its draft and publication history will be preserved.'))) return
 
     setPublishing(true)
     setError(null)
@@ -196,16 +198,16 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
       await unpublishPage(editing.id)
       setPublication(null)
       setRedirects([])
-      setSuccess('The page is no longer publicly available.')
+      setSuccess(t('The page is no longer publicly available.'))
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not unpublish the page.')
+      setError(localizedError(adminLocale, reason, t('Could not unpublish the page.')))
     } finally {
       setPublishing(false)
     }
   }
 
   async function deleteCurrentPage() {
-    if (!editing || !window.confirm('Permanently delete this page draft and all revisions? Published snapshots will be retained.')) return
+    if (!editing || !window.confirm(t('Permanently delete this page draft and all revisions? Published snapshots will be retained.'))) return
 
     setDeleting(true)
     setError(null)
@@ -216,9 +218,9 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
       setEditing(null)
       setPublication(null)
       setRedirects([])
-      setSuccess('The page draft was permanently deleted.')
+      setSuccess(t('The page draft was permanently deleted.'))
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not delete the page.')
+      setError(localizedError(adminLocale, reason, t('Could not delete the page.')))
     } finally {
       setDeleting(false)
     }
@@ -235,23 +237,23 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
     getPageRedirects(page.id)
       .then(setRedirects)
       .catch((reason: unknown) => {
-        setError(reason instanceof Error ? reason.message : 'Could not load redirect history.')
+        setError(localizedError(adminLocale, reason, t('Could not load redirect history.')))
       })
     getPageRevisions(page.id)
       .then(setRevisions)
-      .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : 'Could not load revision history.'))
+      .catch((reason: unknown) => setError(localizedError(adminLocale, reason, t('Could not load revision history.'))))
   }
 
   async function restoreRevision(revision: number) {
-    if (!editing || editingDirty || !window.confirm(`Restore revision ${revision} as a new draft revision?`)) return
+    if (!editing || editingDirty || !window.confirm(t('Restore revision {{revision}} as a new draft revision?', { revision }))) return
     setRestoringRevision(revision); setError(null); setSuccess(null)
     try {
       const restored = await restorePageRevision(editing.id, revision, editing.version)
       setEditing(restored)
       setPages((current) => current.map((page) => page.id === restored.id ? restored : page))
       setRevisions(await getPageRevisions(restored.id))
-      setSuccess(`Revision ${revision} was restored as revision ${restored.version}.`)
-    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not restore the revision.') }
+      setSuccess(t('Revision {{source}} was restored as revision {{target}}.', { source: revision, target: restored.version }))
+    } catch (reason) { setError(localizedError(adminLocale, reason, t('Could not restore the revision.'))) }
     finally { setRestoringRevision(null) }
   }
 
@@ -259,7 +261,7 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
     if (!editing || !redirectSlug) return
     setRedirectBusy(true); setError(null)
     try { const redirect = await createPageRedirect(editing.id, redirectSlug); setRedirects((current) => [...current.filter((item) => item.sourceSlug !== redirect.sourceSlug), redirect]); setRedirectSlug('') }
-    catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not create redirect.') }
+    catch (reason) { setError(localizedError(adminLocale, reason, t('Could not create redirect.'))) }
     finally { setRedirectBusy(false) }
   }
 
@@ -267,7 +269,7 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
     if (!editing) return
     setRedirectBusy(true); setError(null)
     try { await deletePageRedirect(editing.id, sourceSlug); setRedirects((current) => current.filter((item) => item.sourceSlug !== sourceSlug)) }
-    catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not delete redirect.') }
+    catch (reason) { setError(localizedError(adminLocale, reason, t('Could not delete redirect.'))) }
     finally { setRedirectBusy(false) }
   }
 
@@ -276,7 +278,7 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
 
     const firstAsset = mediaAssets[0]
     if (type === 'image' && !firstAsset) {
-      setError('Upload an image to the media library before adding an Image block.')
+      setError(t('Upload an image to the media library before adding an Image block.'))
       return
     }
 
@@ -383,23 +385,23 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
     try {
       const section = await createReusableSection(sectionName.trim(), editing.blocks)
       setSections((current) => [...current, section].sort((left, right) => left.name.localeCompare(right.name)))
-      setSectionName(''); setSuccess('Reusable section created.')
-    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not create reusable section.') }
+      setSectionName(''); setSuccess(t('Reusable section created.'))
+    } catch (reason) { setError(localizedError(adminLocale, reason, t('Could not create reusable section.'))) }
   }
 
   async function removeSection(section: ReusableSection) {
     try { await deleteReusableSection(section.id); setSections((current) => current.filter((item) => item.id !== section.id)) }
-    catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not delete reusable section.') }
+    catch (reason) { setError(localizedError(adminLocale, reason, t('Could not delete reusable section.'))) }
   }
 
   return (
     <Stack spacing={3}>
       <div>
         <Typography component="h1" variant="h1">
-          Pages
+          {t('Pages')}
         </Typography>
         <Typography color="text.secondary" sx={{ mt: 0.75 }}>
-          Create the first draft. Blocks, preview and publishing will build on this content contract.
+          {t('Create the first draft. Blocks, preview and publishing will build on this content contract.')}
         </Typography>
       </div>
 
@@ -408,14 +410,14 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
 
       <Card variant="outlined">
         <CardContent>
-          <Typography variant="h6">New page</Typography>
+          <Typography variant="h6">{t('New page')}</Typography>
           <Typography color="text.secondary" sx={{ mt: 0.5, mb: 2.5 }}>
-            The slug is the future public URL and must be unique. Publish a page with slug 404 to customize the not-found screen.
+            {t('The slug is the future public URL and must be unique. Publish a page with slug 404 to customize the not-found screen.')}
           </Typography>
 
           <Stack component="form" direction={{ xs: 'column', md: 'row' }} spacing={2} onSubmit={submit}>
             <TextField
-              label="Title"
+              label={t('Title')}
               value={title}
               onChange={(event) => setTitle(event.target.value)}
               required
@@ -423,21 +425,21 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
               slotProps={{ htmlInput: { maxLength: 200 } }}
             />
             <TextField
-              label="Slug"
+              label={t('Slug')}
               value={slug}
               onChange={(event) => setSlug(event.target.value)}
               required
               fullWidth
               slotProps={{ htmlInput: { maxLength: 191, pattern: '[a-z0-9]+(?:-[a-z0-9]+)*' } }}
-              helperText="Lowercase letters, numbers and hyphens"
+              helperText={t('Lowercase letters, numbers and hyphens')}
             />
-            <TextField label="Locale" value={locale} onChange={(event) => setLocale(event.target.value)} required sx={{ minWidth: 120 }} helperText="en or ru-RU" />
-            <TextField select label="Translation of" value={translationSourceId} onChange={(event) => setTranslationSourceId(event.target.value)} sx={{ minWidth: 190 }}>
-              <MenuItem value="">New translation group</MenuItem>
+            <TextField label={t('Locale')} value={locale} onChange={(event) => setLocale(event.target.value)} required sx={{ minWidth: 120 }} helperText="en or ru-RU" />
+            <TextField select label={t('Translation of')} value={translationSourceId} onChange={(event) => setTranslationSourceId(event.target.value)} sx={{ minWidth: 190 }}>
+              <MenuItem value="">{t('New translation group')}</MenuItem>
               {pages.map((page) => <MenuItem key={page.id} value={page.id}>{page.title} ({page.locale})</MenuItem>)}
             </TextField>
             <Button type="submit" variant="contained" disabled={submitting} sx={{ minWidth: 140, alignSelf: 'flex-start' }}>
-              {submitting ? 'Creating…' : 'Create draft'}
+              {submitting ? t('Creating…') : t('Create draft')}
             </Button>
           </Stack>
         </CardContent>
@@ -450,19 +452,19 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
           </Stack>
         ) : pages.length === 0 ? (
           <Typography color="text.secondary" sx={{ p: 3 }}>
-            No pages yet. Create the first draft above.
+            {t('No pages yet. Create the first draft above.')}
           </Typography>
         ) : (
           <TableContainer>
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell>Title</TableCell>
-                  <TableCell>Slug</TableCell>
-                  <TableCell>Locale</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Created</TableCell>
-                  <TableCell align="right">Actions</TableCell>
+                  <TableCell>{t('Title')}</TableCell>
+                  <TableCell>{t('Slug')}</TableCell>
+                  <TableCell>{t('Locale')}</TableCell>
+                  <TableCell>{t('Status')}</TableCell>
+                  <TableCell>{t('Created')}</TableCell>
+                  <TableCell align="right">{t('Actions')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -471,10 +473,10 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
                     <TableCell sx={{ fontWeight: 700 }}>{page.title}</TableCell>
                     <TableCell>{page.locale === 'en' ? `/${page.slug}` : `/${page.locale}/${page.slug}`}</TableCell>
                     <TableCell><Chip label={page.locale} size="small" variant="outlined" /></TableCell>
-                    <TableCell><Chip label={page.status} size="small" /></TableCell>
-                    <TableCell>{new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(page.createdAt))}</TableCell>
+                    <TableCell><Chip label={page.status === 'draft' ? t('draft') : page.status} size="small" /></TableCell>
+                    <TableCell>{formatDateTime(page.createdAt)}</TableCell>
                     <TableCell align="right">
-                      <Button size="small" onClick={() => openEditor(page)}>Edit</Button>
+                      <Button size="small" onClick={() => openEditor(page)}>{t('Edit')}</Button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -490,15 +492,15 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
             <Stack spacing={3}>
               <Stack direction={{ xs: 'column', md: 'row' }} sx={{ justifyContent: 'space-between', gap: 2 }}>
                 <div>
-                  <Typography variant="h5">Edit page</Typography>
-                  <Typography color="text.secondary">Draft revision {editing.version}</Typography>
+                  <Typography variant="h5">{t('Edit page')}</Typography>
+                  <Typography color="text.secondary">{t('Draft revision {{revision}}', { revision: editing.version })}</Typography>
                 </div>
                 <Stack direction="row" spacing={1}>
                   <Button component="a" href={`/_preview/pages/${editing.id}`} target="_blank" variant="outlined">
-                    Preview
+                    {t('Preview')}
                   </Button>
                   <Button type="submit" variant="contained" disabled={saving}>
-                    {saving ? 'Saving…' : 'Save revision'}
+                    {saving ? t('Saving…') : t('Save revision')}
                   </Button>
                   <Button
                     color="success"
@@ -506,27 +508,27 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
                     disabled={publishing || editingDirty}
                     onClick={publishCurrentRevision}
                   >
-                    {publishing ? 'Publishing…' : 'Publish'}
+                    {publishing ? t('Publishing…') : t('Publish')}
                   </Button>
                   <Button color="warning" variant="outlined" disabled={publishing} onClick={() => void unpublishCurrentPage()}>
-                    Unpublish
+                    {t('Unpublish')}
                   </Button>
                   <Button color="error" variant="outlined" disabled={publishing || deleting} onClick={() => void deleteCurrentPage()}>
-                    {deleting ? 'Deleting…' : 'Delete'}
+                    {deleting ? t('Deleting…') : t('Delete')}
                   </Button>
                 </Stack>
               </Stack>
 
               {editingDirty && (
-                <Alert severity="warning">Save this revision before publishing it.</Alert>
+                <Alert severity="warning">{t('Save this revision before publishing it.')}</Alert>
               )}
 
               {publication && (
                 <Alert severity="success">
-                  Revision {publication.sourceRevision} is live at{' '}
+                  {t('Revision {{revision}} is live at', { revision: publication.sourceRevision })}{' '}
                   <a href={`${publicSiteUrl}${publication.url}`} target="_blank" rel="noreferrer">{publication.url}</a>
-                  {' '}and available through the{' '}
-                  <a href={`/api/v1/content/pages${publication.url}`} target="_blank" rel="noreferrer">public API</a>.
+                  {' '}{t('and available through the')}{' '}
+                  <a href={`/api/v1/content/pages${publication.url}`} target="_blank" rel="noreferrer">{t('public API')}</a>.
                 </Alert>
               )}
 
@@ -534,13 +536,13 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
 
               <Card variant="outlined">
                 <CardContent>
-                  <Typography variant="h6">Revision history</Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: .5, mb: 2 }}>Restoring creates a new revision and never changes the published page.</Typography>
+                  <Typography variant="h6">{t('Revision history')}</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: .5, mb: 2 }}>{t('Restoring creates a new revision and never changes the published page.')}</Typography>
                   <Stack spacing={1}>
                     {revisions.map((revision) => (
                       <Stack key={revision.revision} direction={{ xs: 'column', sm: 'row' }} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' }, gap: 1, py: 1, borderTop: 1, borderColor: 'divider' }}>
-                        <div><Typography sx={{ fontWeight: 700 }}>Revision {revision.revision} · {revision.title}</Typography><Typography variant="body2" color="text.secondary">{new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(revision.createdAt))} · /{revision.slug}</Typography></div>
-                        <Button size="small" variant="outlined" disabled={editingDirty || revision.revision === editing.version || restoringRevision !== null} onClick={() => void restoreRevision(revision.revision)}>{restoringRevision === revision.revision ? 'Restoring…' : 'Restore'}</Button>
+                        <div><Typography sx={{ fontWeight: 700 }}>{t('Revision {{revision}} · {{title}}', { revision: revision.revision, title: revision.title })}</Typography><Typography variant="body2" color="text.secondary">{formatDateTime(revision.createdAt)} · /{revision.slug}</Typography></div>
+                        <Button size="small" variant="outlined" disabled={editingDirty || revision.revision === editing.version || restoringRevision !== null} onClick={() => void restoreRevision(revision.revision)}>{restoringRevision === revision.revision ? t('Restoring…') : t('Restore')}</Button>
                       </Stack>
                     ))}
                   </Stack>
@@ -549,7 +551,7 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
 
               <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
                 <TextField
-                  label="Title"
+                  label={t('Title')}
                   value={editing.title}
                   onChange={(event) => {
                     setEditing({ ...editing, title: event.target.value })
@@ -559,7 +561,7 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
                   required
                 />
                 <TextField
-                  label="Slug"
+                  label={t('Slug')}
                   value={editing.slug}
                   onChange={(event) => {
                     setEditing({ ...editing, slug: event.target.value })
@@ -567,16 +569,16 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
                   }}
                   fullWidth
                   required
-                  helperText="After publishing, previous slugs become permanent redirects"
+                  helperText={t('After publishing, previous slugs become permanent redirects')}
                 />
-                <TextField label="Locale" value={editing.locale} onChange={(event) => { setEditing({ ...editing, locale: event.target.value }); setEditingDirty(true) }} required helperText="Localized variants publish independently" />
-                <TextField select label="Translation group" value={editing.translationGroupId} onChange={(event) => { setEditing({ ...editing, translationGroupId: event.target.value }); setEditingDirty(true) }} sx={{ minWidth: 220 }}>
+                <TextField label={t('Locale')} value={editing.locale} onChange={(event) => { setEditing({ ...editing, locale: event.target.value }); setEditingDirty(true) }} required helperText={t('Localized variants publish independently')} />
+                <TextField select label={t('Translation group')} value={editing.translationGroupId} onChange={(event) => { setEditing({ ...editing, translationGroupId: event.target.value }); setEditingDirty(true) }} sx={{ minWidth: 220 }}>
                   {pages.filter((page, index, all) => all.findIndex((candidate) => candidate.translationGroupId === page.translationGroupId) === index).map((page) => <MenuItem key={page.translationGroupId} value={page.translationGroupId}>{page.title}</MenuItem>)}
                 </TextField>
               </Stack>
 
               <Alert severity="info">
-                  <Typography variant="subtitle2" sx={{ mb: 1 }}>Permanent redirects</Typography>
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>{t('Permanent redirects')}</Typography>
                   <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
                     {redirects.map((redirect) => (
                       <Chip
@@ -588,44 +590,44 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
                       />
                     ))}
                   </Stack>
-                  <Stack direction="row" spacing={1} sx={{ mt: 2 }}><TextField size="small" label="Old slug" value={redirectSlug} onChange={(event) => setRedirectSlug(event.target.value.toLowerCase())} helperText="The page must be published"/><Button variant="outlined" disabled={!redirectSlug || redirectBusy} onClick={() => void addManualRedirect()}>Add redirect</Button></Stack>
+                  <Stack direction="row" spacing={1} sx={{ mt: 2 }}><TextField size="small" label={t('Old slug')} value={redirectSlug} onChange={(event) => setRedirectSlug(event.target.value.toLowerCase())} helperText={t('The page must be published')}/><Button variant="outlined" disabled={!redirectSlug || redirectBusy} onClick={() => void addManualRedirect()}>{t('Add redirect')}</Button></Stack>
                 </Alert>
 
               <Divider />
 
               <Stack spacing={2}>
                 <div>
-                  <Typography variant="h6">Theme and layout</Typography>
+                  <Typography variant="h6">{t('Theme and layout')}</Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                    Layout settings are versioned with the page and frozen into each published snapshot.
+                    {t('Layout settings are versioned with the page and frozen into each published snapshot.')}
                   </Typography>
                 </div>
                 <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-                  <TextField select label="Theme" value={editing.layout.theme} onChange={(event) => {
+                  <TextField select label={t('Theme')} value={editing.layout.theme} onChange={(event) => {
                     const theme = themes.find((candidate) => candidate.id === event.target.value)
                     setEditing({ ...editing, layout: { ...editing.layout, theme: event.target.value, template: theme?.templates[0]?.id ?? editing.layout.template } })
                     setEditingDirty(true)
                   }} fullWidth>
                     {themes.map((theme) => <MenuItem key={theme.id} value={theme.id}>{theme.name}</MenuItem>)}
                   </TextField>
-                  <TextField select label="Template" value={editing.layout.template} onChange={(event) => {
+                  <TextField select label={t('Template')} value={editing.layout.template} onChange={(event) => {
                     setEditing({ ...editing, layout: { ...editing.layout, template: event.target.value } })
                     setEditingDirty(true)
                   }} fullWidth>
                     {(themes.find((theme) => theme.id === editing.layout.theme)?.templates ?? []).map((template) => <MenuItem key={template.id} value={template.id}>{template.name}</MenuItem>)}
                   </TextField>
-                  <TextField select label="Header navigation" value={editing.layout.headerNavigationCode ?? ''} onChange={(event) => {
+                  <TextField select label={t('Header navigation')} value={editing.layout.headerNavigationCode ?? ''} onChange={(event) => {
                     setEditing({ ...editing, layout: { ...editing.layout, headerNavigationCode: event.target.value || null } })
                     setEditingDirty(true)
                   }} fullWidth>
-                    <MenuItem value="">No header navigation</MenuItem>
+                    <MenuItem value="">{t('No header navigation')}</MenuItem>
                     {navigationMenus.map((menu) => <MenuItem key={menu.id} value={menu.code}>{menu.name}</MenuItem>)}
                   </TextField>
-                  <TextField select label="Footer navigation" value={editing.layout.footerNavigationCode ?? ''} onChange={(event) => {
+                  <TextField select label={t('Footer navigation')} value={editing.layout.footerNavigationCode ?? ''} onChange={(event) => {
                     setEditing({ ...editing, layout: { ...editing.layout, footerNavigationCode: event.target.value || null } })
                     setEditingDirty(true)
                   }} fullWidth>
-                    <MenuItem value="">No footer navigation</MenuItem>
+                    <MenuItem value="">{t('No footer navigation')}</MenuItem>
                     {navigationMenus.map((menu) => <MenuItem key={menu.id} value={menu.code}>{menu.name}</MenuItem>)}
                   </TextField>
                 </Stack>
@@ -635,27 +637,27 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
 
               <Stack spacing={2}>
                 <div>
-                  <Typography variant="h6">Search and social</Typography>
+                  <Typography variant="h6">{t('Search and social')}</Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                    These values are versioned with the page and become public only after publishing.
+                    {t('These values are versioned with the page and become public only after publishing.')}
                   </Typography>
                 </div>
 
                 <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
                   <TextField
-                    label="SEO title"
+                    label={t('SEO title')}
                     value={editing.seo.title}
                     onChange={(event) => {
                       setEditing({ ...editing, seo: { ...editing.seo, title: event.target.value } })
                       setEditingDirty(true)
                     }}
-                    helperText={`${editing.seo.title.length}/70 · Empty uses the page title`}
+                    helperText={t('{{count}}/70 · Empty uses the page title', { count: editing.seo.title.length })}
                     slotProps={{ htmlInput: { maxLength: 70 } }}
                     fullWidth
                   />
                   <TextField
                     select
-                    label="Social sharing image"
+                    label={t('Social sharing image')}
                     value={editing.seo.openGraphImageAssetId ?? ''}
                     onChange={(event) => {
                       setEditing({
@@ -666,7 +668,7 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
                     }}
                     fullWidth
                   >
-                    <MenuItem value="">No image</MenuItem>
+                    <MenuItem value="">{t('No image')}</MenuItem>
                     {mediaAssets.map((asset) => (
                       <MenuItem key={asset.id} value={asset.id}>{asset.originalName}</MenuItem>
                     ))}
@@ -674,7 +676,7 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
                 </Stack>
 
                 <TextField
-                  label="Meta description"
+                  label={t('Meta description')}
                   value={editing.seo.description}
                   onChange={(event) => {
                     setEditing({ ...editing, seo: { ...editing.seo, description: event.target.value } })
@@ -696,7 +698,7 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
                       }}
                     />
                   )}
-                  label="Hide this page from search engines and sitemap"
+                  label={t('Hide this page from search engines and sitemap')}
                 />
 
                 <Box sx={{ p: 2.5, border: 1, borderColor: 'divider', borderRadius: 2, maxWidth: 720 }}>
@@ -707,26 +709,26 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
                     {editing.seo.title || editing.title}
                   </Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                    {editing.seo.description || 'Add a concise description of this page for search results.'}
+                    {editing.seo.description || t('Add a concise description of this page for search results.')}
                   </Typography>
                 </Box>
               </Stack>
 
               <Divider />
 
-              <Typography variant="h6">Visual page builder</Typography>
+              <Typography variant="h6">{t('Visual page builder')}</Typography>
               <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
-                <Button variant="outlined" onClick={() => addBlock('hero')}>Add Hero</Button>
-                <Button variant="outlined" onClick={() => addBlock('richText')}>Add RichText</Button>
+                <Button variant="outlined" onClick={() => addBlock('hero')}>{t('Add Hero')}</Button>
+                <Button variant="outlined" onClick={() => addBlock('richText')}>{t('Add RichText')}</Button>
                 <Button variant="outlined" onClick={() => addBlock('image')} disabled={mediaAssets.length === 0}>
-                  Add Image
+                  {t('Add Image')}
                 </Button>
               </Stack>
 
               <Card variant="outlined"><CardContent><Stack spacing={2}>
-                <div><Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Reusable sections</Typography><Typography variant="body2" color="text.secondary">Insertion copies blocks with fresh IDs, so later section changes never rewrite this page.</Typography></div>
-                <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}><TextField size="small" label="Save current canvas as" value={sectionName} onChange={(event) => setSectionName(event.target.value)} /><Button variant="outlined" disabled={!sectionName.trim() || editing.blocks.length === 0} onClick={() => void saveSection()}>Save section</Button></Stack>
-                <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>{sections.map((section) => <Chip key={section.id} label={`${section.name} · ${section.blocks.length} blocks`} onClick={() => insertSection(section)} onDelete={() => void removeSection(section)} />)}</Stack>
+                <div><Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{t('Reusable sections')}</Typography><Typography variant="body2" color="text.secondary">{t('Insertion copies blocks with fresh IDs, so later section changes never rewrite this page.')}</Typography></div>
+                <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}><TextField size="small" label={t('Save current canvas as')} value={sectionName} onChange={(event) => setSectionName(event.target.value)} /><Button variant="outlined" disabled={!sectionName.trim() || editing.blocks.length === 0} onClick={() => void saveSection()}>{t('Save section')}</Button></Stack>
+                <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>{sections.map((section) => <Chip key={section.id} label={t('{{name}} · {{count}} blocks', { name: section.name, count: section.blocks.length })} onClick={() => insertSection(section)} onDelete={() => void removeSection(section)} />)}</Stack>
               </Stack></CardContent></Card>
 
               <Card variant="outlined">
@@ -734,13 +736,13 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
                   <Stack spacing={2}>
                     <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ justifyContent: 'space-between', gap: 1 }}>
                       <div>
-                        <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Live layout preview</Typography>
-                        <Typography variant="body2" color="text.secondary">Safe text and media representation; server preview remains authoritative.</Typography>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{t('Live layout preview')}</Typography>
+                        <Typography variant="body2" color="text.secondary">{t('Safe text and media representation; server preview remains authoritative.')}</Typography>
                       </div>
                       <Stack direction="row" spacing={1}>
                         {(['desktop', 'tablet', 'mobile'] as const).map((viewport) => (
                           <Button key={viewport} size="small" variant={builderViewport === viewport ? 'contained' : 'outlined'} onClick={() => setBuilderViewport(viewport)}>
-                            {viewport[0].toUpperCase() + viewport.slice(1)}
+                            {t(viewport)}
                           </Button>
                         ))}
                       </Stack>
@@ -748,19 +750,19 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
                     <Box sx={{ overflowX: 'auto', bgcolor: 'grey.100', p: 2, borderRadius: 2 }}>
                       <Box sx={{ width: builderViewport === 'desktop' ? '100%' : builderViewport === 'tablet' ? 720 : 360, maxWidth: '100%', mx: 'auto', bgcolor: editing.layout.theme === 'atelier' ? '#fffaf3' : 'background.paper', border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden', transition: 'width 160ms ease' }}>
                         {editing.blocks.length === 0 ? (
-                          <Typography color="text.secondary" sx={{ p: 4, textAlign: 'center' }}>Add blocks to preview the page composition.</Typography>
+                          <Typography color="text.secondary" sx={{ p: 4, textAlign: 'center' }}>{t('Add blocks to preview the page composition.')}</Typography>
                         ) : editing.blocks.map((block) => {
                           const asset = block.type === 'image' ? mediaAssets.find((candidate) => candidate.id === block.data.assetId) : undefined
                           return (
                             <Box key={block.id} onClick={() => setSelectedBlockId(block.id)} sx={{ p: block.type === 'hero' ? 5 : 3, textAlign: block.type === 'hero' ? 'center' : 'left', border: selectedBlockId === block.id ? 2 : 0, borderColor: 'primary.main', cursor: 'pointer' }}>
                               {block.type === 'hero' ? (
-                                <><Typography variant="h4" sx={{ fontFamily: editing.layout.theme === 'atelier' ? 'serif' : 'inherit' }}>{block.data.heading || 'Hero heading'}</Typography><Typography color="text.secondary" sx={{ mt: 1 }}>{block.data.text || 'Supporting text'}</Typography></>
+                                <><Typography variant="h4" sx={{ fontFamily: editing.layout.theme === 'atelier' ? 'serif' : 'inherit' }}>{block.data.heading || t('Hero heading')}</Typography><Typography color="text.secondary" sx={{ mt: 1 }}>{block.data.text || t('Supporting text')}</Typography></>
                               ) : block.type === 'richText' ? (
-                                <Typography sx={{ whiteSpace: 'pre-wrap' }}>{richTextPreview(block.data.content) || 'Rich text content'}</Typography>
+                                <Typography sx={{ whiteSpace: 'pre-wrap' }}>{richTextPreview(block.data.content) || t('Rich text content')}</Typography>
                               ) : asset ? (
                                 <Box component="img" src={getMediaThumbnail(asset)} alt={block.data.alt} sx={{ display: 'block', width: '100%', maxHeight: 420, objectFit: 'cover' }} />
                               ) : (
-                                <Typography color="text.secondary">Select an image asset.</Typography>
+                                <Typography color="text.secondary">{t('Select an image asset.')}</Typography>
                               )}
                             </Box>
                           )
@@ -773,12 +775,12 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
 
               {mediaAssets.length === 0 && (
                 <Typography variant="body2" color="text.secondary">
-                  Upload media below to enable Image blocks.
+                  {t('Upload media below to enable Image blocks.')}
                 </Typography>
               )}
 
               {editing.blocks.length === 0 && (
-                <Alert severity="info">This draft has no blocks. Add Hero or RichText to begin.</Alert>
+                <Alert severity="info">{t('This draft has no blocks. Add Hero or RichText to begin.')}</Alert>
               )}
 
               {editing.blocks.map((block, index) => (
@@ -787,26 +789,26 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
                     <Stack spacing={2}>
                       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
                         <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                          {index + 1}. {block.type === 'hero' ? 'Hero' : block.type === 'richText' ? 'RichText' : 'Image'}
+                          {index + 1}. {block.type === 'hero' ? t('Hero') : block.type === 'richText' ? 'RichText' : t('Image')}
                         </Typography>
                         <Stack direction="row" spacing={.5}>
-                          <Button size="small" disabled={index === 0} onClick={() => moveBlock(block.id, -1)}>Up</Button>
-                          <Button size="small" disabled={index === editing.blocks.length - 1} onClick={() => moveBlock(block.id, 1)}>Down</Button>
-                          <Button size="small" onClick={() => duplicateBlock(block.id)}>Duplicate</Button>
-                          <Button color="error" size="small" onClick={() => removeBlock(block.id)}>Remove</Button>
+                          <Button size="small" disabled={index === 0} onClick={() => moveBlock(block.id, -1)}>{t('Up')}</Button>
+                          <Button size="small" disabled={index === editing.blocks.length - 1} onClick={() => moveBlock(block.id, 1)}>{t('Down')}</Button>
+                          <Button size="small" onClick={() => duplicateBlock(block.id)}>{t('Duplicate')}</Button>
+                          <Button color="error" size="small" onClick={() => removeBlock(block.id)}>{t('Remove')}</Button>
                         </Stack>
                       </Stack>
 
                       {block.type === 'hero' ? (
                         <>
                           <TextField
-                            label="Heading"
+                            label={t('Heading')}
                             value={block.data.heading}
                             onChange={(event) => updateBlock(block.id, 'heading', event.target.value)}
                             required
                           />
                           <TextField
-                            label="Supporting text"
+                            label={t('Supporting text')}
                             value={block.data.text ?? ''}
                             onChange={(event) => updateBlock(block.id, 'text', event.target.value)}
                             multiline
@@ -835,7 +837,7 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
                           })()}
                           <TextField
                             select
-                            label="Media asset"
+                            label={t('Media asset')}
                             value={block.data.assetId}
                             onChange={(event) => updateBlock(block.id, 'assetId', event.target.value)}
                             required
@@ -847,15 +849,15 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
                             ))}
                           </TextField>
                           <TextField
-                            label="Alternative text"
+                            label={t('Alternative text')}
                             value={block.data.alt}
                             onChange={(event) => updateBlock(block.id, 'alt', event.target.value)}
                             required
                             slotProps={{ htmlInput: { maxLength: 300 } }}
-                            helperText="Describe what the image communicates for accessibility and SEO"
+                            helperText={t('Describe what the image communicates for accessibility and SEO')}
                           />
                           <TextField
-                            label="Caption"
+                            label={t('Caption')}
                             value={block.data.caption ?? ''}
                             onChange={(event) => updateBlock(block.id, 'caption', event.target.value)}
                             multiline
@@ -874,4 +876,8 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
       )}
     </Stack>
   )
+}
+
+function localizedError(locale: string, reason: unknown, fallback: string): string {
+  return locale === 'en' && reason instanceof Error ? reason.message : fallback
 }

@@ -4,7 +4,7 @@ import { getDashboardCounts, type DashboardCounts } from './api'
 import { useAdminLocale } from '../../i18n/AdminLocaleProvider'
 
 export function DashboardWorkspace({ onNavigate }: { onNavigate: (path: string) => void }) {
-  const { t } = useAdminLocale()
+  const { errorMessage, t } = useAdminLocale()
   const [counts, setCounts] = useState<DashboardCounts | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -15,11 +15,11 @@ export function DashboardWorkspace({ onNavigate }: { onNavigate: (path: string) 
     getDashboardCounts(controller.signal)
       .then(setCounts)
       .catch((reason: unknown) => {
-        if (!(reason instanceof DOMException && reason.name === 'AbortError')) setError(reason instanceof Error ? reason.message : t('Could not load the content overview.'))
+        if (!(reason instanceof DOMException && reason.name === 'AbortError')) setError(errorMessage(reason, 'Could not load the content overview.'))
       })
       .finally(() => setLoading(false))
     return () => controller.abort()
-  }, [t])
+  }, [errorMessage])
 
   useEffect(() => load(), [load])
 

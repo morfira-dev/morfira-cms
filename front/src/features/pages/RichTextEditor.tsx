@@ -30,6 +30,7 @@ import {
 } from 'lexical'
 import { useRef } from 'react'
 import { Box, Button, MenuItem, Stack, TextField } from '../../ui'
+import { useAdminLocale } from '../../i18n/AdminLocaleProvider'
 
 interface RichTextEditorProps {
   value: string
@@ -37,6 +38,7 @@ interface RichTextEditorProps {
 }
 
 export function RichTextEditor({ value, onChange }: RichTextEditorProps) {
+  const { t } = useAdminLocale()
   const initialValue = useRef(value)
 
   return (
@@ -63,11 +65,11 @@ export function RichTextEditor({ value, onChange }: RichTextEditorProps) {
           <RichTextPlugin
             contentEditable={(
               <ContentEditable
-                aria-label="Rich text content"
+                aria-label={t('Rich text content')}
                 style={{ minHeight: 180, outline: 'none', padding: '16px' }}
               />
             )}
-            placeholder={<Box sx={{ color: 'text.disabled', left: 16, pointerEvents: 'none', position: 'absolute', top: 16 }}>Start writing useful content…</Box>}
+            placeholder={<Box sx={{ color: 'text.disabled', left: 16, pointerEvents: 'none', position: 'absolute', top: 16 }}>{t('Start writing useful content…')}</Box>}
             ErrorBoundary={LexicalErrorBoundary}
           />
         </Box>
@@ -85,6 +87,7 @@ export function RichTextEditor({ value, onChange }: RichTextEditorProps) {
 
 function Toolbar() {
   const [editor] = useLexicalComposerContext()
+  const { t } = useAdminLocale()
 
   function setBlock(type: string) {
     if (type === 'bullet') editor.dispatchCommand(INSERT_UNORDERED_LIST_COMMAND, undefined)
@@ -103,27 +106,27 @@ function Toolbar() {
   }
 
   function editLink() {
-    const url = window.prompt('Link URL. Leave empty to remove the link.')
+    const url = window.prompt(t('Link URL. Leave empty to remove the link.'))
     if (url === null) return
     editor.dispatchCommand(TOGGLE_LINK_COMMAND, url.trim() || null)
   }
 
   return (
     <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', bgcolor: 'grey.50', borderBottom: 1, borderColor: 'divider', flexWrap: 'wrap', gap: 0.75, p: 1 }}>
-      <TextField select size="small" defaultValue="paragraph" aria-label="Block style" sx={{ minWidth: 130 }} onChange={(event) => setBlock(event.target.value)}>
-        <MenuItem value="paragraph">Paragraph</MenuItem>
-        <MenuItem value="h2">Heading 2</MenuItem>
-        <MenuItem value="h3">Heading 3</MenuItem>
-        <MenuItem value="h4">Heading 4</MenuItem>
-        <MenuItem value="quote">Quote</MenuItem>
-        <MenuItem value="bullet">Bullet list</MenuItem>
-        <MenuItem value="number">Numbered list</MenuItem>
+      <TextField select size="small" defaultValue="paragraph" aria-label={t('Block style')} sx={{ minWidth: 130 }} onChange={(event) => setBlock(event.target.value)}>
+        <MenuItem value="paragraph">{t('Paragraph')}</MenuItem>
+        <MenuItem value="h2">{t('Heading 2')}</MenuItem>
+        <MenuItem value="h3">{t('Heading 3')}</MenuItem>
+        <MenuItem value="h4">{t('Heading 4')}</MenuItem>
+        <MenuItem value="quote">{t('Quote')}</MenuItem>
+        <MenuItem value="bullet">{t('Bullet list')}</MenuItem>
+        <MenuItem value="number">{t('Numbered list')}</MenuItem>
       </TextField>
       <Button size="small" onClick={() => editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'bold')}><strong>B</strong></Button>
       <Button size="small" onClick={() => editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'italic')}><em>I</em></Button>
       <Button size="small" onClick={() => editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'underline')}><u>U</u></Button>
       <Button size="small" onClick={() => editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'strikethrough')}><s>S</s></Button>
-      <Button size="small" onClick={editLink}>Link</Button>
+      <Button size="small" onClick={editLink}>{t('Link')}</Button>
     </Stack>
   )
 }

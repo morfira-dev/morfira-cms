@@ -10,7 +10,7 @@ interface AuthGateProps {
 type Mode = 'loading' | 'setup' | 'login' | 'authenticated'
 
 export function AuthGate({ children }: AuthGateProps) {
-  const { locale, setLocale, t } = useAdminLocale()
+  const { errorMessage, locale, setLocale, t } = useAdminLocale()
   const [mode, setMode] = useState<Mode>('loading')
   const [user, setUser] = useState<AuthenticatedUser | null>(null)
   const [email, setEmail] = useState('')
@@ -30,7 +30,7 @@ export function AuthGate({ children }: AuthGateProps) {
         } else setMode('login')
       })
       .catch((reason: unknown) => {
-        setError(reason instanceof Error ? reason.message : t('Could not initialize Admin Studio.'))
+        setError(errorMessage(reason, 'Could not initialize Admin Studio.'))
         setMode('login')
       })
   }, [])
@@ -53,7 +53,7 @@ export function AuthGate({ children }: AuthGateProps) {
       setConfirmPassword('')
       setMode('authenticated')
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : t('Authentication failed.'))
+      setError(errorMessage(reason, 'Authentication failed.'))
     } finally {
       setSubmitting(false)
     }

@@ -1,7 +1,7 @@
 # Admin Studio localization
 
 ## Status
-Accepted
+Implemented
 
 ## Problem
 Admin Studio exposes its navigation, forms, validation feedback and editorial workflows only in English, while Russian-speaking operators need a complete Russian interface.
@@ -51,11 +51,11 @@ Admin Studio exposes its navigation, forms, validation feedback and editorial wo
 - Backend error messages are not parsed as trusted markup.
 
 ## Acceptance criteria
-- [ ] Setup, authentication, navigation and every current Admin Studio workspace are usable in Russian.
-- [ ] A language switch changes Russian and English labels immediately and survives login, reload and device changes.
-- [ ] Admin Studio locale and public-site default locale can be changed independently.
-- [ ] MUI locale, document language and formatted dates follow the selected interface locale.
-- [ ] Frontend tests, types, production build and the critical browser journey pass.
+- [x] Setup, authentication, navigation and every current Admin Studio workspace are usable in Russian.
+- [x] A language switch changes Russian and English labels immediately and survives login, reload and device changes.
+- [x] Admin Studio locale and public-site default locale can be changed independently.
+- [x] MUI locale, document language and formatted dates follow the selected interface locale.
+- [x] Frontend tests, types, production build and the critical browser journey pass.
 
 ## Verification plan
 - Translation contract unit tests, route tests, frontend full check and production Playwright journey in Russian.
