@@ -4,6 +4,7 @@
 /npm-debug.log*
 /back/.env.local
 /back/.phpunit.cache/
+/back/config/reference.php
 /back/var/
 /back/vendor/
 /front/dist/
