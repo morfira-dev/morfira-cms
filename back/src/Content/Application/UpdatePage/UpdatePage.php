@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cms\Content\Application\UpdatePage;
 
 use Cms\Content\Application\PageView;
+use Cms\Content\Application\RichTextSanitizer;
 use Cms\Content\Domain\PageBlock;
 use Cms\Content\Domain\PageId;
 use Cms\Content\Domain\PageNotFound;
@@ -15,8 +16,10 @@ use Cms\Content\Domain\PageTitle;
 
 final readonly class UpdatePage
 {
-    public function __construct(private PageRepository $pages)
-    {
+    public function __construct(
+        private PageRepository $pages,
+        private RichTextSanitizer $richTextSanitizer,
+    ) {
     }
 
     /** @param list<array<string, mixed>> $blocks */
@@ -35,7 +38,7 @@ final readonly class UpdatePage
         $revised = $page->revise(
             new PageTitle($title),
             new PageSlug($slug),
-            array_map(PageBlock::fromArray(...), $blocks),
+            array_map(PageBlock::fromArray(...), $this->sanitizeRichTextBlocks($blocks)),
             $seo,
             new \DateTimeImmutable('now', new \DateTimeZone('UTC')),
         );
@@ -43,5 +46,28 @@ final readonly class UpdatePage
         $this->pages->save($revised, $version);
 
         return PageView::fromPage($revised);
+    }
+
+    /**
+     * @param list<array<string, mixed>> $blocks
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function sanitizeRichTextBlocks(array $blocks): array
+    {
+        return array_map(function (array $block): array {
+            if (($block['type'] ?? null) !== 'richText' || !is_array($block['data'] ?? null)) {
+                return $block;
+            }
+
+            $content = $block['data']['content'] ?? null;
+            if (!is_string($content)) {
+                return $block;
+            }
+
+            $block['data']['content'] = $this->richTextSanitizer->sanitize($content);
+
+            return $block;
+        }, $blocks);
     }
 }

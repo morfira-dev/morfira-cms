@@ -8,6 +8,7 @@ use Cms\Content\Application\CreatePage\CreatePage;
 use Cms\Content\Application\UpdatePage\UpdatePage;
 use Cms\Content\Domain\PageVersionConflict;
 use Cms\Content\Domain\PageSeo;
+use Cms\Content\Infrastructure\Html\SymfonyRichTextSanitizer;
 use Cms\Publishing\Application\GetPublishedPage\GetPublishedPage;
 use Cms\Publishing\Application\GetPublishedRedirect\GetPublishedRedirect;
 use Cms\Publishing\Application\ListPageRedirects\ListPageRedirects;
@@ -17,6 +18,7 @@ use Cms\Publishing\Application\RemovePageRedirect;
 use Cms\Publishing\Domain\PublishedSlugAlreadyExists;
 use Cms\Publishing\Domain\PublishedPageNotActive;
 use Cms\Tests\Content\InMemoryPageRepository;
+use Cms\Tests\Content\PassThroughRichTextSanitizer;
 use Cms\Tests\Publishing\InMemoryPublishedPageRepository;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -29,7 +31,7 @@ final class PublishPageTest extends TestCase
         $drafts = new InMemoryPageRepository();
         $delivery = new InMemoryPublishedPageRepository();
         $created = (new CreatePage($drafts))('Landing', 'landing');
-        $draft = (new UpdatePage($drafts))(
+        $draft = (new UpdatePage($drafts, new PassThroughRichTextSanitizer()))(
             $created->id,
             'Landing',
             'landing',
@@ -39,7 +41,7 @@ final class PublishPageTest extends TestCase
         );
 
         $published = (new PublishPage($drafts, $delivery))($draft->id, 2);
-        (new UpdatePage($drafts))($draft->id, 'Changed draft', 'landing', [], PageSeo::defaults(), 2);
+        (new UpdatePage($drafts, new PassThroughRichTextSanitizer()))($draft->id, 'Changed draft', 'landing', [], PageSeo::defaults(), 2);
         $publicPage = (new GetPublishedPage($delivery))('landing');
 
         self::assertSame(2, $published->sourceRevision);
@@ -54,7 +56,7 @@ final class PublishPageTest extends TestCase
     {
         $drafts = new InMemoryPageRepository();
         $created = (new CreatePage($drafts))('Landing', 'landing');
-        (new UpdatePage($drafts))($created->id, 'Changed', 'landing', [], PageSeo::defaults(), 1);
+        (new UpdatePage($drafts, new PassThroughRichTextSanitizer()))($created->id, 'Changed', 'landing', [], PageSeo::defaults(), 1);
 
         $this->expectException(PageVersionConflict::class);
 
@@ -76,6 +78,30 @@ final class PublishPageTest extends TestCase
     }
 
     #[Test]
+    public function it_preserves_sanitized_rich_text_in_the_published_snapshot(): void
+    {
+        $drafts = new InMemoryPageRepository();
+        $delivery = new InMemoryPublishedPageRepository();
+        $created = (new CreatePage($drafts))('Landing', 'landing');
+        $updated = (new UpdatePage($drafts, new SymfonyRichTextSanitizer()))(
+            $created->id,
+            'Landing',
+            'landing',
+            [[
+                'id' => '6bb4ff18-266f-44a7-a3d0-1b4d84ac0ac8',
+                'type' => 'richText',
+                'data' => ['content' => '<h2>Welcome</h2><p><strong>Safe</strong> copy.</p><script>alert(1)</script>'],
+            ]],
+            PageSeo::defaults(),
+            $created->version,
+        );
+
+        $published = (new PublishPage($drafts, $delivery))($updated->id, $updated->version);
+
+        self::assertSame('<h2>Welcome</h2><p><strong>Safe</strong> copy.</p>', $published->blocks[0]['data']['content']);
+    }
+
+    #[Test]
     public function changing_a_published_slug_creates_a_direct_permanent_route_to_the_current_page(): void
     {
         $drafts = new InMemoryPageRepository();
@@ -83,7 +109,7 @@ final class PublishPageTest extends TestCase
         $created = (new CreatePage($drafts))('Landing', 'landing');
         $publish = new PublishPage($drafts, $delivery);
         $publish($created->id, 1);
-        $renamed = (new UpdatePage($drafts))(
+        $renamed = (new UpdatePage($drafts, new PassThroughRichTextSanitizer()))(
             $created->id,
             'Landing',
             'better-landing',
@@ -112,7 +138,7 @@ final class PublishPageTest extends TestCase
         $first = (new CreatePage($drafts))('First', 'first');
         $publish = new PublishPage($drafts, $delivery);
         $publish($first->id, 1);
-        $renamed = (new UpdatePage($drafts))($first->id, 'First', 'renamed', [], PageSeo::defaults(), 1);
+        $renamed = (new UpdatePage($drafts, new PassThroughRichTextSanitizer()))($first->id, 'First', 'renamed', [], PageSeo::defaults(), 1);
         $publish($renamed->id, 2);
         $second = (new CreatePage($drafts))('Second', 'first');
 

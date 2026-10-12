@@ -38,6 +38,7 @@ import {
   unpublishPage,
   updatePage,
 } from './api'
+import { RichTextEditor } from './RichTextEditor'
 
 const publicSiteUrl = import.meta.env.VITE_PUBLIC_SITE_URL || window.location.origin
 
@@ -588,13 +589,9 @@ export function PagesWorkspace({ mediaAssets }: PagesWorkspaceProps) {
                           />
                         </>
                       ) : block.type === 'richText' ? (
-                        <TextField
-                          label="Content"
+                        <RichTextEditor
                           value={block.data.content}
-                          onChange={(event) => updateBlock(block.id, 'content', event.target.value)}
-                          multiline
-                          minRows={6}
-                          required
+                          onChange={(content) => updateBlock(block.id, 'content', content)}
                         />
                       ) : (
                         <>

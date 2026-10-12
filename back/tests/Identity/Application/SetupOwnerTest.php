@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace Cms\Tests\Identity\Application;
 
-use Cms\Identity\Application\PasswordHasher;
 use Cms\Identity\Application\SetupOwner\SetupOwner;
 use Cms\Identity\Domain\IdentityAlreadyInstalled;
-use Cms\Identity\Domain\User;
-use Cms\Identity\Domain\UserRepository;
+use Cms\Tests\Identity\FakePasswordHasher;
+use Cms\Tests\Identity\InMemoryUserRepository;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -46,38 +45,5 @@ final class SetupOwnerTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
 
         (new SetupOwner(new InMemoryUserRepository(), new FakePasswordHasher()))('owner@example.test', 'too-short');
-    }
-}
-
-final class InMemoryUserRepository implements UserRepository
-{
-    private ?User $user = null;
-
-    public function isInstalled(): bool
-    {
-        return $this->user !== null;
-    }
-
-    public function addFirstOwner(User $user): bool
-    {
-        if ($this->user !== null) {
-            return false;
-        }
-
-        $this->user = $user;
-        return true;
-    }
-
-    public function findByEmail(string $email): ?User
-    {
-        return $this->user?->email === $email ? $this->user : null;
-    }
-}
-
-final readonly class FakePasswordHasher implements PasswordHasher
-{
-    public function hash(string $id, string $email, array $roles, string $plainPassword): string
-    {
-        return 'hashed:' . $plainPassword;
     }
 }

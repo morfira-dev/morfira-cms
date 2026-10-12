@@ -2,6 +2,7 @@
   "name": "@morfira/admin",
   "private": true,
   "version": "0.0.0",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "api:types": "openapi-typescript ../back/openapi/openapi.yaml -o src/api/schema.d.ts",
@@ -14,7 +15,14 @@
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
+    "@lexical/html": "^0.52.0",
+    "@lexical/link": "^0.52.0",
+    "@lexical/list": "^0.52.0",
+    "@lexical/react": "^0.52.0",
+    "@lexical/rich-text": "^0.52.0",
+    "@lexical/selection": "^0.52.0",
     "@mui/material": "^9.4.0",
+    "lexical": "^0.52.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },

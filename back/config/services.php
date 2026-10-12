@@ -32,7 +32,9 @@ use Cms\Taxonomy\Infrastructure\Persistence\DoctrineTaxonomyRepository;
 use Cms\Schema\Application\RelationTargetLookup;
 use Cms\Content\Infrastructure\Persistence\DoctrineRelationTargetLookup;
 use Cms\Content\Application\ContentDeletionGateway;
+use Cms\Content\Application\RichTextSanitizer;
 use Cms\Content\Infrastructure\Persistence\DoctrineContentDeletionGateway;
+use Cms\Content\Infrastructure\Html\SymfonyRichTextSanitizer;
 
 return static function (ContainerConfigurator $container): void {
     $services = $container->services()
@@ -62,4 +64,5 @@ return static function (ContainerConfigurator $container): void {
     $services->alias(TaxonomyRepository::class, DoctrineTaxonomyRepository::class);
     $services->alias(RelationTargetLookup::class, DoctrineRelationTargetLookup::class);
     $services->alias(ContentDeletionGateway::class, DoctrineContentDeletionGateway::class);
+    $services->alias(RichTextSanitizer::class, SymfonyRichTextSanitizer::class);
 };

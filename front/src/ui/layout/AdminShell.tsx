@@ -14,18 +14,20 @@ import type { PropsWithChildren } from 'react'
 interface NavigationItem {
   id: string
   label: string
+  path: string
   active?: boolean
 }
 
 interface AdminShellProps extends PropsWithChildren {
   navigation: NavigationItem[]
   userEmail: string
+  onNavigate: (path: string) => void
   onLogout: () => void
 }
 
 const sidebarWidth = 240
 
-export function AdminShell({ navigation, userEmail, onLogout, children }: AdminShellProps) {
+export function AdminShell({ navigation, userEmail, onNavigate, onLogout, children }: AdminShellProps) {
   return (
     <Box
       sx={{
@@ -57,8 +59,15 @@ export function AdminShell({ navigation, userEmail, onLogout, children }: AdminS
         >
           {navigation.map((item) => (
             <ListItemButton
+              component="a"
+              href={item.path}
               key={item.id}
               selected={item.active}
+              onClick={(event) => {
+                if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+                event.preventDefault()
+                onNavigate(item.path)
+              }}
               sx={{
                 borderRadius: 1.5,
                 mb: { md: 0.5 },

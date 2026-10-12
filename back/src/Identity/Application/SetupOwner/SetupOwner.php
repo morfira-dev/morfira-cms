@@ -8,6 +8,7 @@ use Cms\Identity\Application\PasswordHasher;
 use Cms\Identity\Domain\IdentityAlreadyInstalled;
 use Cms\Identity\Domain\User;
 use Cms\Identity\Domain\UserRepository;
+use Cms\Identity\Domain\UserRole;
 
 final readonly class SetupOwner
 {
@@ -29,7 +30,7 @@ final readonly class SetupOwner
         }
 
         $id = self::newUuid();
-        $roles = ['ROLE_OWNER', 'ROLE_EDITOR'];
+        $roles = UserRole::Owner->securityRoles();
         $user = new User(
             $id,
             $email,

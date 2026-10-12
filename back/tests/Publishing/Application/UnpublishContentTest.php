@@ -21,6 +21,7 @@ use Cms\Schema\Application\GetContentTypeDefinition;
 use Cms\Schema\Application\ValidateEntryValues;
 use Cms\Tests\Content\InMemoryEntryRepository;
 use Cms\Tests\Content\InMemoryPageRepository;
+use Cms\Tests\Content\PassThroughRichTextSanitizer;
 use Cms\Tests\Publishing\InMemoryPublicationScheduleRepository;
 use Cms\Tests\Publishing\InMemoryPublishedEntryRepository;
 use Cms\Tests\Publishing\InMemoryPublishedPageRepository;
@@ -38,7 +39,7 @@ final class UnpublishContentTest extends TestCase
         $published = new InMemoryPublishedPageRepository();
         $publish = new PublishPage($drafts, $published);
         $publish($page->id, 1);
-        $updated = (new UpdatePage($drafts))($page->id, 'Landing', 'home', [], PageSeo::defaults(), 1);
+        $updated = (new UpdatePage($drafts, new PassThroughRichTextSanitizer()))($page->id, 'Landing', 'home', [], PageSeo::defaults(), 1);
         $publish($page->id, $updated->version);
         $schedules = new InMemoryPublicationScheduleRepository();
         (new PlanPagePublication($drafts, $schedules))($page->id, $updated->version, new \DateTimeImmutable('+1 hour'));

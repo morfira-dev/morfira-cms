@@ -22,6 +22,7 @@ use Cms\Schema\Application\GetContentTypeDefinition;
 use Cms\Schema\Application\ValidateEntryValues;
 use Cms\Tests\Content\InMemoryEntryRepository;
 use Cms\Tests\Content\InMemoryPageRepository;
+use Cms\Tests\Content\PassThroughRichTextSanitizer;
 use Cms\Tests\Publishing\InMemoryPublicationScheduleRepository;
 use Cms\Tests\Publishing\InMemoryPublishedEntryRepository;
 use Cms\Tests\Publishing\InMemoryPublishedPageRepository;
@@ -55,7 +56,7 @@ final class ScheduledPublishingTest extends TestCase
         $due = new \DateTimeImmutable('+1 hour', new \DateTimeZone('UTC'));
         (new PlanPagePublication($pages, $schedules))($pageId, 1, $due);
         $this->makeDue($schedules, PublicationTarget::Page, $pageId);
-        (new UpdatePage($pages))($pageId, 'Changed', 'landing', [], PageSeo::defaults(), 1);
+        (new UpdatePage($pages, new PassThroughRichTextSanitizer()))($pageId, 'Changed', 'landing', [], PageSeo::defaults(), 1);
 
         $result = (new RunScheduledPublications($schedules, $publishPage, $publishEntry))(100);
 
