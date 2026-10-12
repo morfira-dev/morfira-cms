@@ -1,3 +1,9 @@
+## [1.3.0](https://github.com/nuykon/morfira-cms/compare/v1.2.0...v1.3.0) (2026-10-12)
+
+### Features
+
+* **schema:** add entry relations ([0b22a55](https://github.com/nuykon/morfira-cms/commit/0b22a556554610642123291832dd2274eceb92cc))
+
 ## [1.2.0](https://github.com/nuykon/morfira-cms/compare/v1.1.0...v1.2.0) (2026-10-12)
 
 ### Features
