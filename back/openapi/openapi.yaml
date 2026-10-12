@@ -144,6 +144,89 @@ paths:
       responses:
         '204':
           description: Session ended.
+  /api/v1/auth/password:
+    put:
+      operationId: changePassword
+      tags: [Identity]
+      summary: Change the authenticated user's password
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '204':
+          description: Password changed and the current session ended.
+        '401':
+          description: No authenticated session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Current password is incorrect or the new password is invalid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/admin/settings:
+    get:
+      operationId: getSiteSettings
+      tags: [Settings]
+      summary: Read site identity and regional defaults
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Current site settings.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SiteSettings'
+    put:
+      operationId: updateSiteSettings
+      tags: [Settings]
+      summary: Update site identity and regional defaults
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSiteSettingsRequest'
+      responses:
+        '200':
+          description: Updated site settings.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SiteSettings'
+        '403':
+          description: Owner access is required.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Settings changed since they were loaded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Invalid site settings.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /api/v1/admin/users:
     get:
       operationId: listUsers
@@ -516,6 +599,62 @@ paths:
                 $ref: '#/components/schemas/Error'
         '422':
           description: Invalid page identifier.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/admin/pages/{id}/revisions:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: listPageRevisions
+      tags: [Admin Content]
+      summary: List immutable page revisions newest first
+      security: [{ sessionCookie: [] }]
+      responses:
+        '200':
+          description: Complete page revision history.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageRevisionCollection'
+        '404':
+          description: Page not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/admin/pages/{id}/revisions/{revision}/restore:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: revision, in: path, required: true, schema: { type: integer, minimum: 1 } }
+    post:
+      operationId: restorePageRevision
+      tags: [Admin Content]
+      summary: Restore a historical page payload as a new revision
+      security: [{ sessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/CsrfTokenHeader' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RestorePageRevisionRequest'
+      responses:
+        '200':
+          description: New current page revision.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page'
+        '404':
+          description: Page or revision not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Current version conflict or slug collision.
           content:
             application/json:
               schema:
@@ -1838,6 +1977,37 @@ components:
         password:
           type: string
           format: password
+    ChangePasswordRequest:
+      type: object
+      additionalProperties: false
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword:
+          type: string
+          format: password
+        newPassword:
+          type: string
+          format: password
+          minLength: 12
+    SiteSettings:
+      type: object
+      additionalProperties: false
+      required: [siteName, defaultLocale, timezone, version, updatedAt]
+      properties:
+        siteName: { type: string, minLength: 1, maxLength: 120 }
+        defaultLocale: { type: string, pattern: '^[a-z]{2,3}(?:-[A-Z]{2})?$' }
+        timezone: { type: string, minLength: 1, maxLength: 64 }
+        version: { type: integer, minimum: 1 }
+        updatedAt: { type: string, format: date-time }
+    UpdateSiteSettingsRequest:
+      type: object
+      additionalProperties: false
+      required: [siteName, defaultLocale, timezone, version]
+      properties:
+        siteName: { type: string, minLength: 1, maxLength: 120 }
+        defaultLocale: { type: string, pattern: '^[a-z]{2,3}(?:-[A-Z]{2})?$' }
+        timezone: { type: string, minLength: 1, maxLength: 64 }
+        version: { type: integer, minimum: 1 }
     AuthenticatedUser:
       type: object
       additionalProperties: false
@@ -2687,6 +2857,36 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Page'
+    PageRevision:
+      type: object
+      additionalProperties: false
+      required: [revision, title, slug, blocks, seo, createdAt]
+      properties:
+        revision: { type: integer, minimum: 1 }
+        title: { type: string }
+        slug: { type: string }
+        blocks:
+          type: array
+          items:
+            $ref: '#/components/schemas/PageBlock'
+        seo:
+          $ref: '#/components/schemas/PageSeo'
+        createdAt: { type: string, format: date-time }
+    PageRevisionCollection:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PageRevision'
+    RestorePageRevisionRequest:
+      type: object
+      additionalProperties: false
+      required: [version]
+      properties:
+        version: { type: integer, minimum: 1 }
     PublishedPage:
       type: object
       additionalProperties: false

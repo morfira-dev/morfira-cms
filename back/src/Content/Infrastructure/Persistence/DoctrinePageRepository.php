@@ -8,6 +8,7 @@ use Cms\Content\Domain\Page;
 use Cms\Content\Domain\PageBlock;
 use Cms\Content\Domain\PageId;
 use Cms\Content\Domain\PageRepository;
+use Cms\Content\Domain\PageRevision;
 use Cms\Content\Domain\PageSeo;
 use Cms\Content\Domain\PageSlug;
 use Cms\Content\Domain\PageSlugAlreadyExists;
@@ -75,6 +76,26 @@ final readonly class DoctrinePageRepository implements PageRepository
         return array_map($this->hydrate(...), $rows);
     }
 
+    public function revisions(PageId $id): array
+    {
+        $rows = $this->connection->fetchAllAssociative(
+            'SELECT * FROM content_page_revisions WHERE page_id = ? ORDER BY revision_number DESC',
+            [$id->value],
+        );
+
+        return array_map($this->hydrateRevision(...), $rows);
+    }
+
+    public function revision(PageId $id, int $revision): ?PageRevision
+    {
+        $row = $this->connection->fetchAssociative(
+            'SELECT * FROM content_page_revisions WHERE page_id = ? AND revision_number = ?',
+            [$id->value, $revision],
+        );
+
+        return $row === false ? null : $this->hydrateRevision($row);
+    }
+
     /** @return array<string, int|string> */
     private function row(Page $page): array
     {
@@ -136,6 +157,32 @@ final readonly class DoctrinePageRepository implements PageRepository
             self::intValue($row, 'version'),
             new \DateTimeImmutable(self::stringValue($row, 'created_at'), new \DateTimeZone('UTC')),
             new \DateTimeImmutable(self::stringValue($row, 'updated_at'), new \DateTimeZone('UTC')),
+        );
+    }
+
+    /** @param array<string, mixed> $row */
+    private function hydrateRevision(array $row): PageRevision
+    {
+        $blocks = json_decode(self::stringValue($row, 'blocks'), true, flags: JSON_THROW_ON_ERROR);
+        $seo = json_decode(self::stringValue($row, 'seo'), true, flags: JSON_THROW_ON_ERROR);
+        if (!is_array($blocks) || !array_is_list($blocks) || !is_array($seo) || array_is_list($seo)) {
+            throw new \UnexpectedValueException('Stored page revision payload is invalid.');
+        }
+        /** @var array<string, mixed> $seo */
+
+        return new PageRevision(
+            self::intValue($row, 'revision_number'),
+            new PageTitle(self::stringValue($row, 'title')),
+            new PageSlug(self::stringValue($row, 'slug')),
+            array_map(static function (mixed $block): PageBlock {
+                if (!is_array($block)) {
+                    throw new \UnexpectedValueException('Every stored block must be an object.');
+                }
+                /** @var array<string, mixed> $block */
+                return PageBlock::fromArray($block);
+            }, $blocks),
+            PageSeo::fromArray($seo),
+            new \DateTimeImmutable(self::stringValue($row, 'created_at'), new \DateTimeZone('UTC')),
         );
     }
 

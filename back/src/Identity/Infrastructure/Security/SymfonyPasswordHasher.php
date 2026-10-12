@@ -20,4 +20,13 @@ final readonly class SymfonyPasswordHasher implements PasswordHasher
             $plainPassword,
         );
     }
+
+    /** @param list<string> $roles */
+    public function verify(string $id, string $email, array $roles, string $passwordHash, string $plainPassword): bool
+    {
+        return $this->hasher->isPasswordValid(
+            new SecurityUser($id, $email, $passwordHash, $roles),
+            $plainPassword,
+        );
+    }
 }

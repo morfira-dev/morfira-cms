@@ -85,6 +85,11 @@ final readonly class DoctrineUserRepository implements UserRepository
         return $row === false ? null : self::hydrate($row);
     }
 
+    public function replacePasswordHash(string $id, string $passwordHash): void
+    {
+        $this->connection->update('identity_users', ['password_hash' => $passwordHash], ['id' => $id]);
+    }
+
     public function changeRolePreservingOwner(string $id, UserRole $role): UserMutationResult
     {
         return $this->connection->transactional(function (Connection $connection) use ($id, $role): UserMutationResult {

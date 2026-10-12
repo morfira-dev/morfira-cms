@@ -45,8 +45,9 @@ Admin Studio authenticates with a server-side session cookie. Mutating setup, au
 - `Identity`: users, roles and permissions.
 - `Media`: assets and transformations.
 - `Extensions`: extension manifests, capabilities and lifecycle.
+- `Settings`: typed installation identity and regional defaults.
 
-Implemented vertical slices currently cover `System`, `Schema`, `Content`, `Publishing`, `Identity`, `Media` and `Navigation`. The remaining modules are created when their first concrete capability is implemented.
+Implemented vertical slices currently cover `System`, `Schema`, `Content`, `Publishing`, `Identity`, `Media`, `Navigation` and `Settings`. The remaining modules are created when their first concrete capability is implemented.
 
 ## Rules
 

@@ -35,6 +35,8 @@ use Cms\Content\Application\ContentDeletionGateway;
 use Cms\Content\Application\RichTextSanitizer;
 use Cms\Content\Infrastructure\Persistence\DoctrineContentDeletionGateway;
 use Cms\Content\Infrastructure\Html\SymfonyRichTextSanitizer;
+use Cms\Settings\Domain\SiteSettingsRepository;
+use Cms\Settings\Infrastructure\Persistence\DoctrineSiteSettingsRepository;
 
 return static function (ContainerConfigurator $container): void {
     $services = $container->services()
@@ -65,4 +67,5 @@ return static function (ContainerConfigurator $container): void {
     $services->alias(RelationTargetLookup::class, DoctrineRelationTargetLookup::class);
     $services->alias(ContentDeletionGateway::class, DoctrineContentDeletionGateway::class);
     $services->alias(RichTextSanitizer::class, SymfonyRichTextSanitizer::class);
+    $services->alias(SiteSettingsRepository::class, DoctrineSiteSettingsRepository::class);
 };

@@ -13,7 +13,7 @@ export function App() {
 
   return (
     <AuthGate>
-      {(user, signOut) => {
+      {(user, signOut, sessionEnded) => {
         const isOwner = user.roles.includes('ROLE_OWNER')
         const navigation = adminRoutes
           .filter((item) => !item.ownerOnly || isOwner)
@@ -26,7 +26,7 @@ export function App() {
                 <CircularProgress size={30} />
               </Stack>
             )}>
-              <ContentWorkspace route={route.id} isOwner={isOwner} currentUserId={user.id} />
+              <ContentWorkspace route={route.id} isOwner={isOwner} currentUserId={user.id} onNavigate={navigate} onSessionEnded={sessionEnded} />
             </Suspense>
           </AdminShell>
         )

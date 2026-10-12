@@ -12,6 +12,11 @@ interface PageRepository
 
     public function save(Page $page, int $expectedVersion): void;
 
+    /** @return list<PageRevision> */
+    public function revisions(PageId $id): array;
+
+    public function revision(PageId $id, int $revision): ?PageRevision;
+
     /** @return list<Page> */
     public function all(): array;
 }

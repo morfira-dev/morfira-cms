@@ -30,11 +30,14 @@ import {
   deletePageRedirect,
   deletePage,
   getPageRedirects,
+  getPageRevisions,
   getPages,
+  type PageRevision,
   type PageSummary,
   type PublishedPage,
   type PublishedRedirect,
   publishPage,
+  restorePageRevision,
   unpublishPage,
   updatePage,
 } from './api'
@@ -63,6 +66,8 @@ export function PagesWorkspace({ mediaAssets }: PagesWorkspaceProps) {
   const [redirects, setRedirects] = useState<PublishedRedirect[]>([])
   const [redirectSlug, setRedirectSlug] = useState('')
   const [redirectBusy, setRedirectBusy] = useState(false)
+  const [revisions, setRevisions] = useState<PageRevision[]>([])
+  const [restoringRevision, setRestoringRevision] = useState<number | null>(null)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -116,6 +121,7 @@ export function PagesWorkspace({ mediaAssets }: PagesWorkspaceProps) {
       setEditing(saved)
       setEditingDirty(false)
       setPages((current) => current.map((page) => page.id === saved.id ? saved : page))
+      setRevisions(await getPageRevisions(saved.id))
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not save the revision.')
     } finally {
@@ -189,11 +195,28 @@ export function PagesWorkspace({ mediaAssets }: PagesWorkspaceProps) {
     setPublication(null)
     setSuccess(null)
     setRedirects([])
+    setRevisions([])
     getPageRedirects(page.id)
       .then(setRedirects)
       .catch((reason: unknown) => {
         setError(reason instanceof Error ? reason.message : 'Could not load redirect history.')
       })
+    getPageRevisions(page.id)
+      .then(setRevisions)
+      .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : 'Could not load revision history.'))
+  }
+
+  async function restoreRevision(revision: number) {
+    if (!editing || editingDirty || !window.confirm(`Restore revision ${revision} as a new draft revision?`)) return
+    setRestoringRevision(revision); setError(null); setSuccess(null)
+    try {
+      const restored = await restorePageRevision(editing.id, revision, editing.version)
+      setEditing(restored)
+      setPages((current) => current.map((page) => page.id === restored.id ? restored : page))
+      setRevisions(await getPageRevisions(restored.id))
+      setSuccess(`Revision ${revision} was restored as revision ${restored.version}.`)
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not restore the revision.') }
+    finally { setRestoringRevision(null) }
   }
 
   async function addManualRedirect() {
@@ -419,6 +442,21 @@ export function PagesWorkspace({ mediaAssets }: PagesWorkspaceProps) {
               )}
 
               <PublicationScheduler target="page" targetId={editing.id} sourceVersion={editing.version} dirty={editingDirty} />
+
+              <Card variant="outlined">
+                <CardContent>
+                  <Typography variant="h6">Revision history</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: .5, mb: 2 }}>Restoring creates a new revision and never changes the published page.</Typography>
+                  <Stack spacing={1}>
+                    {revisions.map((revision) => (
+                      <Stack key={revision.revision} direction={{ xs: 'column', sm: 'row' }} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' }, gap: 1, py: 1, borderTop: 1, borderColor: 'divider' }}>
+                        <div><Typography sx={{ fontWeight: 700 }}>Revision {revision.revision} · {revision.title}</Typography><Typography variant="body2" color="text.secondary">{new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(revision.createdAt))} · /{revision.slug}</Typography></div>
+                        <Button size="small" variant="outlined" disabled={editingDirty || revision.revision === editing.version || restoringRevision !== null} onClick={() => void restoreRevision(revision.revision)}>{restoringRevision === revision.revision ? 'Restoring…' : 'Restore'}</Button>
+                      </Stack>
+                    ))}
+                  </Stack>
+                </CardContent>
+              </Card>
 
               <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
                 <TextField

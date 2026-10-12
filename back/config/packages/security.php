@@ -41,6 +41,7 @@ return static function (ContainerConfigurator $container): void {
         ],
         'access_control' => [
             ['path' => '^/api/v1/admin/users', 'roles' => 'ROLE_OWNER'],
+            ['path' => '^/api/v1/admin/settings$', 'roles' => 'ROLE_OWNER', 'methods' => ['PUT']],
             ['path' => '^/api/v1/admin', 'roles' => 'ROLE_EDITOR'],
             ['path' => '^/_preview', 'roles' => 'ROLE_EDITOR'],
         ],

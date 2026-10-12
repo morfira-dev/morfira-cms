@@ -20,6 +20,8 @@ interface UserRepository
 
     public function findById(string $id): ?User;
 
+    public function replacePasswordHash(string $id, string $passwordHash): void;
+
     public function changeRolePreservingOwner(string $id, UserRole $role): UserMutationResult;
 
     public function removePreservingOwner(string $id): UserMutationResult;

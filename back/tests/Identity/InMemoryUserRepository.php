@@ -63,6 +63,15 @@ final class InMemoryUserRepository implements UserRepository
         return $this->users[$id] ?? null;
     }
 
+    public function replacePasswordHash(string $id, string $passwordHash): void
+    {
+        $user = $this->users[$id] ?? null;
+        if ($user === null) {
+            return;
+        }
+        $this->users[$id] = new User($user->id, $user->email, $passwordHash, $user->roles, $user->createdAt);
+    }
+
     public function changeRolePreservingOwner(string $id, UserRole $role): UserMutationResult
     {
         $user = $this->users[$id] ?? null;

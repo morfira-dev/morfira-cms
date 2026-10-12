@@ -3,7 +3,7 @@ import { Alert, Button, Card, CardContent, CircularProgress, Stack, TextField, T
 import { getCurrentUser, getSetupStatus, login, logout, setupOwner, type AuthenticatedUser } from './api'
 
 interface AuthGateProps {
-  children: (user: AuthenticatedUser, signOut: () => Promise<void>) => ReactNode
+  children: (user: AuthenticatedUser, signOut: () => Promise<void>, sessionEnded: () => void) => ReactNode
 }
 
 type Mode = 'loading' | 'setup' | 'login' | 'authenticated'
@@ -61,7 +61,10 @@ export function AuthGate({ children }: AuthGateProps) {
     setMode('login')
   }
 
-  if (mode === 'authenticated' && user) return children(user, signOut)
+  if (mode === 'authenticated' && user) return children(user, signOut, () => {
+    setUser(null)
+    setMode('login')
+  })
 
   return (
     <Stack sx={{ minHeight: '100vh', alignItems: 'center', justifyContent: 'center', bgcolor: 'background.default', p: 3 }}>

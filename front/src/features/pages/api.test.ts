@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resetCsrfToken } from '../../api/http'
-import { createPageRedirect, deletePage, deletePageRedirect, getPageRedirects, unpublishPage, updatePage, type PageSummary, type PageUpdate } from './api'
+import { createPageRedirect, deletePage, deletePageRedirect, getPageRedirects, getPageRevisions, restorePageRevision, unpublishPage, updatePage, type PageSummary, type PageUpdate } from './api'
 
 const revision: PageUpdate = {
   title: 'Landing',
@@ -114,5 +114,22 @@ describe('deletePage', () => {
 
     expect(fetchMock.mock.calls[1][0]).toBe(`/api/v1/admin/pages/${page.id}`)
     expect(fetchMock.mock.calls[1][1]?.method).toBe('DELETE')
+  })
+})
+
+describe('page revision history', () => {
+  it('lists history and restores with the current optimistic version', async () => {
+    const history = [{ revision: 1, title: 'Landing', slug: 'landing', blocks: [], seo: revision.seo, createdAt: page.createdAt }]
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ items: history }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ token: 'csrf' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ...page, version: 2 }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(getPageRevisions(page.id)).resolves.toEqual(history)
+    await restorePageRevision(page.id, 1, page.version)
+
+    expect(fetchMock.mock.calls[2][0]).toBe(`/api/v1/admin/pages/${page.id}/revisions/1/restore`)
+    expect(JSON.parse(String(fetchMock.mock.calls[2][1]?.body))).toEqual({ version: 1 })
   })
 })

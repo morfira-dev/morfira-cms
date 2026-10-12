@@ -41,3 +41,12 @@ export async function logout(): Promise<void> {
   if (!response.ok && response.status !== 204) throw new Error(await readApiError(response))
   resetCsrfToken()
 }
+
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  const response = await apiFetch('/api/v1/auth/password', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ currentPassword, newPassword }),
+  })
+  if (!response.ok) throw new Error(await readApiError(response))
+}

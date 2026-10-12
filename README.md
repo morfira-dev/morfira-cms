@@ -89,6 +89,10 @@ The initial foundation contains:
 - schema-validated single-entry relations stored by stable identifier;
 - safe draft deletion with database-enforced relation integrity;
 - manually managed direct permanent redirects for active page routes;
+- owner-managed site identity and regional defaults with optimistic locking;
+- visible immutable page revision history and append-only draft restoration;
+- authenticated self-service password rotation;
+- a live Admin Studio content overview with direct workspace navigation;
 - versioned `/api/v1` contracts with frontend types generated from OpenAPI 3.1;
 - architectural decision records.
 

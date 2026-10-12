@@ -7,6 +7,7 @@ export type PageSummary = components['schemas']['Page']
 export type PageUpdate = components['schemas']['UpdatePageRequest']
 export type PublishedPage = components['schemas']['PublishedPage']
 export type PublishedRedirect = components['schemas']['PublishedRedirect']
+export type PageRevision = components['schemas']['PageRevision']
 
 export async function getPages(signal?: AbortSignal): Promise<PageSummary[]> {
   const response = await apiFetch('/api/v1/admin/pages', { signal })
@@ -94,4 +95,20 @@ export async function createPageRedirect(id: string, sourceSlug: string): Promis
 export async function deletePageRedirect(id: string, sourceSlug: string): Promise<void> {
   const response = await apiFetch(`/api/v1/admin/pages/${id}/redirects/${encodeURIComponent(sourceSlug)}`, { method: 'DELETE' })
   if (!response.ok) throw new Error(await readApiError(response))
+}
+
+export async function getPageRevisions(id: string, signal?: AbortSignal): Promise<PageRevision[]> {
+  const response = await apiFetch(`/api/v1/admin/pages/${id}/revisions`, { signal })
+  if (!response.ok) throw new Error(await readApiError(response))
+  return ((await response.json()) as components['schemas']['PageRevisionCollection']).items
+}
+
+export async function restorePageRevision(id: string, revision: number, version: number): Promise<PageSummary> {
+  const response = await apiFetch(`/api/v1/admin/pages/${id}/revisions/${revision}/restore`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ version }),
+  })
+  if (!response.ok) throw new Error(await readApiError(response))
+  return (await response.json()) as PageSummary
 }

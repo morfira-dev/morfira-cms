@@ -89,4 +89,5 @@ final readonly class IdentityController
     {
         throw new \LogicException('This request is handled by the security firewall.');
     }
+
 }

@@ -12,4 +12,10 @@ final readonly class FakePasswordHasher implements PasswordHasher
     {
         return 'hashed:' . $plainPassword;
     }
+
+    /** @param list<string> $roles */
+    public function verify(string $id, string $email, array $roles, string $passwordHash, string $plainPassword): bool
+    {
+        return hash_equals($passwordHash, 'hashed:' . $plainPassword);
+    }
 }
