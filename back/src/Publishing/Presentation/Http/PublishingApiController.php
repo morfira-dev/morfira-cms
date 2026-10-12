@@ -11,6 +11,9 @@ use Cms\Publishing\Application\GetPublishedPage\GetPublishedPage;
 use Cms\Publishing\Application\GetPublishedRedirect\GetPublishedRedirect;
 use Cms\Publishing\Application\ListPageRedirects\ListPageRedirects;
 use Cms\Publishing\Application\PublishPage\PublishPage;
+use Cms\Publishing\Application\AddPageRedirect;
+use Cms\Publishing\Application\RemovePageRedirect;
+use Cms\Publishing\Domain\PublishedPageNotActive;
 use Cms\Publishing\Domain\PublishedSlugAlreadyExists;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\RedirectResponse;
@@ -25,6 +28,8 @@ final readonly class PublishingApiController
         private GetPublishedPage $getPublishedPage,
         private GetPublishedRedirect $getPublishedRedirect,
         private ListPageRedirects $listPageRedirects,
+        private AddPageRedirect $addPageRedirect,
+        private RemovePageRedirect $removePageRedirect,
     ) {
     }
 
@@ -87,5 +92,20 @@ final readonly class PublishingApiController
         }
 
         return new JsonResponse(['items' => ($this->listPageRedirects)($pageId->value)]);
+    }
+
+    #[Route('/api/v1/admin/pages/{id}/redirects', name: 'publishing.pages.redirects.create', methods: ['POST'])]
+    public function addRedirect(string $id,Request $request):JsonResponse
+    {
+        $payload=$request->toArray();$sourceSlug=$payload['sourceSlug']??null;
+        if(array_diff(array_keys($payload),['sourceSlug'])!==[]||!is_string($sourceSlug))return new JsonResponse(['error'=>'sourceSlug must be a string.'],422);
+        try{return new JsonResponse(($this->addPageRedirect)($id,$sourceSlug),201);}catch(PageNotFound){return new JsonResponse(['error'=>'Page not found.'],404);}catch(PublishedPageNotActive $e){return new JsonResponse(['error'=>$e->getMessage()],409);}catch(PublishedSlugAlreadyExists $e){return new JsonResponse(['error'=>$e->getMessage()],409);}catch(\InvalidArgumentException $e){return new JsonResponse(['error'=>$e->getMessage()],422);}
+    }
+
+    #[Route('/api/v1/admin/pages/{id}/redirects/{sourceSlug}', name: 'publishing.pages.redirects.delete', methods: ['DELETE'])]
+    public function removeRedirect(string $id,string $sourceSlug):Response
+    {
+        try{($this->removePageRedirect)($id,$sourceSlug);}catch(PageNotFound){return new JsonResponse(['error'=>'Page not found.'],404);}catch(\InvalidArgumentException $e){return new JsonResponse(['error'=>$e->getMessage()],422);}
+        return new Response(status:204);
     }
 }

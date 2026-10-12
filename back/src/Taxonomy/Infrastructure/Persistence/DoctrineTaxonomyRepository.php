@@ -20,6 +20,12 @@ final readonly class DoctrineTaxonomyRepository implements TaxonomyRepository
         try { $this->connection->insert('taxonomy_vocabularies', ['id'=>$t->id,'name'=>$t->name,'slug'=>$t->slug,'hierarchical'=>$t->hierarchical ? 1 : 0,'created_at'=>$this->date($t->createdAt)]); }
         catch (UniqueConstraintViolationException) { throw new TaxonomyConflict('Taxonomy slug is already in use.'); }
     }
+    public function saveTaxonomy(Taxonomy $t): void
+    {
+        try { $this->connection->update('taxonomy_vocabularies',['name'=>$t->name,'slug'=>$t->slug,'hierarchical'=>$t->hierarchical ? 1 : 0],['id'=>$t->id]); }
+        catch (UniqueConstraintViolationException) { throw new TaxonomyConflict('Taxonomy slug is already in use.'); }
+    }
+    public function deleteTaxonomy(string $id): void { $this->connection->delete('taxonomy_vocabularies',['id'=>$id]); }
     public function getTaxonomy(string $id): ?Taxonomy
     {
         $r=$this->connection->fetchAssociative('SELECT * FROM taxonomy_vocabularies WHERE id=?',[$id]); return $r===false?null:$this->taxonomy($r);
@@ -30,6 +36,12 @@ final readonly class DoctrineTaxonomyRepository implements TaxonomyRepository
         try { $this->connection->insert('taxonomy_terms',['id'=>$t->id,'taxonomy_id'=>$t->taxonomyId,'name'=>$t->name,'slug'=>$t->slug,'parent_id'=>$t->parentId,'created_at'=>$this->date($t->createdAt)]); }
         catch (UniqueConstraintViolationException) { throw new TaxonomyConflict('Term slug is already in use in this taxonomy.'); }
     }
+    public function saveTerm(Term $t): void
+    {
+        try { $this->connection->update('taxonomy_terms',['name'=>$t->name,'slug'=>$t->slug,'parent_id'=>$t->parentId],['id'=>$t->id]); }
+        catch (UniqueConstraintViolationException) { throw new TaxonomyConflict('Term slug is already in use in this taxonomy.'); }
+    }
+    public function deleteTerm(string $id): void { $this->connection->delete('taxonomy_terms',['id'=>$id]); }
     public function getTerm(string $id): ?Term { $r=$this->connection->fetchAssociative('SELECT * FROM taxonomy_terms WHERE id=?',[$id]); return $r===false?null:$this->term($r); }
     public function terms(string $taxonomyId): array { return array_map($this->term(...),$this->connection->fetchAllAssociative('SELECT * FROM taxonomy_terms WHERE taxonomy_id=? ORDER BY name',[$taxonomyId])); }
     public function replaceEntryTerms(string $entryId,array $termIds): void

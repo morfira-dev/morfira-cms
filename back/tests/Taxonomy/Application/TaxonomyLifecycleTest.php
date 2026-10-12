@@ -44,4 +44,34 @@ final class TaxonomyLifecycleTest extends TestCase
         $repo=new InMemoryTaxonomyRepository();$manage=new ManageTaxonomy($repo);$taxonomy=$manage->createTaxonomy('Tags','tags',false);$term=$manage->createTerm($taxonomy->id,'PHP','php',null)->terms[0];
         $this->expectException(\InvalidArgumentException::class);$manage->createTerm($taxonomy->id,'Symfony','symfony',$term['id']);
     }
+
+    #[Test]
+    public function taxonomy_and_terms_can_be_updated_and_leaf_terms_deleted():void
+    {
+        $repo=new InMemoryTaxonomyRepository();$manage=new ManageTaxonomy($repo);
+        $taxonomy=$manage->createTaxonomy('Topics','topics',true);
+        $withParent=$manage->createTerm($taxonomy->id,'Parent','parent',null);$parentId=$withParent->terms[0]['id'];
+        $withChild=$manage->createTerm($taxonomy->id,'Child','child',$parentId);$childId=array_values(array_filter($withChild->terms,static fn(array $term):bool=>$term['slug']==='child'))[0]['id'];
+        $updated=$manage->updateTaxonomy($taxonomy->id,'Subjects','subjects',true);
+        $updated=$manage->updateTerm($taxonomy->id,$childId,'Updated child','updated-child',null);
+        $updated=$manage->deleteTerm($taxonomy->id,$childId);
+
+        self::assertSame('Subjects',$updated->name);
+        self::assertSame('subjects',$updated->slug);
+        self::assertCount(1,$updated->terms);
+        self::assertSame($parentId,$updated->terms[0]['id']);
+    }
+
+    #[Test]
+    public function deleting_parent_terms_and_flattening_hierarchies_is_blocked():void
+    {
+        $repo=new InMemoryTaxonomyRepository();$manage=new ManageTaxonomy($repo);
+        $taxonomy=$manage->createTaxonomy('Topics','topics',true);
+        $parent=$manage->createTerm($taxonomy->id,'Parent','parent',null)->terms[0];
+        $manage->createTerm($taxonomy->id,'Child','child',$parent['id']);
+
+        try{$manage->deleteTerm($taxonomy->id,$parent['id']);self::fail('Parent deletion must be blocked.');}catch(\Cms\Taxonomy\Domain\TaxonomyConflict){}
+        $this->expectException(\Cms\Taxonomy\Domain\TaxonomyConflict::class);
+        $manage->updateTaxonomy($taxonomy->id,'Topics','topics',false);
+    }
 }

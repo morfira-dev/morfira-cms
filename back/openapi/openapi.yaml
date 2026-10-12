@@ -355,6 +355,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /api/v1/admin/pages/{id}/redirects/{sourceSlug}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: sourceSlug, in: path, required: true, schema: { type: string, maxLength: 191, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' } }
+    delete:
+      operationId: deletePageRedirect
+      tags: [Publishing]
+      summary: Delete one permanent redirect owned by a page
+      security: [{ sessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/CsrfTokenHeader' }]
+      responses:
+        '204': { description: Redirect is absent. }
+        '404': { description: Page not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '422': { description: Invalid identifier or source slug, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
   /api/v1/admin/pages/{id}/publish:
     parameters:
       - name: id
@@ -551,6 +565,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+    post:
+      operationId: createPageRedirect
+      tags: [Publishing]
+      summary: Add a permanent source slug for the active page route
+      security: [{ sessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/CsrfTokenHeader' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CreatePublishedRedirectRequest' } } }
+      responses:
+        '201': { description: Redirect created, content: { application/json: { schema: { $ref: '#/components/schemas/PublishedRedirect' } } } }
+        '404': { description: Page not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '409': { description: Page is not active or source slug conflicts, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '422': { description: Invalid source slug, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
   /api/v1/admin/content-types:
     get:
       operationId: listContentTypes
@@ -1097,6 +1125,60 @@ paths:
         '404': { description: Taxonomy not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
         '409': { description: Term slug conflict, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
         '422': { description: Invalid term, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/taxonomies/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      operationId: updateTaxonomy
+      tags: [Entries]
+      summary: Update a taxonomy
+      security: [{ sessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/CsrfTokenHeader' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CreateTaxonomyRequest' } } }
+      responses:
+        '200': { description: Updated taxonomy, content: { application/json: { schema: { $ref: '#/components/schemas/Taxonomy' } } } }
+        '404': { description: Taxonomy not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '409': { description: Slug or hierarchy conflict, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '422': { description: Invalid taxonomy, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    delete:
+      operationId: deleteTaxonomy
+      tags: [Entries]
+      summary: Delete a taxonomy and mutable assignments
+      security: [{ sessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/CsrfTokenHeader' }]
+      responses:
+        '204': { description: Taxonomy deleted; published snapshots are unchanged. }
+        '404': { description: Taxonomy not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/taxonomies/{id}/terms/{termId}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: termId, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      operationId: updateTaxonomyTerm
+      tags: [Entries]
+      summary: Update a taxonomy term
+      security: [{ sessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/CsrfTokenHeader' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CreateTaxonomyTermRequest' } } }
+      responses:
+        '200': { description: Updated taxonomy, content: { application/json: { schema: { $ref: '#/components/schemas/Taxonomy' } } } }
+        '404': { description: Taxonomy or term not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '409': { description: Slug conflict, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '422': { description: Invalid term or hierarchy cycle, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    delete:
+      operationId: deleteTaxonomyTerm
+      tags: [Entries]
+      summary: Delete a leaf taxonomy term
+      security: [{ sessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/CsrfTokenHeader' }]
+      responses:
+        '200': { description: Updated taxonomy, content: { application/json: { schema: { $ref: '#/components/schemas/Taxonomy' } } } }
+        '404': { description: Taxonomy or term not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '409': { description: Term still has children, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
   /api/v1/admin/entries/{id}/terms:
     parameters:
       - $ref: '#/components/parameters/EntryId'
@@ -2326,6 +2408,12 @@ components:
               format: uuid
             - type: 'null'
           description: Optional immutable media asset used for social sharing cards.
+    CreatePublishedRedirectRequest:
+      type: object
+      additionalProperties: false
+      required: [sourceSlug]
+      properties:
+        sourceSlug: { type: string, maxLength: 191, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' }
     PublishedRedirect:
       type: object
       additionalProperties: false

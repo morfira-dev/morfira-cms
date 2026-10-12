@@ -84,3 +84,14 @@ export async function getPageRedirects(id: string): Promise<PublishedRedirect[]>
   const body = (await response.json()) as components['schemas']['PublishedRedirectCollection']
   return body.items
 }
+
+export async function createPageRedirect(id: string, sourceSlug: string): Promise<PublishedRedirect> {
+  const response = await apiFetch(`/api/v1/admin/pages/${id}/redirects`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sourceSlug }) })
+  if (!response.ok) throw new Error(await readApiError(response))
+  return (await response.json()) as PublishedRedirect
+}
+
+export async function deletePageRedirect(id: string, sourceSlug: string): Promise<void> {
+  const response = await apiFetch(`/api/v1/admin/pages/${id}/redirects/${encodeURIComponent(sourceSlug)}`, { method: 'DELETE' })
+  if (!response.ok) throw new Error(await readApiError(response))
+}

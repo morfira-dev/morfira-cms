@@ -114,6 +114,22 @@ final class InMemoryPublishedPageRepository implements PublishedPageRepository
         return $redirects;
     }
 
+    public function addRedirect(string $pageId, string $sourceSlug): PublishedRedirect
+    {
+        $target = null;
+        foreach ($this->routes as $slug=>$revisionKey) if (str_starts_with($revisionKey,$pageId.':')) $target=$slug;
+        if ($target===null) throw new \Cms\Publishing\Domain\PublishedPageNotActive();
+        $redirect=new PublishedRedirect($sourceSlug,$target);
+        if(isset($this->routes[$sourceSlug]))throw new PublishedSlugAlreadyExists($sourceSlug);
+        $owner=$this->redirects[$sourceSlug]??null;if($owner!==null&&$owner!==$pageId)throw new PublishedSlugAlreadyExists($sourceSlug);
+        $this->redirects[$sourceSlug]=$pageId;return $redirect;
+    }
+
+    public function removeRedirect(string $pageId, string $sourceSlug): void
+    {
+        if(($this->redirects[$sourceSlug]??null)===$pageId)unset($this->redirects[$sourceSlug]);
+    }
+
     public function allActive(): array
     {
         $pages = [];

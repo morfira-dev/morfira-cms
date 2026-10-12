@@ -150,6 +150,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/pages/{id}/redirects/{sourceSlug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                sourceSlug: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete one permanent redirect owned by a page */
+        delete: operations["deletePageRedirect"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/pages/{id}/publish": {
         parameters: {
             query?: never;
@@ -203,7 +223,8 @@ export interface paths {
         /** List permanent old slugs pointing to the page's active route */
         get: operations["listPageRedirects"];
         put?: never;
-        post?: never;
+        /** Add a permanent source slug for the active page route */
+        post: operations["createPageRedirect"];
         delete?: never;
         options?: never;
         head?: never;
@@ -360,6 +381,47 @@ export interface paths {
         /** Create a term */
         post: operations["createTaxonomyTerm"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/taxonomies/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Update a taxonomy */
+        put: operations["updateTaxonomy"];
+        post?: never;
+        /** Delete a taxonomy and mutable assignments */
+        delete: operations["deleteTaxonomy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/taxonomies/{id}/terms/{termId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                termId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Update a taxonomy term */
+        put: operations["updateTaxonomyTerm"];
+        post?: never;
+        /** Delete a leaf taxonomy term */
+        delete: operations["deleteTaxonomyTerm"];
         options?: never;
         head?: never;
         patch?: never;
@@ -908,6 +970,9 @@ export interface components {
             noIndex: boolean;
             /** @description Optional immutable media asset used for social sharing cards. */
             openGraphImageAssetId: string | null;
+        };
+        CreatePublishedRedirectRequest: {
+            sourceSlug: string;
         };
         PublishedRedirect: {
             sourceSlug: string;
@@ -1476,6 +1541,48 @@ export interface operations {
             };
         };
     };
+    deletePageRedirect: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Session-bound token obtained from `/api/v1/auth/csrf`. */
+                "X-CSRF-Token": components["parameters"]["CsrfTokenHeader"];
+            };
+            path: {
+                id: string;
+                sourceSlug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redirect is absent. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Page not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid identifier or source slug */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     publishPage: {
         parameters: {
             query?: never;
@@ -1733,6 +1840,62 @@ export interface operations {
                 };
             };
             /** @description Invalid page identifier. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    createPageRedirect: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Session-bound token obtained from `/api/v1/auth/csrf`. */
+                "X-CSRF-Token": components["parameters"]["CsrfTokenHeader"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePublishedRedirectRequest"];
+            };
+        };
+        responses: {
+            /** @description Redirect created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublishedRedirect"];
+                };
+            };
+            /** @description Page not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Page is not active or source slug conflicts */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid source slug */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -2592,6 +2755,195 @@ export interface operations {
             };
             /** @description Invalid term */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    updateTaxonomy: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Session-bound token obtained from `/api/v1/auth/csrf`. */
+                "X-CSRF-Token": components["parameters"]["CsrfTokenHeader"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTaxonomyRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated taxonomy */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Taxonomy"];
+                };
+            };
+            /** @description Taxonomy not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Slug or hierarchy conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid taxonomy */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteTaxonomy: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Session-bound token obtained from `/api/v1/auth/csrf`. */
+                "X-CSRF-Token": components["parameters"]["CsrfTokenHeader"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Taxonomy deleted; published snapshots are unchanged. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Taxonomy not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    updateTaxonomyTerm: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Session-bound token obtained from `/api/v1/auth/csrf`. */
+                "X-CSRF-Token": components["parameters"]["CsrfTokenHeader"];
+            };
+            path: {
+                id: string;
+                termId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTaxonomyTermRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated taxonomy */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Taxonomy"];
+                };
+            };
+            /** @description Taxonomy or term not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Slug conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid term or hierarchy cycle */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteTaxonomyTerm: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Session-bound token obtained from `/api/v1/auth/csrf`. */
+                "X-CSRF-Token": components["parameters"]["CsrfTokenHeader"];
+            };
+            path: {
+                id: string;
+                termId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Updated taxonomy */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Taxonomy"];
+                };
+            };
+            /** @description Taxonomy or term not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Term still has children */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

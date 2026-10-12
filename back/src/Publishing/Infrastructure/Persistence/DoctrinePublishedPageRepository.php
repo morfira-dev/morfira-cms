@@ -106,6 +106,33 @@ SQL, [$pageId]);
         );
     }
 
+    public function addRedirect(string $pageId, string $sourceSlug): PublishedRedirect
+    {
+        try {
+            return $this->connection->transactional(function (Connection $connection) use ($pageId, $sourceSlug): PublishedRedirect {
+                $targetSlug = $connection->fetchOne('SELECT slug FROM published_page_routes WHERE page_id = ? FOR UPDATE', [$pageId]);
+                if (!is_string($targetSlug)) throw new \Cms\Publishing\Domain\PublishedPageNotActive();
+                $redirect = new PublishedRedirect($sourceSlug, $targetSlug);
+                $activeOwner = $connection->fetchOne('SELECT page_id FROM published_page_routes WHERE slug = ? FOR UPDATE', [$sourceSlug]);
+                if (is_string($activeOwner)) throw new PublishedSlugAlreadyExists($sourceSlug);
+                $redirectOwner = $connection->fetchOne('SELECT page_id FROM published_page_redirects WHERE source_slug = ? FOR UPDATE', [$sourceSlug]);
+                if (is_string($redirectOwner) && $redirectOwner !== $pageId) throw new PublishedSlugAlreadyExists($sourceSlug);
+                if (!is_string($redirectOwner)) {
+                    $connection->insert('published_page_redirects', ['source_slug'=>$sourceSlug,'page_id'=>$pageId,'created_at'=>(new \DateTimeImmutable('now',new \DateTimeZone('UTC')))->format('Y-m-d H:i:s.u')]);
+                }
+
+                return $redirect;
+            });
+        } catch (UniqueConstraintViolationException) {
+            throw new PublishedSlugAlreadyExists($sourceSlug);
+        }
+    }
+
+    public function removeRedirect(string $pageId, string $sourceSlug): void
+    {
+        $this->connection->delete('published_page_redirects', ['source_slug'=>$sourceSlug,'page_id'=>$pageId]);
+    }
+
     public function allActive(): array
     {
         $rows = $this->connection->fetchAllAssociative(<<<'SQL'

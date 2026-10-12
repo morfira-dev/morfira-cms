@@ -27,11 +27,37 @@ final readonly class TaxonomyController
         try{return new JsonResponse($this->manage->createTaxonomy($p['name'],$p['slug'],$p['hierarchical'])->toArray(),201);}catch(TaxonomyConflict $e){return new JsonResponse(['error'=>$e->getMessage()],409);}catch(\InvalidArgumentException $e){return new JsonResponse(['error'=>$e->getMessage()],422);}
     }
 
+    #[Route('/api/v1/admin/taxonomies/{id}',name:'taxonomy.update',methods:['PUT'])]
+    public function update(string $id,Request $r):JsonResponse
+    {
+        $p=$r->toArray();if(array_diff(array_keys($p),['name','slug','hierarchical'])!==[]||!is_string($p['name']??null)||!is_string($p['slug']??null)||!is_bool($p['hierarchical']??null))return new JsonResponse(['error'=>'Invalid taxonomy payload.'],422);
+        try{return new JsonResponse($this->manage->updateTaxonomy($id,$p['name'],$p['slug'],$p['hierarchical'])->toArray());}catch(\OutOfBoundsException){return new JsonResponse(['error'=>'Taxonomy not found.'],404);}catch(TaxonomyConflict $e){return new JsonResponse(['error'=>$e->getMessage()],409);}catch(\InvalidArgumentException $e){return new JsonResponse(['error'=>$e->getMessage()],422);}
+    }
+
+    #[Route('/api/v1/admin/taxonomies/{id}',name:'taxonomy.delete',methods:['DELETE'])]
+    public function delete(string $id):JsonResponse
+    {
+        try{$this->manage->deleteTaxonomy($id);return new JsonResponse(null,204);}catch(\OutOfBoundsException){return new JsonResponse(['error'=>'Taxonomy not found.'],404);}catch(\InvalidArgumentException $e){return new JsonResponse(['error'=>$e->getMessage()],422);}
+    }
+
     #[Route('/api/v1/admin/taxonomies/{id}/terms',name:'taxonomy.terms.create',methods:['POST'])]
     public function createTerm(string $id,Request $r):JsonResponse
     {
         $p=$r->toArray();$parent=$p['parentId']??null;if(array_diff(array_keys($p),['name','slug','parentId'])!==[]||!is_string($p['name']??null)||!is_string($p['slug']??null)||($parent!==null&&!is_string($parent)))return new JsonResponse(['error'=>'Invalid term payload.'],422);
         try{return new JsonResponse($this->manage->createTerm($id,$p['name'],$p['slug'],$parent)->toArray(),201);}catch(\OutOfBoundsException){return new JsonResponse(['error'=>'Taxonomy not found.'],404);}catch(TaxonomyConflict $e){return new JsonResponse(['error'=>$e->getMessage()],409);}catch(\InvalidArgumentException $e){return new JsonResponse(['error'=>$e->getMessage()],422);}
+    }
+
+    #[Route('/api/v1/admin/taxonomies/{id}/terms/{termId}',name:'taxonomy.terms.update',methods:['PUT'])]
+    public function updateTerm(string $id,string $termId,Request $r):JsonResponse
+    {
+        $p=$r->toArray();$parent=$p['parentId']??null;if(array_diff(array_keys($p),['name','slug','parentId'])!==[]||!is_string($p['name']??null)||!is_string($p['slug']??null)||($parent!==null&&!is_string($parent)))return new JsonResponse(['error'=>'Invalid term payload.'],422);
+        try{return new JsonResponse($this->manage->updateTerm($id,$termId,$p['name'],$p['slug'],$parent)->toArray());}catch(\OutOfBoundsException){return new JsonResponse(['error'=>'Taxonomy or term not found.'],404);}catch(TaxonomyConflict $e){return new JsonResponse(['error'=>$e->getMessage()],409);}catch(\InvalidArgumentException $e){return new JsonResponse(['error'=>$e->getMessage()],422);}
+    }
+
+    #[Route('/api/v1/admin/taxonomies/{id}/terms/{termId}',name:'taxonomy.terms.delete',methods:['DELETE'])]
+    public function deleteTerm(string $id,string $termId):JsonResponse
+    {
+        try{return new JsonResponse($this->manage->deleteTerm($id,$termId)->toArray());}catch(\OutOfBoundsException){return new JsonResponse(['error'=>'Taxonomy or term not found.'],404);}catch(TaxonomyConflict $e){return new JsonResponse(['error'=>$e->getMessage()],409);}catch(\InvalidArgumentException $e){return new JsonResponse(['error'=>$e->getMessage()],422);}
     }
 
     #[Route('/api/v1/admin/entries/{id}/terms',name:'taxonomy.entries.get',methods:['GET'])]

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resetCsrfToken } from '../../api/http'
-import { deletePage, getPageRedirects, unpublishPage, updatePage, type PageSummary, type PageUpdate } from './api'
+import { createPageRedirect, deletePage, deletePageRedirect, getPageRedirects, unpublishPage, updatePage, type PageSummary, type PageUpdate } from './api'
 
 const revision: PageUpdate = {
   title: 'Landing',
@@ -55,6 +55,35 @@ describe('getPageRedirects', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(fetchMock.mock.calls[0][0]).toBe(`/api/v1/admin/pages/${page.id}/redirects`)
+  })
+})
+
+describe('manual page redirects', () => {
+  it('creates a permanent redirect for the active page', async () => {
+    const redirect = { sourceSlug: 'old-landing', targetSlug: 'landing' }
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ token: 'csrf-token' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(redirect), { status: 201 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(createPageRedirect(page.id, redirect.sourceSlug)).resolves.toEqual(redirect)
+
+    expect(fetchMock.mock.calls[1][0]).toBe(`/api/v1/admin/pages/${page.id}/redirects`)
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body))).toEqual({ sourceSlug: 'old-landing' })
+  })
+
+  it('deletes a permanent redirect by source slug', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ token: 'csrf-token' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await deletePageRedirect(page.id, 'old-landing')
+
+    expect(fetchMock.mock.calls[1][0]).toBe(`/api/v1/admin/pages/${page.id}/redirects/old-landing`)
+    expect(fetchMock.mock.calls[1][1]?.method).toBe('DELETE')
   })
 })
 

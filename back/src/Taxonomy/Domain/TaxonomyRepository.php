@@ -7,10 +7,14 @@ namespace Cms\Taxonomy\Domain;
 interface TaxonomyRepository
 {
     public function addTaxonomy(Taxonomy $taxonomy): void;
+    public function saveTaxonomy(Taxonomy $taxonomy): void;
+    public function deleteTaxonomy(string $id): void;
     public function getTaxonomy(string $id): ?Taxonomy;
     /** @return list<Taxonomy> */
     public function allTaxonomies(): array;
     public function addTerm(Term $term): void;
+    public function saveTerm(Term $term): void;
+    public function deleteTerm(string $id): void;
     public function getTerm(string $id): ?Term;
     /** @return list<Term> */
     public function terms(string $taxonomyId): array;

@@ -17,6 +17,10 @@ interface PublishedPageRepository
     /** @return list<PublishedRedirect> */
     public function redirectsForPage(string $pageId): array;
 
+    public function addRedirect(string $pageId, string $sourceSlug): PublishedRedirect;
+
+    public function removeRedirect(string $pageId, string $sourceSlug): void;
+
     /** @return list<PublishedPage> */
     public function allActive(): array;
 }

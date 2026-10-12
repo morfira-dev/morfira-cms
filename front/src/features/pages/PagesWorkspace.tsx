@@ -26,6 +26,8 @@ import { getMediaThumbnail } from '../media/MediaLibrary'
 import { PublicationScheduler } from '../publishing/PublicationScheduler'
 import {
   createPage,
+  createPageRedirect,
+  deletePageRedirect,
   deletePage,
   getPageRedirects,
   getPages,
@@ -58,6 +60,8 @@ export function PagesWorkspace({ mediaAssets }: PagesWorkspaceProps) {
   const [editingDirty, setEditingDirty] = useState(false)
   const [publication, setPublication] = useState<PublishedPage | null>(null)
   const [redirects, setRedirects] = useState<PublishedRedirect[]>([])
+  const [redirectSlug, setRedirectSlug] = useState('')
+  const [redirectBusy, setRedirectBusy] = useState(false)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -189,6 +193,22 @@ export function PagesWorkspace({ mediaAssets }: PagesWorkspaceProps) {
       .catch((reason: unknown) => {
         setError(reason instanceof Error ? reason.message : 'Could not load redirect history.')
       })
+  }
+
+  async function addManualRedirect() {
+    if (!editing || !redirectSlug) return
+    setRedirectBusy(true); setError(null)
+    try { const redirect = await createPageRedirect(editing.id, redirectSlug); setRedirects((current) => [...current.filter((item) => item.sourceSlug !== redirect.sourceSlug), redirect]); setRedirectSlug('') }
+    catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not create redirect.') }
+    finally { setRedirectBusy(false) }
+  }
+
+  async function removeManualRedirect(sourceSlug: string) {
+    if (!editing) return
+    setRedirectBusy(true); setError(null)
+    try { await deletePageRedirect(editing.id, sourceSlug); setRedirects((current) => current.filter((item) => item.sourceSlug !== sourceSlug)) }
+    catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not delete redirect.') }
+    finally { setRedirectBusy(false) }
   }
 
   function addBlock(type: 'hero' | 'richText' | 'image') {
@@ -423,9 +443,8 @@ export function PagesWorkspace({ mediaAssets }: PagesWorkspaceProps) {
                 />
               </Stack>
 
-              {redirects.length > 0 && (
-                <Alert severity="info">
-                  <Typography variant="subtitle2" sx={{ mb: 1 }}>Permanent redirect history</Typography>
+              <Alert severity="info">
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>Permanent redirects</Typography>
                   <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
                     {redirects.map((redirect) => (
                       <Chip
@@ -433,11 +452,12 @@ export function PagesWorkspace({ mediaAssets }: PagesWorkspaceProps) {
                         label={`/${redirect.sourceSlug} → /${redirect.targetSlug}`}
                         size="small"
                         variant="outlined"
+                        onDelete={() => void removeManualRedirect(redirect.sourceSlug)}
                       />
                     ))}
                   </Stack>
+                  <Stack direction="row" spacing={1} sx={{ mt: 2 }}><TextField size="small" label="Old slug" value={redirectSlug} onChange={(event) => setRedirectSlug(event.target.value.toLowerCase())} helperText="The page must be published"/><Button variant="outlined" disabled={!redirectSlug || redirectBusy} onClick={() => void addManualRedirect()}>Add redirect</Button></Stack>
                 </Alert>
-              )}
 
               <Divider />
 

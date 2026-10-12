@@ -6,6 +6,7 @@ namespace Cms\Tests\Publishing\Presentation\Http;
 
 use Cms\Content\Application\CreateEntry;
 use Cms\Publishing\Application\GetPublishedEntry;
+use Cms\Publishing\Application\ListPublishedEntries;
 use Cms\Publishing\Application\PublishEntry;
 use Cms\Publishing\Presentation\Http\PublicEntryController;
 use Cms\Schema\Application\CreateContentType;
@@ -50,7 +51,7 @@ final class PublicEntryControllerTest extends TestCase
             'defaultAlt' => 'Safe image',
             'variants' => [['url' => '/media/'.$id.'/800w.webp', 'width' => 800, 'height' => 450]],
         ]));
-        $controller = new PublicEntryController(new GetPublishedEntry($published), $twig);
+        $controller = new PublicEntryController(new GetPublishedEntry($published), new ListPublishedEntries($published), $twig);
 
         $response = $controller->get('articles', 'safe-entry', Request::create('/content/articles/safe-entry'));
         $html = (string) $response->getContent();
@@ -69,8 +70,25 @@ final class PublicEntryControllerTest extends TestCase
         $definitions = new GetContentTypeDefinition($types);
         (new CreateContentType($types))('Article', 'articles', []);
         $twig = new Environment(new FilesystemLoader(dirname(__DIR__, 4).'/templates'), ['autoescape' => 'html']);
-        $controller = new PublicEntryController(new GetPublishedEntry(new InMemoryPublishedEntryRepository()), $twig);
+        $published = new InMemoryPublishedEntryRepository();
+        $controller = new PublicEntryController(new GetPublishedEntry($published), new ListPublishedEntries($published), $twig);
 
         self::assertSame(404, $controller->get('articles', 'draft', Request::create('/content/articles/draft'))->getStatusCode());
+    }
+
+    #[Test]
+    public function taxonomy_archives_render_immutable_filtered_entries(): void
+    {
+        $published = new InMemoryPublishedEntryRepository();
+        $published->publish(new \Cms\Publishing\Domain\PublishedEntry('11111111-1111-4111-8111-111111111111','22222222-2222-4222-8222-222222222222',1,['id'=>'33333333-3333-4333-8333-333333333333','name'=>'Article','apiName'=>'articles','version'=>1,'fields'=>[]],'First','first',[],[['taxonomyId'=>'44444444-4444-4444-8444-444444444444','taxonomySlug'=>'topics','termId'=>'55555555-5555-4555-8555-555555555555','termSlug'=>'php','name'=>'PHP']],new \DateTimeImmutable('2026-10-12T12:00:00+00:00')));
+        $twig = new Environment(new FilesystemLoader(dirname(__DIR__, 4).'/templates'), ['autoescape' => 'html']);
+        $controller = new PublicEntryController(new GetPublishedEntry($published), new ListPublishedEntries($published), $twig);
+
+        $response = $controller->archive('articles','topics','php',Request::create('/content/articles/taxonomy/topics/php'));
+
+        self::assertSame(200,$response->getStatusCode());self::assertStringContainsString('First',(string)$response->getContent());self::assertNotNull($response->getEtag());
+        self::assertSame(404,$controller->archive('articles','topics','missing',Request::create('/content/articles/taxonomy/topics/missing'))->getStatusCode());
+        self::assertSame(404,$controller->archive('articles','topics','php',Request::create('/content/articles/taxonomy/topics/php?page=2'))->getStatusCode());
+        self::assertSame(422,$controller->archive('articles','topics','php',Request::create('/content/articles/taxonomy/topics/php?page=zero'))->getStatusCode());
     }
 }

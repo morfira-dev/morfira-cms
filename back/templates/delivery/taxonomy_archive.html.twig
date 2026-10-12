@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ termName }} · {{ type }}</title>
+    <link rel="canonical" href="/content/{{ type }}/taxonomy/{{ taxonomy }}/{{ term }}{% if page > 1 %}?page={{ page }}{% endif %}">
+    <style>
+        :root { font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #182230; }
+        body { margin: 0; background: #f8fafc; }
+        main { width: min(880px, calc(100% - 32px)); margin: 48px auto; }
+        h1 { font-size: clamp(36px, 7vw, 64px); letter-spacing: -.04em; }
+        ul { display: grid; gap: 16px; padding: 0; list-style: none; }
+        a { display: block; padding: 24px; border: 1px solid #e4e7ec; border-radius: 16px; background: #fff; color: inherit; font-size: 22px; font-weight: 700; text-decoration: none; }
+        nav { display: flex; gap: 16px; margin-top: 32px; }
+    </style>
+</head>
+<body><main>
+    <p>{{ taxonomy }}</p><h1>{{ termName }}</h1>
+    <ul>{% for entry in result.items %}<li><a href="/content/{{ entry.contentType.apiName }}/{{ entry.slug }}">{{ entry.title }}</a></li>{% endfor %}</ul>
+    <nav>{% if page > 1 %}<a href="?page={{ page - 1 }}">Previous</a>{% endif %}{% if page * result.limit < result.total %}<a href="?page={{ page + 1 }}">Next</a>{% endif %}</nav>
+</main></body>
+</html>

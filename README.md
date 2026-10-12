@@ -84,12 +84,15 @@ The initial foundation contains:
 - brokerless scheduled publication for exact page revisions and entry versions;
 - idempotent page and entry unpublishing that preserves immutable snapshots;
 - flat or hierarchical entry taxonomies embedded in immutable public snapshots;
+- taxonomy and term lifecycle management with hierarchy safeguards;
+- cacheable public taxonomy archive pages built from immutable entry snapshots;
 - schema-validated single-entry relations stored by stable identifier;
 - safe draft deletion with database-enforced relation integrity;
+- manually managed direct permanent redirects for active page routes;
 - versioned `/api/v1` contracts with frontend types generated from OpenAPI 3.1;
 - architectural decision records.
 
-Multi-entry and reverse relation editing, localization, rich HTML fields, taxonomy editing/deletion and public term archive pages, menu placement/theme bindings, manual redirect editing, extension/plugin execution and advanced editorial workflows are intentionally deferred. They will be introduced through vertical slices and explicit ADRs.
+Multi-entry and reverse relation editing, localization, rich HTML fields, menu placement/theme bindings, extension/plugin execution and advanced editorial workflows are intentionally deferred. They will be introduced through vertical slices and explicit ADRs.
 
 ## Architecture
 

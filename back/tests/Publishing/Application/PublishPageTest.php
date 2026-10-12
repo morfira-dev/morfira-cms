@@ -12,7 +12,10 @@ use Cms\Publishing\Application\GetPublishedPage\GetPublishedPage;
 use Cms\Publishing\Application\GetPublishedRedirect\GetPublishedRedirect;
 use Cms\Publishing\Application\ListPageRedirects\ListPageRedirects;
 use Cms\Publishing\Application\PublishPage\PublishPage;
+use Cms\Publishing\Application\AddPageRedirect;
+use Cms\Publishing\Application\RemovePageRedirect;
 use Cms\Publishing\Domain\PublishedSlugAlreadyExists;
+use Cms\Publishing\Domain\PublishedPageNotActive;
 use Cms\Tests\Content\InMemoryPageRepository;
 use Cms\Tests\Publishing\InMemoryPublishedPageRepository;
 use PHPUnit\Framework\Attributes\Test;
@@ -115,5 +118,33 @@ final class PublishPageTest extends TestCase
 
         $this->expectException(PublishedSlugAlreadyExists::class);
         $publish($second->id, 1);
+    }
+
+    #[Test]
+    public function editors_can_add_and_remove_manual_redirects_for_an_active_page():void
+    {
+        $drafts=new InMemoryPageRepository();$delivery=new InMemoryPublishedPageRepository();$page=(new CreatePage($drafts))('Landing','landing');(new PublishPage($drafts,$delivery))($page->id,1);
+        $redirect=(new AddPageRedirect($drafts,$delivery))($page->id,'campaign');
+        self::assertSame(['sourceSlug'=>'campaign','targetSlug'=>'landing'],$redirect);self::assertNotNull((new GetPublishedRedirect($delivery))('campaign'));
+        (new RemovePageRedirect($drafts,$delivery))($page->id,'campaign');
+        self::assertNull((new GetPublishedRedirect($delivery))('campaign'));
+    }
+
+    #[Test]
+    public function manual_redirects_require_an_active_page():void
+    {
+        $drafts=new InMemoryPageRepository();$delivery=new InMemoryPublishedPageRepository();$page=(new CreatePage($drafts))('Landing','landing');
+        $this->expectException(PublishedPageNotActive::class);
+        (new AddPageRedirect($drafts,$delivery))($page->id,'campaign');
+    }
+
+    #[Test]
+    public function another_page_cannot_remove_a_redirect_it_does_not_own():void
+    {
+        $drafts=new InMemoryPageRepository();$delivery=new InMemoryPublishedPageRepository();$publish=new PublishPage($drafts,$delivery);
+        $first=(new CreatePage($drafts))('First','first');$second=(new CreatePage($drafts))('Second','second');$publish($first->id,1);$publish($second->id,1);
+        (new AddPageRedirect($drafts,$delivery))($first->id,'campaign');
+        (new RemovePageRedirect($drafts,$delivery))($second->id,'campaign');
+        self::assertNotNull((new GetPublishedRedirect($delivery))('campaign'));
     }
 }

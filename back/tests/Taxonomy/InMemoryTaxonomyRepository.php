@@ -14,9 +14,13 @@ final class InMemoryTaxonomyRepository implements TaxonomyRepository
     /** @var array<string,Term> */ public array $termItems=[];
     /** @var array<string,list<string>> */ private array $assignments=[];
     public function addTaxonomy(Taxonomy $taxonomy):void{$this->taxonomies[$taxonomy->id]=$taxonomy;}
+    public function saveTaxonomy(Taxonomy $taxonomy):void{$this->taxonomies[$taxonomy->id]=$taxonomy;}
+    public function deleteTaxonomy(string $id):void{unset($this->taxonomies[$id]);foreach($this->termItems as $termId=>$term){if($term->taxonomyId===$id)unset($this->termItems[$termId]);}}
     public function getTaxonomy(string $id):?Taxonomy{return $this->taxonomies[$id]??null;}
     public function allTaxonomies():array{return array_values($this->taxonomies);}
     public function addTerm(Term $term):void{$this->termItems[$term->id]=$term;}
+    public function saveTerm(Term $term):void{$this->termItems[$term->id]=$term;}
+    public function deleteTerm(string $id):void{unset($this->termItems[$id]);}
     public function getTerm(string $id):?Term{return $this->termItems[$id]??null;}
     public function terms(string $taxonomyId):array{return array_values(array_filter($this->termItems,fn(Term $t)=>$t->taxonomyId===$taxonomyId));}
     public function replaceEntryTerms(string $entryId,array $termIds):void{$this->assignments[$entryId]=$termIds;}
