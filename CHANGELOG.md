@@ -1,3 +1,9 @@
+## [1.6.0](https://github.com/nuykon/morfira-cms/compare/v1.5.0...v1.6.0) (2026-10-12)
+
+### Features
+
+* **content:** add taxonomy lifecycle and redirect management ([60e3d79](https://github.com/nuykon/morfira-cms/commit/60e3d7958a3cfdecddb9a0a89264c27cf5a48d35))
+
 ## [1.5.0](https://github.com/nuykon/morfira-cms/compare/v1.4.0...v1.5.0) (2026-10-12)
 
 ### Features
