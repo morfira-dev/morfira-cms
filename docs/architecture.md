@@ -75,6 +75,8 @@ Draft edits append immutable revisions and use an integer version for optimistic
 
 Unpublishing removes the active delivery route and cancels a pending schedule while retaining drafts, revisions and publication snapshots. Page redirect history is removed with its route so redirects cannot resolve to unpublished content.
 
+Permanent draft deletion removes mutable lifecycle records in one transaction while retaining immutable publication snapshots. Entry relations have a normalized integrity index: outgoing relations cascade with their source and incoming relations restrict target deletion.
+
 Scheduled publishing stores the exact draft version and UTC due time inside the
 `Publishing` module. An idempotent console worker delegates to the same immediate
 publication services, so a small installation needs only cron and never a broker.

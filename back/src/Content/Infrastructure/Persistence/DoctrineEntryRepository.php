@@ -25,6 +25,7 @@ final readonly class DoctrineEntryRepository implements EntryRepository
             $this->connection->transactional(function (Connection $c) use ($e): void {
                 $c->insert('content_entries', $this->row($e));
                 $this->revision($c, $e);
+                $this->replaceRelationIndex($c, $e);
             });
         } catch (UniqueConstraintViolationException) {
             throw new EntrySlugAlreadyExists($e->slug->value);
@@ -47,6 +48,7 @@ final readonly class DoctrineEntryRepository implements EntryRepository
                     throw new EntryVersionConflict();
                 }
                 $this->revision($c, $e);
+                $this->replaceRelationIndex($c, $e);
             });
         } catch (UniqueConstraintViolationException) {
             throw new EntrySlugAlreadyExists($e->slug->value);
@@ -69,6 +71,37 @@ final readonly class DoctrineEntryRepository implements EntryRepository
     private function revision(Connection $c, Entry $e): void
     {
         $c->insert('content_entry_revisions', ['entry_id' => $e->id->value, 'revision_number' => $e->version, 'title' => $e->title, 'slug' => $e->slug->value, 'values_json' => json_encode($e->values, JSON_THROW_ON_ERROR | JSON_FORCE_OBJECT), 'created_at' => $e->updatedAt->format('Y-m-d H:i:s.u')]);
+    }
+
+    private function replaceRelationIndex(Connection $connection, Entry $entry): void
+    {
+        $connection->delete('content_entry_relations', ['source_entry_id' => $entry->id->value]);
+        $encodedFields = $connection->fetchOne('SELECT fields FROM schema_content_types WHERE id = ?', [$entry->contentTypeId]);
+        if (!is_string($encodedFields)) {
+            throw new \UnexpectedValueException('Content type fields must be stored as JSON.');
+        }
+        $fields = json_decode($encodedFields, true, flags: JSON_THROW_ON_ERROR);
+        if (!is_array($fields) || !array_is_list($fields)) {
+            throw new \UnexpectedValueException('Content type fields must be a JSON list.');
+        }
+        foreach ($fields as $field) {
+            if (!is_array($field) || ($field['type'] ?? null) !== 'relation') {
+                continue;
+            }
+            $key = $field['key'] ?? null;
+            if (!is_string($key)) {
+                throw new \UnexpectedValueException('Relation field key must be a string.');
+            }
+            $targetId = $entry->values[$key] ?? null;
+            if (!is_string($targetId)) {
+                continue;
+            }
+            $connection->insert('content_entry_relations', [
+                'source_entry_id' => $entry->id->value,
+                'field_key' => $key,
+                'target_entry_id' => $targetId,
+            ]);
+        }
     }
 
     /** @param array<string,mixed> $r */

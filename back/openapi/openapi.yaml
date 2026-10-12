@@ -332,6 +332,29 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+    delete:
+      operationId: deletePage
+      tags: [Admin Content]
+      summary: Permanently delete a page draft while retaining publication snapshots
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfTokenHeader'
+      responses:
+        '204':
+          description: Page draft, revisions, routes, redirects and schedules were deleted.
+        '404':
+          description: Page not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Invalid page identifier.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /api/v1/admin/pages/{id}/publish:
     parameters:
       - name: id
@@ -832,6 +855,35 @@ paths:
                 $ref: '#/components/schemas/Error'
         '422':
           description: Entry values do not satisfy the current content-type schema.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      operationId: deleteEntry
+      tags: [Entries]
+      summary: Permanently delete an unreferenced entry draft while retaining publication snapshots
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfTokenHeader'
+      responses:
+        '204':
+          description: Entry draft, revisions, route, assignments and schedules were deleted.
+        '404':
+          description: Entry not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Another entry still references this entry.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Invalid entry identifier.
           content:
             application/json:
               schema:

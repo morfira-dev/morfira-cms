@@ -143,7 +143,8 @@ export interface paths {
         /** Save a new page revision */
         put: operations["updatePage"];
         post?: never;
-        delete?: never;
+        /** Permanently delete a page draft while retaining publication snapshots */
+        delete: operations["deletePage"];
         options?: never;
         head?: never;
         patch?: never;
@@ -279,7 +280,8 @@ export interface paths {
         /** Save a new schema-validated entry version */
         put: operations["updateEntry"];
         post?: never;
-        delete?: never;
+        /** Permanently delete an unreferenced entry draft while retaining publication snapshots */
+        delete: operations["deleteEntry"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1433,6 +1435,47 @@ export interface operations {
             };
         };
     };
+    deletePage: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Session-bound token obtained from `/api/v1/auth/csrf`. */
+                "X-CSRF-Token": components["parameters"]["CsrfTokenHeader"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Page draft, revisions, routes, redirects and schedules were deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Page not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid page identifier. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     publishPage: {
         parameters: {
             query?: never;
@@ -2132,6 +2175,56 @@ export interface operations {
                 };
             };
             /** @description Entry values do not satisfy the current content-type schema. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteEntry: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Session-bound token obtained from `/api/v1/auth/csrf`. */
+                "X-CSRF-Token": components["parameters"]["CsrfTokenHeader"];
+            };
+            path: {
+                id: components["parameters"]["EntryId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Entry draft, revisions, route, assignments and schedules were deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Entry not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Another entry still references this entry. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid entry identifier. */
             422: {
                 headers: {
                     [name: string]: unknown;

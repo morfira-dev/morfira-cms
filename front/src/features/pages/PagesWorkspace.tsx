@@ -26,6 +26,7 @@ import { getMediaThumbnail } from '../media/MediaLibrary'
 import { PublicationScheduler } from '../publishing/PublicationScheduler'
 import {
   createPage,
+  deletePage,
   getPageRedirects,
   getPages,
   type PageSummary,
@@ -48,6 +49,7 @@ export function PagesWorkspace({ mediaAssets }: PagesWorkspaceProps) {
   const [submitting, setSubmitting] = useState(false)
   const [saving, setSaving] = useState(false)
   const [publishing, setPublishing] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [title, setTitle] = useState('')
@@ -153,6 +155,26 @@ export function PagesWorkspace({ mediaAssets }: PagesWorkspaceProps) {
       setError(reason instanceof Error ? reason.message : 'Could not unpublish the page.')
     } finally {
       setPublishing(false)
+    }
+  }
+
+  async function deleteCurrentPage() {
+    if (!editing || !window.confirm('Permanently delete this page draft and all revisions? Published snapshots will be retained.')) return
+
+    setDeleting(true)
+    setError(null)
+    setSuccess(null)
+    try {
+      await deletePage(editing.id)
+      setPages((current) => current.filter((page) => page.id !== editing.id))
+      setEditing(null)
+      setPublication(null)
+      setRedirects([])
+      setSuccess('The page draft was permanently deleted.')
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not delete the page.')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -355,6 +377,9 @@ export function PagesWorkspace({ mediaAssets }: PagesWorkspaceProps) {
                   </Button>
                   <Button color="warning" variant="outlined" disabled={publishing} onClick={() => void unpublishCurrentPage()}>
                     Unpublish
+                  </Button>
+                  <Button color="error" variant="outlined" disabled={publishing || deleting} onClick={() => void deleteCurrentPage()}>
+                    {deleting ? 'Deleting…' : 'Delete'}
                   </Button>
                 </Stack>
               </Stack>

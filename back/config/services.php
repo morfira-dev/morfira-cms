@@ -31,6 +31,8 @@ use Cms\Taxonomy\Domain\TaxonomyRepository;
 use Cms\Taxonomy\Infrastructure\Persistence\DoctrineTaxonomyRepository;
 use Cms\Schema\Application\RelationTargetLookup;
 use Cms\Content\Infrastructure\Persistence\DoctrineRelationTargetLookup;
+use Cms\Content\Application\ContentDeletionGateway;
+use Cms\Content\Infrastructure\Persistence\DoctrineContentDeletionGateway;
 
 return static function (ContainerConfigurator $container): void {
     $services = $container->services()
@@ -59,4 +61,5 @@ return static function (ContainerConfigurator $container): void {
     $services->alias(PublicationScheduleRepository::class, DoctrinePublicationScheduleRepository::class);
     $services->alias(TaxonomyRepository::class, DoctrineTaxonomyRepository::class);
     $services->alias(RelationTargetLookup::class, DoctrineRelationTargetLookup::class);
+    $services->alias(ContentDeletionGateway::class, DoctrineContentDeletionGateway::class);
 };

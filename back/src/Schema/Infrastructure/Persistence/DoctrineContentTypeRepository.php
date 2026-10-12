@@ -55,6 +55,7 @@ final readonly class DoctrineContentTypeRepository implements ContentTypeReposit
                     throw new ContentTypeVersionConflict();
                 }
                 $this->revision($c, $type);
+                $this->rebuildEntryRelations($c, $type);
             });
         } catch (UniqueConstraintViolationException) {
             throw new ContentTypeKeyAlreadyExists($type->key->value);
@@ -75,6 +76,38 @@ final readonly class DoctrineContentTypeRepository implements ContentTypeReposit
     private function revision(Connection $c, ContentType $t): void
     {
         $c->insert('schema_content_type_revisions', ['content_type_id' => $t->id->value, 'revision_number' => $t->version, 'name' => $t->name, 'api_name' => $t->key->value, 'fields' => json_encode(array_map(static fn (FieldDefinition $f): array => $f->toArray(), $t->fields), JSON_THROW_ON_ERROR), 'created_at' => $t->updatedAt->format('Y-m-d H:i:s.u')]);
+    }
+
+    private function rebuildEntryRelations(Connection $connection, ContentType $type): void
+    {
+        $relationKeys = array_map(
+            static fn (FieldDefinition $field): string => $field->key,
+            array_values(array_filter($type->fields, static fn (FieldDefinition $field): bool => $field->type === 'relation')),
+        );
+        $entries = $connection->fetchAllAssociative('SELECT id, values_json FROM content_entries WHERE content_type_id = ?', [$type->id->value]);
+        foreach ($entries as $entry) {
+            $entryId = $entry['id'] ?? null;
+            $encodedValues = $entry['values_json'] ?? null;
+            if (!is_string($entryId) || !is_string($encodedValues)) {
+                throw new \UnexpectedValueException('Invalid entry relation source row.');
+            }
+            $connection->delete('content_entry_relations', ['source_entry_id' => $entryId]);
+            $values = json_decode($encodedValues, true, flags: JSON_THROW_ON_ERROR);
+            if (!is_array($values) || ([] !== $values && array_is_list($values))) {
+                throw new \UnexpectedValueException('Entry values must be a JSON object.');
+            }
+            foreach ($relationKeys as $fieldKey) {
+                $targetId = $values[$fieldKey] ?? null;
+                if (!is_string($targetId) || $connection->fetchOne('SELECT 1 FROM content_entries WHERE id = ?', [$targetId]) === false) {
+                    continue;
+                }
+                $connection->insert('content_entry_relations', [
+                    'source_entry_id' => $entryId,
+                    'field_key' => $fieldKey,
+                    'target_entry_id' => $targetId,
+                ]);
+            }
+        }
     }
 
     /** @param array<string,mixed> $r */

@@ -31,6 +31,11 @@ export async function updateEntry(id: string, payload: EntryUpdate): Promise<Ent
   return sendJson(`/api/v1/admin/entries/${id}`, 'PUT', payload)
 }
 
+export async function deleteEntry(id: string): Promise<void> {
+  const response = await apiFetch(`/api/v1/admin/entries/${id}`, { method: 'DELETE' })
+  if (!response.ok) throw new Error(await readApiError(response))
+}
+
 export async function publishEntry(id: string, version: number): Promise<PublishedEntry> {
   return sendJson(`/api/v1/admin/entries/${id}/publish`, 'POST', { version })
 }

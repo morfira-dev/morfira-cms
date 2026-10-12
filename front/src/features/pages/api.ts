@@ -47,6 +47,11 @@ export async function updatePage(id: string, revision: PageUpdate): Promise<Page
   return (await response.json()) as PageSummary
 }
 
+export async function deletePage(id: string): Promise<void> {
+  const response = await apiFetch(`/api/v1/admin/pages/${id}`, { method: 'DELETE' })
+  if (!response.ok) throw new Error(await readApiError(response))
+}
+
 export async function publishPage(id: string, version: number): Promise<PublishedPage> {
   const response = await apiFetch(`/api/v1/admin/pages/${id}/publish`, {
     method: 'POST',

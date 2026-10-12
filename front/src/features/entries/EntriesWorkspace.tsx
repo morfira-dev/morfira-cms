@@ -21,6 +21,7 @@ import { EntryTaxonomyAssignments } from '../taxonomy/EntryTaxonomyAssignments'
 import type { Taxonomy } from '../taxonomy/api'
 import {
   createEntry,
+  deleteEntry,
   type Entry,
   type EntryValue,
   type EntryValues,
@@ -43,6 +44,7 @@ export function EntriesWorkspace({ contentTypes, mediaAssets, taxonomies }: Entr
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [publishing, setPublishing] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null)
@@ -147,6 +149,19 @@ export function EntriesWorkspace({ contentTypes, mediaAssets, taxonomies }: Entr
     finally { setPublishing(false) }
   }
 
+  async function remove() {
+    if (!editing?.id || !window.confirm('Permanently delete this entry draft and all revisions? Published snapshots will be retained.')) return
+    setDeleting(true); setError(null); setSuccess(null)
+    try {
+      await deleteEntry(editing.id)
+      setEntries((current) => current.filter((entry) => entry.id !== editing.id))
+      setEditing(null)
+      setPublishedUrl(null)
+      setSuccess('The entry draft was permanently deleted.')
+    } catch (reason) { setError(errorMessage(reason, 'Could not delete entry.')) }
+    finally { setDeleting(false) }
+  }
+
   function changeValue(key: string, value: EntryValue) {
     if (!editing) return
     setEditing({ ...editing, values: setEntryValue(editing.values, key, value) })
@@ -185,6 +200,7 @@ export function EntriesWorkspace({ contentTypes, mediaAssets, taxonomies }: Entr
                     <Button type="submit" variant="contained" disabled={!dirty || saving}>{saving ? 'Saving…' : 'Save'}</Button>
                     <Button color="success" variant="contained" disabled={!editing.id || dirty || publishing} onClick={() => void publish()}>{publishing ? 'Publishing…' : 'Publish'}</Button>
                     <Button color="warning" variant="outlined" disabled={!editing.id || publishing} onClick={() => void unpublish()}>Unpublish</Button>
+                    <Button color="error" variant="outlined" disabled={!editing.id || publishing || deleting} onClick={() => void remove()}>{deleting ? 'Deleting…' : 'Delete'}</Button>
                   </Stack>
                 </Stack>
                 {dirty && editing.id && <Alert severity="warning">Save this version before publishing it.</Alert>}
