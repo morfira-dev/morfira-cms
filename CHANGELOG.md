@@ -1,3 +1,9 @@
+## [1.5.0](https://github.com/nuykon/morfira-cms/compare/v1.4.0...v1.5.0) (2026-10-12)
+
+### Features
+
+* **content:** add safe draft deletion ([8f3313c](https://github.com/nuykon/morfira-cms/commit/8f3313cf14a8ad34040612fcccd17157351f0b74))
+
 ## [1.4.0](https://github.com/nuykon/morfira-cms/compare/v1.3.0...v1.4.0) (2026-10-12)
 
 ### Features

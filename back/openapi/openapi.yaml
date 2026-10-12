@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Morfira CMS API
-  version: 0.9.0
+  version: 1.5.0
   description: Stable HTTP contract shared by Admin Studio and headless clients.
 servers:
   - url: /
