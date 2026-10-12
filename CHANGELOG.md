@@ -1,3 +1,9 @@
+## [1.11.0](https://github.com/nuykon/morfira-cms/compare/v1.10.0...v1.11.0) (2026-10-12)
+
+### Features
+
+* **i18n:** complete Russian Admin Studio localization ([3dcce3a](https://github.com/nuykon/morfira-cms/commit/3dcce3a0a257fdff8b37aacd01378a9371deedb7))
+
 ## [1.10.0](https://github.com/nuykon/morfira-cms/compare/v1.9.0...v1.10.0) (2026-10-12)
 
 ### Features
