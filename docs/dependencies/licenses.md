@@ -1,0 +1,90 @@
+# Dependency license policy and audit
+
+## Purpose
+
+Morfira is intended to support both an open-source distribution and optional commercial products. Every application dependency must therefore permit commercial use and redistribution under terms the project can satisfy. This document records the current static audit and the policy enforced by `npm run licenses:check`.
+
+This is an engineering inventory, not legal advice. A qualified lawyer should review the final distribution model, notices, trademarks, contributor terms, and commercial license before a public launch.
+
+## Automated policy
+
+The gate reads the two npm lockfiles, the Composer lockfile, `compose.yaml`, the backend Dockerfile, and the release workflow. It fails when a package has an unknown license, a license outside the reviewed allow-list, or a container base or GitHub Action that has not been reviewed. New license identifiers and external build references require an explicit review before the allow-list changes.
+
+```bash
+npm run licenses:check
+```
+
+The release workflow runs this gate after installing all dependencies. Lockfile metadata is the primary machine-readable inventory; source distributions and binaries must still retain the license texts and notices required by their dependencies.
+
+Accepted identifiers currently include permissive licenses, attribution licenses used by build metadata, and MPL-2.0 for build-only tooling. GPL, AGPL, LGPL, SSPL, BSL/BUSL, Elastic License, Commons Clause, source-available licenses, and unknown identifiers are not accepted automatically.
+
+One explicit metadata correction exists for `qrcode-terminal@0.12.0`, nested under npm. Its old package manifest and bundled `LICENSE` identify Apache-2.0, but npm does not copy the legacy `licenses` field into the lockfile.
+
+## Audit snapshot
+
+Reviewed on 2026-10-12 against the committed lockfiles and locally available image metadata.
+
+| Inventory | Packages reviewed | License result |
+|---|---:|---|
+| Root release tooling (`package-lock.json`) | 453 | MIT, ISC, Apache-2.0, BSD-2-Clause, BSD-3-Clause, BlueOak-1.0.0, Python-2.0, Artistic-2.0, CC0-1.0, CC-BY-3.0, and permissive OR expressions |
+| Admin Studio (`front/package-lock.json`) | 204 | MIT, ISC, Apache-2.0, BSD-3-Clause, Python-2.0, CC0/MIT choice, and MPL-2.0 |
+| Backend (`back/composer.lock`) | 91 | MIT and BSD-3-Clause |
+| GitHub Actions (`release.yml`) | 2 | MIT |
+
+All current lockfile entries pass the automated policy. No application dependency is identified as GPL, AGPL, LGPL, SSPL, BSL/BUSL, Elastic License, Commons Clause, or unlicensed.
+
+## Security snapshot
+
+License compatibility and vulnerability status are separate checks. On 2026-10-12, the frontend production and development tree reported zero npm advisories, and Composer reported no security advisories or abandoned packages. The root release-tooling tree reported 15 npm advisories in transitive, development-only packages bundled below Semantic Release: 13 high-severity and two moderate-severity findings. They are not shipped with the CMS application, and the current compatible dependency ranges do not provide a complete automated fix. In particular, `npm audit fix --force` proposes an invalid downgrade path, so it must not be applied blindly.
+
+Until the upstream release-tool chain resolves those advisories, release jobs must continue to accept only trusted repository configuration and merged commit history. Recheck the full root audit on every release-tool update; a clean application audit does not make the development-tool findings disappear.
+
+### Direct product dependencies
+
+- The React, MUI, Emotion, and Lexical runtime dependencies are MIT licensed.
+- TypeScript is Apache-2.0. Vite, Vitest, OpenAPI TypeScript, and the React/Vite development stack are MIT licensed.
+- Symfony, Doctrine bundles, and PHPStan are MIT licensed. Twig and PHPUnit are BSD-3-Clause.
+- Semantic Release and its configured plugins are MIT licensed; `conventional-changelog-conventionalcommits` is ISC licensed.
+- GitHub's `actions/checkout@v5` and `actions/setup-node@v6` workflow dependencies are MIT licensed.
+
+### Dependencies with additional attention
+
+- `lightningcss` and its platform binaries use MPL-2.0. They are build-time dependencies. If Morfira modifies and distributes an MPL-covered file, the source for that covered file and the required notices must remain available under MPL-2.0. This does not require unrelated Morfira source files to use MPL-2.0.
+- Apache and BSD packages require preservation of their copyright and license notices in applicable distributions.
+- The CC-BY-3.0 entries are SPDX metadata used by release tooling. Attribution must be preserved if that material is redistributed.
+- Development dependencies are included in the audit because source distributions and build environments may redistribute them even when production artifacts do not.
+
+## Container images
+
+Container images combine an image definition, a language runtime, an operating-system base, and many packages. A single image label does not replace an audit of every file shipped inside a redistributed image.
+
+| Compose image | Local metadata or upstream license | Commercial-use assessment |
+|---|---|---|
+| `dunglas/frankenphp:php8.4-bookworm` | Local OCI label: MIT; the image also contains PHP and Debian packages under their own licenses | Suitable for commercial use. Preserve all runtime and OS notices when redistributing the image. Modified covered components remain subject to their own terms. |
+| `mariadb:11.4` | Local OCI label: GPL-2.0 | Commercial operation as a separate database service is permitted. Redistributing the image or modified MariaDB binaries creates GPL source-and-notice obligations; obtain legal review before shipping an appliance or bundled image archive. |
+| `composer:2` | No license OCI label in the locally inspected image; Composer itself is MIT licensed and the image contains PHP and OS packages | Suitable as a development tool. Do not treat the absent image label as proof for every bundled file; preserve component notices if redistributing it. |
+| `node:22-bookworm-slim` | No license OCI label in the locally inspected image; Node.js is MIT licensed and the image contains Debian packages | Suitable as a development image. A redistributed image needs the license inventory and notices for its included Debian packages. |
+
+Using the containers internally, in CI, or as separately operated services does not by itself impose a license on Morfira source code. Distribution is the important boundary: before publishing container images, an installer bundle, an offline archive, or an appliance, generate an image-level software bill of materials and notice bundle and have the exact artifact reviewed.
+
+## Open-source and commercial editions
+
+Morfira CMS is licensed under the MIT License. The repository root contains the authoritative `LICENSE` file, and the npm and Composer manifests declare the same SPDX identifier.
+
+MIT permits use, copying, modification, distribution, sublicensing and sale, including use of the community core in proprietary commercial products, provided that distributed copies retain the copyright and permission notice. Third-party dependencies remain governed by their own licenses.
+
+The planned edition boundary is:
+
+- the community core remains MIT licensed;
+- commercial modules may live in separately licensed packages or repositories;
+- proprietary code must not replace or remove the MIT notice from copied core code;
+- contributor terms and the third-party notice process must be defined before accepting substantial external contributions or distributing bundled binaries and containers.
+
+## Release checklist
+
+- Run `npm run licenses:check` on the exact lockfiles being released.
+- Run npm and Composer vulnerability/abandonment audits separately; license approval does not imply security or maintenance quality.
+- Generate and retain an SBOM for production application and container artifacts.
+- Ship required copyright, license, attribution, and source-offer materials with every distribution channel.
+- Recheck licenses after every dependency update, base-image digest change, or new delivery format.
+- Escalate any unknown, copyleft, source-available, non-commercial, or custom license before merging the dependency.

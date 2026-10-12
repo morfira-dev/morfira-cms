@@ -43,6 +43,9 @@ jobs:
       - name: Install frontend dependencies
         run: docker compose run --rm --no-deps front npm ci
 
+      - name: Verify dependency licenses
+        run: npm run licenses:check
+
       - name: Verify backend
         run: docker compose run --rm --no-deps composer check
 

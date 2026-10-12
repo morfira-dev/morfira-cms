@@ -2,11 +2,13 @@
   "name": "morfira-cms",
   "version": "0.0.0-development",
   "description": "A lightweight, scalable and extensible content management system.",
+  "license": "MIT",
   "private": true,
   "engines": {
     "node": ">=24.15.0"
   },
   "scripts": {
+    "licenses:check": "node scripts/check-licenses.mjs",
     "release": "semantic-release",
     "release:dry-run": "semantic-release --dry-run",
     "release:update-openapi": "node scripts/update-openapi-version.mjs"

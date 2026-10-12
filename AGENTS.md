@@ -65,6 +65,15 @@ Repository layout:
 - Preserve safe media decoding/re-encoding and immutable asset behavior.
 - Never invent initial owner credentials or weaken setup/login protections for convenience.
 
+## Licensing and dependencies
+
+- Morfira community core is licensed under the root MIT `LICENSE`; keep npm and Composer manifest metadata synchronized with it.
+- Before adding or updating a dependency, verify its license, commercial-use terms, redistribution duties, maintenance status, and known security advisories.
+- Do not introduce copyleft, source-available, non-commercial, custom, or unknown licenses without an explicit product decision.
+- Record reviewed exceptions in `docs/dependencies/licenses.md` and keep `scripts/check-licenses.mjs` fail-closed for new package licenses, container images, and GitHub Actions.
+- Run `npm run licenses:check` after every dependency or delivery-image change.
+- Keep proprietary commercial modules in separately licensed packages or repositories; copied MIT core code must retain the MIT notice.
+
 ## Implementation workflow
 
 - Prefer one coherent vertical slice over broad layer-first scaffolding.

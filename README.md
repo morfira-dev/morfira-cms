@@ -97,3 +97,9 @@ Multi-entry and reverse relation editing, localization, rich HTML fields, menu p
 ## Architecture
 
 See [docs/architecture.md](docs/architecture.md) and [docs/adr](docs/adr).
+
+## License
+
+Morfira CMS is open-source software released under the [MIT License](LICENSE).
+
+Commercial products and proprietary modules may use the MIT-licensed core in accordance with its terms. Third-party dependencies retain their own licenses and notice requirements; see [docs/dependencies/licenses.md](docs/dependencies/licenses.md).
