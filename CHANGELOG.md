@@ -1,3 +1,9 @@
+## [1.4.0](https://github.com/nuykon/morfira-cms/compare/v1.3.0...v1.4.0) (2026-10-12)
+
+### Features
+
+* **publishing:** add content unpublishing ([9b99256](https://github.com/nuykon/morfira-cms/commit/9b992567147e3e50ec8d4663004abd09bc5e6b40))
+
 ## [1.3.0](https://github.com/nuykon/morfira-cms/compare/v1.2.0...v1.3.0) (2026-10-12)
 
 ### Features
