@@ -1,3 +1,9 @@
+## [1.8.0](https://github.com/nuykon/morfira-cms/compare/v1.7.0...v1.8.0) (2026-10-12)
+
+### Features
+
+* **cms:** add settings and revision recovery ([504a6f7](https://github.com/nuykon/morfira-cms/commit/504a6f7b0a1b047b6cd68151902d4658a1d12ac6))
+
 ## [1.7.0](https://github.com/nuykon/morfira-cms/compare/v1.6.0...v1.7.0) (2026-10-12)
 
 ### Features
