@@ -1,3 +1,9 @@
+## [1.12.0](https://github.com/morfira-dev/morfira-cms/compare/v1.11.0...v1.12.0) (2026-10-15)
+
+### Features
+
+* expand structured content authoring ([678add7](https://github.com/morfira-dev/morfira-cms/commit/678add711c78d1f562ec6f2abac5acb2bda3991d))
+
 ## [1.11.0](https://github.com/nuykon/morfira-cms/compare/v1.10.0...v1.11.0) (2026-10-12)
 
 ### Features
