@@ -80,8 +80,8 @@ final readonly class DoctrineContentTypeRepository implements ContentTypeReposit
 
     private function rebuildEntryRelations(Connection $connection, ContentType $type): void
     {
-        $relationKeys = array_map(
-            static fn (FieldDefinition $field): string => $field->key,
+        $relationFields = array_map(
+            static fn (FieldDefinition $field): array => ['key' => $field->key, 'multiple' => $field->multiple],
             array_values(array_filter($type->fields, static fn (FieldDefinition $field): bool => $field->type === 'relation')),
         );
         $entries = $connection->fetchAllAssociative('SELECT id, values_json FROM content_entries WHERE content_type_id = ?', [$type->id->value]);
@@ -96,16 +96,21 @@ final readonly class DoctrineContentTypeRepository implements ContentTypeReposit
             if (!is_array($values) || ([] !== $values && array_is_list($values))) {
                 throw new \UnexpectedValueException('Entry values must be a JSON object.');
             }
-            foreach ($relationKeys as $fieldKey) {
-                $targetId = $values[$fieldKey] ?? null;
-                if (!is_string($targetId) || $connection->fetchOne('SELECT 1 FROM content_entries WHERE id = ?', [$targetId]) === false) {
-                    continue;
+            foreach ($relationFields as $field) {
+                $fieldKey = $field['key'];
+                $value = $values[$fieldKey] ?? null;
+                $targetIds = $field['multiple'] && is_array($value) ? $value : (is_string($value) ? [$value] : []);
+                foreach ($targetIds as $position => $targetId) {
+                    if (!is_string($targetId) || false === $connection->fetchOne('SELECT 1 FROM content_entries WHERE id = ?', [$targetId])) {
+                        continue;
+                    }
+                    $connection->insert('content_entry_relations', [
+                        'source_entry_id' => $entryId,
+                        'field_key' => $fieldKey,
+                        'position' => $position,
+                        'target_entry_id' => $targetId,
+                    ]);
                 }
-                $connection->insert('content_entry_relations', [
-                    'source_entry_id' => $entryId,
-                    'field_key' => $fieldKey,
-                    'target_entry_id' => $targetId,
-                ]);
             }
         }
     }

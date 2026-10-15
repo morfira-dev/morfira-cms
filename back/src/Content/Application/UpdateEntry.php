@@ -13,7 +13,7 @@ use Cms\Schema\Application\ValidateEntryValues;
 
 final readonly class UpdateEntry
 {
-    public function __construct(private EntryRepository $entries, private ValidateEntryValues $validator)
+    public function __construct(private EntryRepository $entries, private ValidateEntryValues $validator, private SanitizeEntryValues $sanitizer)
     {
     }
 
@@ -31,7 +31,7 @@ final readonly class UpdateEntry
         $updated = $entry->revise(
             $title,
             new EntrySlug($slug),
-            ($this->validator)($entry->contentTypeId, $values),
+            ($this->validator)($entry->contentTypeId, ($this->sanitizer)($entry->contentTypeId, $values)),
             new \DateTimeImmutable('now', new \DateTimeZone('UTC')),
         );
         $this->entries->save($updated, $version);

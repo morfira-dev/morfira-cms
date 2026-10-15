@@ -123,7 +123,7 @@ final readonly class DoctrinePublishedEntryRepository implements PublishedEntryR
     /**
      * @param array<string, mixed> $r
      *
-     * @return array{id:string,name:string,apiName:string,version:int,fields:list<array{id:string,key:string,label:string,type:string,required:bool}>}
+     * @return array{id:string,name:string,apiName:string,version:int,fields:list<array{id:string,key:string,label:string,type:string,required:bool,targetContentTypeId:?string,multiple:bool}>}
      */
     private static function contentType(array $r): array
     {
@@ -149,10 +149,12 @@ final readonly class DoctrinePublishedEntryRepository implements PublishedEntryR
             $label = $field['label'] ?? null;
             $type = $field['type'] ?? null;
             $required = $field['required'] ?? null;
-            if (!is_string($fieldId) || !is_string($key) || !is_string($label) || !is_string($type) || !is_bool($required)) {
+            $targetContentTypeId = $field['targetContentTypeId'] ?? null;
+            $multiple = $field['multiple'] ?? false;
+            if (!is_string($fieldId) || !is_string($key) || !is_string($label) || !is_string($type) || !is_bool($required) || (null !== $targetContentTypeId && !is_string($targetContentTypeId)) || !is_bool($multiple)) {
                 throw new \UnexpectedValueException('Invalid published field.');
             }
-            $normalized[] = ['id' => $fieldId, 'key' => $key, 'label' => $label, 'type' => $type, 'required' => $required];
+            $normalized[] = ['id' => $fieldId, 'key' => $key, 'label' => $label, 'type' => $type, 'required' => $required, 'targetContentTypeId' => $targetContentTypeId, 'multiple' => $multiple];
         }
 
         return ['id' => $id, 'name' => $name, 'apiName' => $apiName, 'version' => $version, 'fields' => $normalized];
@@ -161,7 +163,7 @@ final readonly class DoctrinePublishedEntryRepository implements PublishedEntryR
     /**
      * @param array<string, mixed> $r
      *
-     * @return array<string, string|int|float|bool|null>
+     * @return array<string, string|int|float|bool|list<string>|null>
      */
     private static function values(array $r): array
     {
@@ -171,13 +173,36 @@ final readonly class DoctrinePublishedEntryRepository implements PublishedEntryR
         }
         $result = [];
         foreach ($value as $key => $item) {
-            if (!is_string($key) || (!is_string($item) && !is_int($item) && !is_float($item) && !is_bool($item) && null !== $item)) {
+            if (!is_string($key)) {
                 throw new \UnexpectedValueException('Invalid published value.');
             }
-            $result[$key] = $item;
+            if (is_string($item) || is_int($item) || is_float($item) || is_bool($item) || null === $item) {
+                $result[$key] = $item;
+                continue;
+            }
+            if (self::isStringList($item)) {
+                /** @var list<string> $item */
+                $result[$key] = $item;
+                continue;
+            }
+            throw new \UnexpectedValueException('Invalid published value.');
         }
 
         return $result;
+    }
+
+    private static function isStringList(mixed $value): bool
+    {
+        if (!is_array($value) || !array_is_list($value)) {
+            return false;
+        }
+        foreach ($value as $item) {
+            if (!is_string($item)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /** @param array<string,mixed> $r */

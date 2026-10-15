@@ -7,12 +7,14 @@ namespace Cms\Tests\Content\Presentation\Http;
 use Cms\Content\Application\CreateEntry;
 use Cms\Content\Application\GetEntry;
 use Cms\Content\Application\ListEntries;
+use Cms\Content\Application\SanitizeEntryValues;
 use Cms\Content\Application\UpdateEntry;
 use Cms\Content\Presentation\Http\EntryController;
 use Cms\Schema\Application\CreateContentType;
 use Cms\Schema\Application\GetContentTypeDefinition;
 use Cms\Schema\Application\ValidateEntryValues;
 use Cms\Tests\Content\InMemoryEntryRepository;
+use Cms\Tests\Content\PassThroughRichTextSanitizer;
 use Cms\Tests\Schema\InMemoryContentTypeRepository;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -68,13 +70,14 @@ final class EntryControllerTest extends TestCase
         $type = (new CreateContentType($types))('Empty', 'empty', []);
         $definitions = new GetContentTypeDefinition($types);
         $validator = new ValidateEntryValues($definitions);
+        $sanitizer = new SanitizeEntryValues($definitions, new PassThroughRichTextSanitizer());
         $entries = new InMemoryEntryRepository();
 
         return [new EntryController(
-            new CreateEntry($entries, $validator),
+            new CreateEntry($entries, $validator, $sanitizer),
             new GetEntry($entries),
             new ListEntries($entries),
-            new UpdateEntry($entries, $validator),
+            new UpdateEntry($entries, $validator, $sanitizer),
             $definitions,
         ), $type->id];
     }

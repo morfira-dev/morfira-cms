@@ -13,6 +13,7 @@
         dl { display: grid; gap: 28px; margin: 0; }
         dt { margin-bottom: 8px; color: #667085; font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
         dd { margin: 0; color: #344054; font-size: 18px; line-height: 1.65; white-space: pre-wrap; }
+        dd.rich-text { white-space: normal; }
         img { display: block; width: 100%; height: auto; border-radius: 16px; }
     </style>
 </head>
@@ -25,12 +26,18 @@
                 {% set value = entry.values[field.key] %}
                 <div>
                     <dt>{{ field.label }}</dt>
-                    <dd>
+                    <dd{% if field.type == 'richText' %} class="rich-text"{% endif %}>
                         {% if field.type == 'media' %}
                             {% set asset = media_asset(value) %}
                             {% if asset %}
                                 <img src="{{ asset.variants|last.url }}" srcset="{% for variant in asset.variants %}{{ variant.url }} {{ variant.width }}w{% if not loop.last %}, {% endif %}{% endfor %}" sizes="(max-width: 880px) calc(100vw - 64px), 752px" width="{{ asset.width }}" height="{{ asset.height }}" alt="{{ asset.defaultAlt }}" loading="lazy" decoding="async">
                             {% endif %}
+                        {% elseif field.type == 'relation' and field.multiple|default(false) %}
+                            <ol>
+                                {% for targetId in value %}<li>{{ targetId }}</li>{% endfor %}
+                            </ol>
+                        {% elseif field.type == 'richText' %}
+                            {{ value|cms_rich_text }}
                         {% elseif field.type == 'boolean' %}
                             {{ value ? 'Yes' : 'No' }}
                         {% else %}

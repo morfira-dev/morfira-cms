@@ -1420,6 +1420,122 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /api/v1/admin/entries/{id}/references:
+    parameters:
+      - $ref: '#/components/parameters/EntryId'
+    get:
+      operationId: listEntryReferences
+      tags: [Entries]
+      summary: List mutable entry drafts that reference this entry
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Incoming mutable entry references.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntryReferenceCollection'
+        '401':
+          description: No authenticated editor session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Entry not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Invalid entry identifier.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/admin/entries/{id}/revisions:
+    parameters:
+      - $ref: '#/components/parameters/EntryId'
+    get:
+      operationId: listEntryRevisions
+      tags: [Entries]
+      summary: List immutable entry revisions newest first
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Complete entry revision history.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntryRevisionCollection'
+        '401':
+          description: No authenticated editor session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Entry not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Invalid entry identifier.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/admin/entries/{id}/revisions/{revision}/restore:
+    parameters:
+      - $ref: '#/components/parameters/EntryId'
+      - name: revision
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    post:
+      operationId: restoreEntryRevision
+      tags: [Entries]
+      summary: Restore an immutable entry revision as a new draft version
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RestoreEntryRevisionRequest'
+      responses:
+        '200':
+          description: Restored entry draft head.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Entry'
+        '404':
+          description: Entry, revision or current content type not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Stale current version or slug conflict.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Invalid request or historical values no longer satisfy the current schema.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /api/v1/admin/entries/{id}/publish:
     parameters:
       - $ref: '#/components/parameters/EntryId'
@@ -2339,19 +2455,24 @@ components:
           maxLength: 120
         type:
           type: string
-          enum: [text, textarea, number, boolean, date, media, relation]
+          enum: [text, textarea, richText, number, boolean, date, media, relation]
           description: >-
             Determines value validation: text is a string of at most 255
             characters; textarea is a string of at most 20000 characters;
+            richText is a server-sanitized HTML string of at most 20000 characters;
             number is a JSON number; boolean is a JSON boolean; date is an ISO
             calendar-date string (YYYY-MM-DD); media is a media asset UUID string;
-            relation is an entry UUID for the declared target content type.
+            relation is one entry UUID or, when multiple is true, an ordered UUID
+            list for the declared target content type.
         required:
           type: boolean
         targetContentTypeId:
           type: [string, 'null']
           format: uuid
           description: Required only when type is relation.
+        multiple:
+          type: boolean
+          description: Only valid for relation fields. When true, the value is an ordered list of up to 100 unique entry UUIDs.
     ContentFieldCollection:
       type: array
       maxItems: 50
@@ -2429,15 +2550,23 @@ components:
       pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
     EntryValue:
       description: >-
-        Scalar value validated against its content field. Date and media values are
-        strings containing an ISO calendar date and media asset UUID respectively.
-        String length is additionally constrained by the field type: text allows
-        at most 255 characters and textarea at most 20000 characters.
+        Value validated against its content field. Date and media values are strings
+        containing an ISO calendar date and media asset UUID respectively. String
+        length is additionally constrained by the field type: text allows at most
+        255 characters, while textarea and richText allow at most 20000 characters.
+        richText strings contain server-sanitized HTML. Multiple relation fields use
+        an ordered list of up to 100 unique entry UUIDs.
       oneOf:
         - type: string
           maxLength: 20000
         - type: number
         - type: boolean
+        - type: array
+          maxItems: 100
+          uniqueItems: true
+          items:
+            type: string
+            format: uuid
         - type: 'null'
     EntryValues:
       type: object
@@ -2525,6 +2654,70 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Entry'
+    EntryReference:
+      type: object
+      additionalProperties: false
+      required: [id, contentTypeId, title, fieldKey]
+      properties:
+        id:
+          type: string
+          format: uuid
+        contentTypeId:
+          type: string
+          format: uuid
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        fieldKey:
+          type: string
+          minLength: 1
+          maxLength: 120
+    EntryReferenceCollection:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/EntryReference'
+    EntryRevision:
+      type: object
+      additionalProperties: false
+      required: [revision, title, slug, values, createdAt]
+      properties:
+        revision:
+          type: integer
+          minimum: 1
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        slug:
+          $ref: '#/components/schemas/EntrySlug'
+        values:
+          $ref: '#/components/schemas/EntryValues'
+        createdAt:
+          type: string
+          format: date-time
+    EntryRevisionCollection:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/EntryRevision'
+    RestoreEntryRevisionRequest:
+      type: object
+      additionalProperties: false
+      required: [version]
+      properties:
+        version:
+          type: integer
+          minimum: 1
     PublishedContentType:
       type: object
       additionalProperties: false

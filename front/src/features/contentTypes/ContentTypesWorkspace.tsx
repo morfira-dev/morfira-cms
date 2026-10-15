@@ -198,10 +198,11 @@ export function ContentTypesWorkspace({ contentTypes, loading, onChange }: Conte
                     <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
                       <TextField label={t('Label')} value={field.label} onChange={(event) => changeFields(updateContentField(editing.fields, field.id, { label: event.target.value }))} required fullWidth />
                       <TextField label={t('Key')} value={field.key} onChange={(event) => changeFields(updateContentField(editing.fields, field.id, { key: event.target.value }))} required fullWidth helperText={t('camelCase, for example: heroImage')} />
-                      <TextField select label={t('Type')} value={field.type} onChange={(event) => { const type=event.target.value as ContentField['type'];changeFields(editing.fields.map(item=>item.id===field.id?{...item,type,targetContentTypeId:type==='relation'?(item.targetContentTypeId??contentTypes[0]?.id??null):null}:item)) }} fullWidth>
+                      <TextField select label={t('Type')} value={field.type} onChange={(event) => { const type=event.target.value as ContentField['type'];changeFields(editing.fields.map(item=>item.id===field.id?{...item,type,targetContentTypeId:type==='relation'?(item.targetContentTypeId??contentTypes[0]?.id??null):null,multiple:type==='relation'?(item.multiple??false):false}:item)) }} fullWidth>
                         {contentFieldTypes.map((type) => <MenuItem key={type} value={type}>{type}</MenuItem>)}
                       </TextField>
                       {field.type==='relation'&&<TextField select label={t('Target type')} value={field.targetContentTypeId??''} onChange={event=>changeFields(editing.fields.map(item=>item.id===field.id?{...item,targetContentTypeId:event.target.value}:item))} required fullWidth>{contentTypes.map(type=><MenuItem key={type.id} value={type.id}>{type.name}</MenuItem>)}</TextField>}
+                      {field.type==='relation'&&<FormControlLabel control={<Switch checked={field.multiple===true} onChange={(event) => changeFields(updateContentField(editing.fields, field.id, { multiple: event.target.checked }))} />} label={t('Allow multiple')} />}
                       <FormControlLabel control={<Switch checked={field.required} onChange={(event) => changeFields(updateContentField(editing.fields, field.id, { required: event.target.checked }))} />} label={t('Required')} />
                     </Stack>
                   </Stack>

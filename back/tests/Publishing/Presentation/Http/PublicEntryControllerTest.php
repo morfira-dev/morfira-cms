@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Cms\Tests\Publishing\Presentation\Http;
 
 use Cms\Content\Application\CreateEntry;
+use Cms\Content\Application\SanitizeEntryValues;
+use Cms\Content\Infrastructure\Html\SymfonyRichTextSanitizer;
+use Cms\Content\Infrastructure\Twig\RichTextExtension;
 use Cms\Publishing\Application\GetPublishedEntry;
 use Cms\Publishing\Application\ListPublishedEntries;
 use Cms\Publishing\Application\PublishEntry;
@@ -30,21 +33,24 @@ final class PublicEntryControllerTest extends TestCase
         $types = new InMemoryContentTypeRepository();
         $definitions = new GetContentTypeDefinition($types);
         $validator = new ValidateEntryValues($definitions);
+        $richText = new SymfonyRichTextSanitizer();
+        $sanitizer = new SanitizeEntryValues($definitions, $richText);
         $type = (new CreateContentType($types))('Article', 'articles', [
-            ['id' => '11111111-1111-4111-8111-111111111111', 'key' => 'body', 'label' => 'Body', 'type' => 'textarea', 'required' => true],
+            ['id' => '11111111-1111-4111-8111-111111111111', 'key' => 'body', 'label' => 'Body', 'type' => 'richText', 'required' => true],
             ['id' => '22222222-2222-4222-8222-222222222222', 'key' => 'hero', 'label' => 'Hero', 'type' => 'media', 'required' => true],
         ]);
         $entries = new InMemoryEntryRepository();
-        $draft = (new CreateEntry($entries, $validator))(
+        $draft = (new CreateEntry($entries, $validator, $sanitizer))(
             $type->id,
             '<script>Title</script>',
             'safe-entry',
-            ['body' => '<script>alert(1)</script>', 'hero' => '33333333-3333-4333-8333-333333333333'],
+            ['body' => '<p onclick="alert(1)"><strong>Safe body</strong><script>alert(1)</script></p>', 'hero' => '33333333-3333-4333-8333-333333333333'],
         );
         $published = new InMemoryPublishedEntryRepository();
-        (new PublishEntry($entries, $published, $definitions, $validator))($draft->id, 1);
+        (new PublishEntry($entries, $published, $definitions, $validator, $sanitizer))($draft->id, 1);
 
         $twig = new Environment(new FilesystemLoader(dirname(__DIR__, 4).'/templates'), ['autoescape' => 'html']);
+        $twig->addExtension(new RichTextExtension($richText));
         $twig->addFunction(new TwigFunction('media_asset', static fn (string $id): array => [
             'width' => 800,
             'height' => 450,
@@ -58,7 +64,8 @@ final class PublicEntryControllerTest extends TestCase
 
         self::assertSame(200, $response->getStatusCode());
         self::assertStringNotContainsString('<script>', $html);
-        self::assertStringContainsString('&lt;script&gt;alert(1)&lt;/script&gt;', $html);
+        self::assertStringContainsString('<strong>Safe body</strong>', $html);
+        self::assertStringNotContainsString('onclick', $html);
         self::assertStringContainsString('/media/33333333-3333-4333-8333-333333333333/800w.webp', $html);
         self::assertNotNull($response->getEtag());
     }

@@ -28,61 +28,96 @@ import {
   type EditorState,
   type LexicalEditor,
 } from 'lexical'
-import { useRef } from 'react'
-import { Box, Button, MenuItem, Stack, TextField } from '../../ui'
+import { useEffect, useRef, type MutableRefObject } from 'react'
+import { Box, Button, MenuItem, Stack, TextField, Typography } from '../../ui'
 import { useAdminLocale } from '../../i18n/AdminLocaleProvider'
+
+const EXTERNAL_HTML_SYNC_TAG = 'morfira-external-html-sync'
 
 interface RichTextEditorProps {
   value: string
   onChange: (html: string) => void
+  label?: string
+  required?: boolean
 }
 
-export function RichTextEditor({ value, onChange }: RichTextEditorProps) {
+export function RichTextEditor({ value, onChange, label, required = false }: RichTextEditorProps) {
   const { t } = useAdminLocale()
   const initialValue = useRef(value)
+  const latestHtml = useRef(value)
+  const accessibleLabel = label ?? t('Rich text content')
 
   return (
-    <LexicalComposer
-      initialConfig={{
-        namespace: 'MorfiraRichText',
-        nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode, LinkNode, AutoLinkNode],
-        onError(error) {
-          throw error
-        },
-        editorState: (editor) => importHtml(editor, initialValue.current),
-        theme: {
-          heading: { h2: 'morfira-editor-h2', h3: 'morfira-editor-h3', h4: 'morfira-editor-h4' },
-          link: 'morfira-editor-link',
-          list: { listitem: 'morfira-editor-listitem', ol: 'morfira-editor-list', ul: 'morfira-editor-list' },
-          quote: 'morfira-editor-quote',
-          text: { bold: 'morfira-editor-bold', italic: 'morfira-editor-italic', strikethrough: 'morfira-editor-strike', underline: 'morfira-editor-underline' },
-        },
-      }}
-    >
-      <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
-        <Toolbar />
-        <Box sx={{ position: 'relative' }}>
-          <RichTextPlugin
-            contentEditable={(
-              <ContentEditable
-                aria-label={t('Rich text content')}
-                style={{ minHeight: 180, outline: 'none', padding: '16px' }}
-              />
-            )}
-            placeholder={<Box sx={{ color: 'text.disabled', left: 16, pointerEvents: 'none', position: 'absolute', top: 16 }}>{t('Start writing useful content…')}</Box>}
-            ErrorBoundary={LexicalErrorBoundary}
-          />
+    <Stack spacing={0.75}>
+      {label && (
+        <Typography component="span" variant="body2" sx={{ color: 'text.secondary', fontWeight: 500 }}>
+          {label}{required ? ' *' : ''}
+        </Typography>
+      )}
+      <LexicalComposer
+        initialConfig={{
+          namespace: 'MorfiraRichText',
+          nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode, LinkNode, AutoLinkNode],
+          onError(error) {
+            throw error
+          },
+          editorState: (editor) => importHtml(editor, initialValue.current),
+          theme: {
+            heading: { h2: 'morfira-editor-h2', h3: 'morfira-editor-h3', h4: 'morfira-editor-h4' },
+            link: 'morfira-editor-link',
+            list: { listitem: 'morfira-editor-listitem', ol: 'morfira-editor-list', ul: 'morfira-editor-list' },
+            quote: 'morfira-editor-quote',
+            text: { bold: 'morfira-editor-bold', italic: 'morfira-editor-italic', strikethrough: 'morfira-editor-strike', underline: 'morfira-editor-underline' },
+          },
+        }}
+      >
+        <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
+          <Toolbar />
+          <Box sx={{ position: 'relative' }}>
+            <RichTextPlugin
+              contentEditable={(
+                <ContentEditable
+                  aria-label={accessibleLabel}
+                  aria-required={required}
+                  style={{ minHeight: 180, outline: 'none', padding: '16px' }}
+                />
+              )}
+              placeholder={<Box sx={{ color: 'text.disabled', left: 16, pointerEvents: 'none', position: 'absolute', top: 16 }}>{t('Start writing useful content…')}</Box>}
+              ErrorBoundary={LexicalErrorBoundary}
+            />
+          </Box>
         </Box>
-      </Box>
-      <HistoryPlugin />
-      <ListPlugin />
-      <LinkPlugin />
-      <OnChangePlugin
-        ignoreSelectionChange
-        onChange={(editorState, editor) => emitHtml(editorState, editor, onChange)}
-      />
-    </LexicalComposer>
+        <HistoryPlugin />
+        <ListPlugin />
+        <LinkPlugin />
+        <SyncHtmlPlugin value={value} latestHtml={latestHtml} />
+        <OnChangePlugin
+          ignoreSelectionChange
+          onChange={(editorState, editor, tags) => {
+            if (tags.has(EXTERNAL_HTML_SYNC_TAG)) return
+            emitHtml(editorState, editor, (html) => {
+              if (html === latestHtml.current) return
+              latestHtml.current = html
+              onChange(html)
+            })
+          }}
+        />
+      </LexicalComposer>
+    </Stack>
   )
+}
+
+function SyncHtmlPlugin({ value, latestHtml }: { value: string; latestHtml: MutableRefObject<string> }) {
+  const [editor] = useLexicalComposerContext()
+
+  useEffect(() => {
+    if (value === latestHtml.current) return
+
+    latestHtml.current = value
+    editor.update(() => importHtml(editor, value), { tag: EXTERNAL_HTML_SYNC_TAG })
+  }, [editor, latestHtml, value])
+
+  return null
 }
 
 function Toolbar() {

@@ -18,7 +18,7 @@ Deletion atomically removes the active route, redirect history, publication sche
 
 ## Entry lifecycle
 
-Mutable single-entry relations are indexed in `content_entry_relations`. The target foreign key uses `ON DELETE RESTRICT`, making the application check race-safe. Deletion atomically removes the active route, publication schedule, taxonomy assignments, outgoing relation index rows, draft and revisions.
+Mutable single and multiple-entry relations are indexed in `content_entry_relations` with an explicit position. The target foreign key uses `ON DELETE RESTRICT`, making the application check race-safe. Deletion atomically removes the active route, publication schedule, taxonomy assignments, outgoing relation index rows, draft and revisions.
 
 Self-references are outgoing rows and are removed with the source. References from other entries block deletion until editors update those entries.
 

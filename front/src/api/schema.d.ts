@@ -542,6 +542,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/entries/{id}/references": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["EntryId"];
+            };
+            cookie?: never;
+        };
+        /** List mutable entry drafts that reference this entry */
+        get: operations["listEntryReferences"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/entries/{id}/revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["EntryId"];
+            };
+            cookie?: never;
+        };
+        /** List immutable entry revisions newest first */
+        get: operations["listEntryRevisions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/entries/{id}/revisions/{revision}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["EntryId"];
+                revision: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore an immutable entry revision as a new draft version */
+        post: operations["restoreEntryRevision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/entries/{id}/publish": {
         parameters: {
             query?: never;
@@ -958,16 +1016,18 @@ export interface components {
             key: string;
             label: string;
             /**
-             * @description Determines value validation: text is a string of at most 255 characters; textarea is a string of at most 20000 characters; number is a JSON number; boolean is a JSON boolean; date is an ISO calendar-date string (YYYY-MM-DD); media is a media asset UUID string; relation is an entry UUID for the declared target content type.
+             * @description Determines value validation: text is a string of at most 255 characters; textarea is a string of at most 20000 characters; richText is a server-sanitized HTML string of at most 20000 characters; number is a JSON number; boolean is a JSON boolean; date is an ISO calendar-date string (YYYY-MM-DD); media is a media asset UUID string; relation is one entry UUID or, when multiple is true, an ordered UUID list for the declared target content type.
              * @enum {string}
              */
-            type: "text" | "textarea" | "number" | "boolean" | "date" | "media" | "relation";
+            type: "text" | "textarea" | "richText" | "number" | "boolean" | "date" | "media" | "relation";
             required: boolean;
             /**
              * Format: uuid
              * @description Required only when type is relation.
              */
             targetContentTypeId?: string | null;
+            /** @description Only valid for relation fields. When true, the value is an ordered list of up to 100 unique entry UUIDs. */
+            multiple?: boolean;
         };
         /** @description Field identifiers and keys must each be unique within the content type. */
         ContentFieldCollection: components["schemas"]["ContentField"][];
@@ -999,8 +1059,8 @@ export interface components {
             items: components["schemas"]["ContentType"][];
         };
         EntrySlug: string;
-        /** @description Scalar value validated against its content field. Date and media values are strings containing an ISO calendar date and media asset UUID respectively. String length is additionally constrained by the field type: text allows at most 255 characters and textarea at most 20000 characters. */
-        EntryValue: string | number | boolean | null;
+        /** @description Value validated against its content field. Date and media values are strings containing an ISO calendar date and media asset UUID respectively. String length is additionally constrained by the field type: text allows at most 255 characters, while textarea and richText allow at most 20000 characters. richText strings contain server-sanitized HTML. Multiple relation fields use an ordered list of up to 100 unique entry UUIDs. */
+        EntryValue: string | number | boolean | string[] | null;
         /** @description Keys must exactly match defined schema fields. Unknown keys are rejected; required fields must be present and non-null. */
         EntryValues: {
             [key: string]: components["schemas"]["EntryValue"];
@@ -1039,6 +1099,31 @@ export interface components {
         };
         EntryCollection: {
             items: components["schemas"]["Entry"][];
+        };
+        EntryReference: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            contentTypeId: string;
+            title: string;
+            fieldKey: string;
+        };
+        EntryReferenceCollection: {
+            items: components["schemas"]["EntryReference"][];
+        };
+        EntryRevision: {
+            revision: number;
+            title: string;
+            slug: components["schemas"]["EntrySlug"];
+            values: components["schemas"]["EntryValues"];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        EntryRevisionCollection: {
+            items: components["schemas"]["EntryRevision"][];
+        };
+        RestoreEntryRevisionRequest: {
+            version: number;
         };
         PublishedContentType: {
             /** Format: uuid */
@@ -3591,6 +3676,161 @@ export interface operations {
                 };
             };
             /** @description Invalid entry identifier. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listEntryReferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["EntryId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Incoming mutable entry references. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntryReferenceCollection"];
+                };
+            };
+            /** @description No authenticated editor session. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Entry not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid entry identifier. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listEntryRevisions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["EntryId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Complete entry revision history. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntryRevisionCollection"];
+                };
+            };
+            /** @description No authenticated editor session. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Entry not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid entry identifier. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    restoreEntryRevision: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Session-bound token obtained from `/api/v1/auth/csrf`. */
+                "X-CSRF-Token": components["parameters"]["CsrfTokenHeader"];
+            };
+            path: {
+                id: components["parameters"]["EntryId"];
+                revision: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RestoreEntryRevisionRequest"];
+            };
+        };
+        responses: {
+            /** @description Restored entry draft head. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Entry"];
+                };
+            };
+            /** @description Entry, revision or current content type not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Stale current version or slug conflict. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid request or historical values no longer satisfy the current schema. */
             422: {
                 headers: {
                     [name: string]: unknown;

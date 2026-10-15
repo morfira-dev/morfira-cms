@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cms\Tests\Publishing\Presentation\Http;
 
+use Cms\Content\Application\SanitizeEntryValues;
 use Cms\Publishing\Application\GetPublishedEntry;
 use Cms\Publishing\Application\ListPublishedEntries;
 use Cms\Publishing\Application\PublishEntry;
@@ -13,6 +14,7 @@ use Cms\Schema\Application\CreateContentType;
 use Cms\Schema\Application\GetContentTypeDefinition;
 use Cms\Schema\Application\ValidateEntryValues;
 use Cms\Tests\Content\InMemoryEntryRepository;
+use Cms\Tests\Content\PassThroughRichTextSanitizer;
 use Cms\Tests\Publishing\InMemoryPublishedEntryRepository;
 use Cms\Tests\Schema\InMemoryContentTypeRepository;
 use PHPUnit\Framework\Attributes\Test;
@@ -42,8 +44,9 @@ final class EntryPublishingControllerTest extends TestCase
         $published->publish($snapshot);
         $entries = new InMemoryEntryRepository();
         $validator = new ValidateEntryValues($definitions);
+        $sanitizer = new SanitizeEntryValues($definitions, new PassThroughRichTextSanitizer());
         $controller = new EntryPublishingController(
-            new PublishEntry($entries, $published, $definitions, $validator),
+            new PublishEntry($entries, $published, $definitions, $validator, $sanitizer),
             new GetPublishedEntry($published),
             new ListPublishedEntries($published),
         );
@@ -73,7 +76,8 @@ final class EntryPublishingControllerTest extends TestCase
         $published = new InMemoryPublishedEntryRepository();
         $entries = new InMemoryEntryRepository();
         $validator = new ValidateEntryValues($definitions);
-        $controller = new EntryPublishingController(new PublishEntry($entries, $published, $definitions, $validator), new GetPublishedEntry($published), new ListPublishedEntries($published));
+        $sanitizer = new SanitizeEntryValues($definitions, new PassThroughRichTextSanitizer());
+        $controller = new EntryPublishingController(new PublishEntry($entries, $published, $definitions, $validator, $sanitizer), new GetPublishedEntry($published), new ListPublishedEntries($published));
 
         self::assertSame(422, $controller->list('articles', Request::create('/api/v1/content/entries/articles?limit=101'))->getStatusCode());
     }
@@ -86,7 +90,8 @@ final class EntryPublishingControllerTest extends TestCase
         $published = new InMemoryPublishedEntryRepository();
         $entries = new InMemoryEntryRepository();
         $validator = new ValidateEntryValues($definitions);
-        $controller = new EntryPublishingController(new PublishEntry($entries, $published, $definitions, $validator), new GetPublishedEntry($published), new ListPublishedEntries($published));
+        $sanitizer = new SanitizeEntryValues($definitions, new PassThroughRichTextSanitizer());
+        $controller = new EntryPublishingController(new PublishEntry($entries, $published, $definitions, $validator, $sanitizer), new GetPublishedEntry($published), new ListPublishedEntries($published));
 
         $response = $controller->list('unknown-type', Request::create('/api/v1/content/entries/unknown-type'));
         $payload = json_decode((string) $response->getContent(), true, flags: JSON_THROW_ON_ERROR);

@@ -14,7 +14,7 @@ final class InMemoryContentDeletionGateway implements ContentDeletionGateway
     /** @var list<string> */
     public array $deletedEntries = [];
 
-    /** @var array<string, list<array{id:string,title:string,fieldKey:string}>> */
+    /** @var array<string, list<array{id:string,contentTypeId:string,title:string,fieldKey:string}>> */
     public array $references = [];
 
     public function deletePage(string $pageId): void

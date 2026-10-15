@@ -11,7 +11,7 @@ final readonly class ValidateEntryValues
     }
 
     /** @param array<string,mixed> $values
-     * @return array<string,string|int|float|bool|null>
+     * @return array<string,string|int|float|bool|list<string>|null>
      */
     public function __invoke(string $contentTypeId, array $values): array
     {
@@ -29,7 +29,7 @@ final readonly class ValidateEntryValues
         foreach ($fields as $key => $field) {
             $exists = array_key_exists($key, $values);
             $value = $exists ? $values[$key] : null;
-            if ($field['required'] && (!$exists || null === $value || (is_string($value) && '' === $value))) {
+            if ($field['required'] && (!$exists || null === $value || (is_string($value) && '' === $value) || (is_array($value) && [] === $value))) {
                 throw new \InvalidArgumentException(sprintf('Field "%s" is required.', $key));
             }
             if (!$exists) {
@@ -45,8 +45,12 @@ final readonly class ValidateEntryValues
         return $normalized;
     }
 
-    /** @param array<string,mixed> $field */
-    private function validateValue(string $key, array $field, mixed $value): string|int|float|bool
+    /**
+     * @param array<string,mixed> $field
+     *
+     * @return string|int|float|bool|list<string>
+     */
+    private function validateValue(string $key, array $field, mixed $value): string|int|float|bool|array
     {
         $type = $field['type'] ?? null;
         if (!is_string($type)) {
@@ -55,7 +59,7 @@ final readonly class ValidateEntryValues
         if ('text' === $type && is_string($value) && mb_strlen($value) <= 255) {
             return $value;
         }
-        if ('textarea' === $type && is_string($value) && mb_strlen($value) <= 20000) {
+        if (in_array($type, ['textarea', 'richText'], true) && is_string($value) && mb_strlen($value) <= 20000) {
             return $value;
         }
         if ('number' === $type && (is_int($value) || is_float($value))) {
@@ -71,10 +75,30 @@ final readonly class ValidateEntryValues
             return $value;
         }
         $target = $field['targetContentTypeId'] ?? null;
-        if ('relation' === $type && is_string($value) && is_string($target) && preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/', $value) === 1 && ($this->relations === null || $this->relations->exists($value, $target))) {
-            return $value;
+        if ('relation' === $type && is_string($target)) {
+            $multiple = $field['multiple'] ?? false;
+            if (true === $multiple && is_array($value) && array_is_list($value) && count($value) <= 100) {
+                $seen = [];
+                foreach ($value as $targetId) {
+                    if (!is_string($targetId) || isset($seen[$targetId]) || !$this->validRelationTarget($targetId, $target)) {
+                        throw new \InvalidArgumentException(sprintf('Field "%s" has an invalid relation value.', $key));
+                    }
+                    $seen[$targetId] = true;
+                }
+
+                return $value;
+            }
+            if (false === $multiple && is_string($value) && $this->validRelationTarget($value, $target)) {
+                return $value;
+            }
         }
         throw new \InvalidArgumentException(sprintf('Field "%s" has an invalid %s value.', $key, $type));
+    }
+
+    private function validRelationTarget(string $entryId, string $contentTypeId): bool
+    {
+        return 1 === preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/', $entryId)
+            && (null === $this->relations || $this->relations->exists($entryId, $contentTypeId));
     }
 
     private function isDate(string $value): bool

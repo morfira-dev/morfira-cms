@@ -27,13 +27,19 @@ import {
   type EntryValues,
   getEntries,
   getEntry,
+  getEntryReferences,
+  getEntryRevisions,
   publishEntry,
+  type EntryReference,
+  type EntryRevision,
+  restoreEntryRevision,
   unpublishEntry,
   updateEntry,
 } from './api'
 import { initializeEntryValues, publishedEntryUrl, setEntryValue, validateEntryValues } from './values'
 import { useAdminLocale } from '../../i18n/AdminLocaleProvider'
 import type { MessageKey } from '../../i18n/messages'
+import { RichTextEditor } from '../richText/RichTextEditor'
 
 interface EntriesWorkspaceProps { contentTypes: ContentType[]; mediaAssets: MediaAsset[]; taxonomies: Taxonomy[] }
 interface EntryForm { id: string | null; title: string; slug: string; values: EntryValues; version: number | null }
@@ -51,14 +57,24 @@ export function EntriesWorkspace({ contentTypes, mediaAssets, taxonomies }: Entr
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null)
+  const [references, setReferences] = useState<EntryReference[]>([])
+  const [revisions, setRevisions] = useState<EntryRevision[]>([])
+  const [restoringRevision, setRestoringRevision] = useState<number | null>(null)
   const request = useRef<AbortController | null>(null)
+  const skipContentTypeReload = useRef(false)
 
   const contentType = contentTypes.find((type) => type.id === contentTypeId) ?? null
 
   useEffect(() => {
+    if (skipContentTypeReload.current) {
+      skipContentTypeReload.current = false
+      return
+    }
     if (!contentTypeId) {
       setEntries([])
       setEditing(null)
+      setReferences([])
+      setRevisions([])
       return
     }
     request.current?.abort()
@@ -87,8 +103,10 @@ export function EntriesWorkspace({ contentTypes, mediaAssets, taxonomies }: Entr
     setLoading(true)
     setError(null)
     try {
-      const entry = await getEntry(id, controller.signal)
+      const [entry, incoming, history] = await Promise.all([getEntry(id, controller.signal), getEntryReferences(id, controller.signal), getEntryRevisions(id, controller.signal)])
       setEditing(toForm(entry, contentType))
+      setReferences(incoming)
+      setRevisions(history)
       setDirty(false)
       setSuccess(null)
       setPublishedUrl(null)
@@ -102,6 +120,8 @@ export function EntriesWorkspace({ contentTypes, mediaAssets, taxonomies }: Entr
   function newEntry() {
     if (!contentType) return
     setEditing({ id: null, title: '', slug: '', values: initializeEntryValues(contentType.fields), version: null })
+    setReferences([])
+    setRevisions([])
     setDirty(true)
     setError(null)
     setSuccess(null)
@@ -120,6 +140,8 @@ export function EntriesWorkspace({ contentTypes, mediaAssets, taxonomies }: Entr
         ? await createEntry({ contentTypeId: contentType.id, title: editing.title.trim(), slug: editing.slug, values: editing.values })
         : await updateEntry(editing.id, { title: editing.title.trim(), slug: editing.slug, values: editing.values, version: editing.version! })
       setEditing(toForm(saved, contentType))
+      setReferences(await getEntryReferences(saved.id))
+      setRevisions(await getEntryRevisions(saved.id))
       setEntries((current) => editing.id === null ? [saved, ...current] : current.map((entry) => entry.id === saved.id ? saved : entry))
       setDirty(false)
       setPublishedUrl(null)
@@ -171,6 +193,33 @@ export function EntriesWorkspace({ contentTypes, mediaAssets, taxonomies }: Entr
     setDirty(true); setSuccess(null); setPublishedUrl(null)
   }
 
+  async function openReference(reference: EntryReference) {
+    const type = contentTypes.find((item) => item.id === reference.contentTypeId)
+    if (!type) return
+    setLoading(true); setError(null)
+    try {
+      const [entry, typeEntries, incoming, history] = await Promise.all([getEntry(reference.id), getEntries(reference.contentTypeId), getEntryReferences(reference.id), getEntryRevisions(reference.id)])
+      if(reference.contentTypeId!==contentTypeId)skipContentTypeReload.current=true
+      setContentTypeId(reference.contentTypeId)
+      setEntries(typeEntries)
+      setEditing(toForm(entry, type))
+      setReferences(incoming)
+      setRevisions(history)
+      setDirty(false); setSuccess(null); setPublishedUrl(null)
+    } catch (reason) { setError(localizedError(locale, reason, t('Could not load entry.'))) }
+    finally { setLoading(false) }
+  }
+
+  async function restoreRevision(revision: number) {
+    if (!editing?.id || editing.version===null || dirty || !contentType || !window.confirm(t('Restore revision {{revision}} as a new draft revision?', { revision }))) return
+    setRestoringRevision(revision); setError(null); setSuccess(null)
+    try {
+      const restored=await restoreEntryRevision(editing.id,revision,editing.version)
+      setEditing(toForm(restored,contentType));setEntries(current=>current.map(entry=>entry.id===restored.id?restored:entry));setRevisions(await getEntryRevisions(restored.id));setPublishedUrl(null);setDirty(false)
+      setSuccess(t('Revision {{source}} was restored as revision {{target}}.',{source:revision,target:restored.version}))
+    }catch(reason){setError(localizedError(locale,reason,t('Could not restore the revision.')))}finally{setRestoringRevision(null)}
+  }
+
   return (
     <Stack spacing={3}>
       <div><Typography component="h1" variant="h1">{t('Entries')}</Typography><Typography color="text.secondary" sx={{ mt: 0.75 }}>{t('Create structured content with a form generated from its schema.')}</Typography></div>
@@ -209,6 +258,8 @@ export function EntriesWorkspace({ contentTypes, mediaAssets, taxonomies }: Entr
                 {dirty && editing.id && <Alert severity="warning">{t('Save this version before publishing it.')}</Alert>}
                 {editing.id && editing.version !== null && <PublicationScheduler target="entry" targetId={editing.id} sourceVersion={editing.version} dirty={dirty} />}
                 {editing.id && <EntryTaxonomyAssignments entryId={editing.id} taxonomies={taxonomies} />}
+                {editing.id && <Card variant="outlined"><CardContent><Typography variant="h6">{t('Referenced by')}</Typography>{references.length===0?<Typography color="text.secondary" sx={{mt:1}}>{t('No other drafts reference this entry.')}</Typography>:<Stack spacing={1} sx={{mt:1}}>{references.map(reference=><Button key={`${reference.id}:${reference.fieldKey}`} variant="outlined" onClick={()=>void openReference(reference)} sx={{justifyContent:'space-between'}}><span>{reference.title}</span><Chip size="small" label={reference.fieldKey}/></Button>)}</Stack>}</CardContent></Card>}
+                {editing.id && <Card variant="outlined"><CardContent><Typography variant="h6">{t('Revision history')}</Typography><Typography variant="body2" color="text.secondary" sx={{mt:.5,mb:2}}>{t('Restoring creates a new revision and never changes the published entry.')}</Typography><Stack spacing={1}>{revisions.map(revision=><Stack key={revision.revision} direction={{xs:'column',sm:'row'}} sx={{justifyContent:'space-between',alignItems:{sm:'center'},gap:1,py:1,borderTop:1,borderColor:'divider'}}><div><Typography sx={{fontWeight:700}}>{t('Revision {{revision}} · {{title}}',{revision:revision.revision,title:revision.title})}</Typography><Typography variant="body2" color="text.secondary">{new Date(revision.createdAt).toLocaleString(locale)} · /{revision.slug}</Typography></div><Button size="small" variant="outlined" disabled={dirty||revision.revision===editing.version||restoringRevision!==null} onClick={()=>void restoreRevision(revision.revision)}>{restoringRevision===revision.revision?t('Restoring…'):t('Restore')}</Button></Stack>)}</Stack></CardContent></Card>}
                 <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
                   <TextField label={t('Title')} value={editing.title} onChange={(event) => { setEditing({ ...editing, title: event.target.value }); setDirty(true); setPublishedUrl(null) }} fullWidth required />
                   <TextField label={t('Slug')} value={editing.slug} onChange={(event) => { setEditing({ ...editing, slug: event.target.value.toLowerCase() }); setDirty(true); setPublishedUrl(null) }} fullWidth required helperText={t('Lowercase letters, numbers and hyphens')} />
@@ -229,6 +280,7 @@ function EntryField({ field, value, mediaAssets, contentTypes, onChange }: { fie
   if (field.type === 'boolean') return <FormControlLabel control={<Switch checked={value === true} onChange={(event) => onChange(event.target.checked)} />} label={`${field.label}${field.required ? ' *' : ''}`} />
   if (field.type === 'media') return <TextField select label={field.label} value={typeof value === 'string' ? value : ''} onChange={(event) => onChange(event.target.value || null)} required={field.required} helperText={t('Choose an image from the media library')}><MenuItem value="">{t('None')}</MenuItem>{mediaAssets.map((asset) => <MenuItem key={asset.id} value={asset.id}>{asset.originalName}</MenuItem>)}</TextField>
   if (field.type === 'number') return <TextField type="number" label={field.label} value={typeof value === 'number' ? value : ''} onChange={(event) => onChange(event.target.value === '' ? null : Number(event.target.value))} required={field.required} />
+  if (field.type === 'richText') return <RichTextEditor value={typeof value === 'string' ? value : ''} onChange={(html) => onChange(html)} label={field.label} required={field.required} />
   if(field.type==='relation') return <RelationField field={field} value={value} contentTypes={contentTypes} onChange={onChange}/>
   return <TextField type={field.type === 'date' ? 'date' : 'text'} label={field.label} value={typeof value === 'string' ? value : ''} onChange={(event) => onChange(event.target.value || null)} required={field.required} multiline={field.type === 'textarea'} minRows={field.type === 'textarea' ? 5 : undefined} slotProps={field.type === 'date' ? { inputLabel: { shrink: true } } : undefined} />
 }
@@ -238,6 +290,17 @@ function RelationField({field,value,contentTypes,onChange}:{field:ContentField;v
   const [options,setOptions]=useState<Entry[]>([])
   useEffect(()=>{if(!field.targetContentTypeId)return;const c=new AbortController();getEntries(field.targetContentTypeId,c.signal).then(setOptions).catch(()=>setOptions([]));return()=>c.abort()},[field.targetContentTypeId])
   const target=contentTypes.find(type=>type.id===field.targetContentTypeId)
+  if(field.multiple){
+    const selected=Array.isArray(value)?value:[]
+    const labels=new Map(options.map(entry=>[entry.id,entry.title]))
+    const move=(index:number,offset:-1|1)=>{const destination=index+offset;if(destination<0||destination>=selected.length)return;const next=[...selected];[next[index],next[destination]]=[next[destination],next[index]];onChange(next)}
+    return <Stack spacing={1.5}>
+      <TextField select label={field.label} value={selected} onChange={event=>onChange(typeof event.target.value==='string'?event.target.value.split(','):event.target.value as string[])} required={field.required} helperText={t('Choose entries from {{type}}', { type: target?.name ?? t('the target type') })} slotProps={{select:{multiple:true,renderValue:(ids:unknown)=>(Array.isArray(ids)?ids.filter((id):id is string=>typeof id==='string'):[]).map(id=>labels.get(id)??id).join(', ')}}}>
+        {options.map(entry=><MenuItem key={entry.id} value={entry.id}>{entry.title}</MenuItem>)}
+      </TextField>
+      {selected.map((id,index)=><Stack key={id} direction="row" spacing={1} sx={{alignItems:'center'}}><Typography sx={{flex:1}}>{index+1}. {labels.get(id)??id}</Typography><Button size="small" disabled={index===0} onClick={()=>move(index,-1)}>{t('Up')}</Button><Button size="small" disabled={index===selected.length-1} onClick={()=>move(index,1)}>{t('Down')}</Button><Button size="small" color="error" onClick={()=>onChange(selected.filter(item=>item!==id))}>{t('Remove')}</Button></Stack>)}
+    </Stack>
+  }
   return <TextField select label={field.label} value={typeof value==='string'?value:''} onChange={event=>onChange(event.target.value||null)} required={field.required} helperText={t('Choose an entry from {{type}}', { type: target?.name ?? t('the target type') })}><MenuItem value="">{t('None')}</MenuItem>{options.map(entry=><MenuItem key={entry.id} value={entry.id}>{entry.title}</MenuItem>)}</TextField>
 }
 

@@ -10,6 +10,6 @@ interface ContentDeletionGateway
 
     public function deleteEntry(string $entryId): void;
 
-    /** @return list<array{id:string,title:string,fieldKey:string}> */
+    /** @return list<array{id:string,contentTypeId:string,title:string,fieldKey:string}> */
     public function referencesToEntry(string $entryId): array;
 }

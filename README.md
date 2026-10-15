@@ -109,12 +109,15 @@ The initial foundation contains:
 - versioned three-level navigation trees with optimistic editing and immutable public snapshots;
 - versioned built-in page layouts with published header and footer navigation placement;
 - versioned custom content schemas, schema-validated entry drafts and immutable public entry snapshots;
+- reusable, server-sanitized rich-text authoring for page blocks and custom content fields;
 - brokerless scheduled publication for exact page revisions and entry versions;
 - idempotent page and entry unpublishing that preserves immutable snapshots;
 - flat or hierarchical entry taxonomies embedded in immutable public snapshots;
 - taxonomy and term lifecycle management with hierarchy safeguards;
 - cacheable public taxonomy archive pages built from immutable entry snapshots;
-- schema-validated single-entry relations stored by stable identifier;
+- schema-validated single and ordered multi-entry relations stored by stable identifier;
+- authenticated reverse-reference navigation backed by the deletion-safe relation index;
+- append-only entry revision history with optimistic restore into a new draft version;
 - safe draft deletion with database-enforced relation integrity;
 - manually managed direct permanent redirects for active page routes;
 - owner-managed site identity and regional defaults with optimistic locking;
@@ -130,7 +133,7 @@ The initial foundation contains:
 - versioned `/api/v1` contracts with frontend types generated from OpenAPI 3.1;
 - architectural decision records.
 
-Multi-entry and reverse relation editing, rich HTML fields, remote theme/extension installation, live-linked sections and advanced editorial workflows are intentionally deferred. They will be introduced through vertical slices and explicit ADRs.
+Remote theme/extension installation, live-linked sections and advanced editorial workflows are intentionally deferred. They will be introduced through vertical slices and explicit ADRs.
 
 ## Architecture
 

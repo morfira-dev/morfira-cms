@@ -12,6 +12,11 @@ interface EntryRepository
 
     public function save(Entry $entry, int $expectedVersion): void;
 
+    /** @return list<EntryRevision> */
+    public function revisions(EntryId $id): array;
+
+    public function revision(EntryId $id, int $revision): ?EntryRevision;
+
     /** @return list<Entry> */
     public function all(?string $contentTypeId = null): array;
 }

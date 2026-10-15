@@ -6,6 +6,7 @@ namespace Cms\Tests\Publishing\Application;
 
 use Cms\Content\Application\CreateEntry;
 use Cms\Content\Application\CreatePage\CreatePage;
+use Cms\Content\Application\SanitizeEntryValues;
 use Cms\Content\Application\UpdatePage\UpdatePage;
 use Cms\Content\Domain\PageSeo;
 use Cms\Publishing\Application\PlanEntryPublication;
@@ -60,10 +61,11 @@ final class UnpublishContentTest extends TestCase
         $type = (new CreateContentType($types))('Article', 'articles', []);
         $definitions = new GetContentTypeDefinition($types);
         $validator = new ValidateEntryValues($definitions);
+        $sanitizer = new SanitizeEntryValues($definitions, new PassThroughRichTextSanitizer());
         $drafts = new InMemoryEntryRepository();
-        $entry = (new CreateEntry($drafts, $validator))($type->id, 'First', 'first', []);
+        $entry = (new CreateEntry($drafts, $validator, $sanitizer))($type->id, 'First', 'first', []);
         $published = new InMemoryPublishedEntryRepository();
-        (new PublishEntry($drafts, $published, $definitions, $validator))($entry->id, 1);
+        (new PublishEntry($drafts, $published, $definitions, $validator, $sanitizer))($entry->id, 1);
         $schedules = new InMemoryPublicationScheduleRepository();
         (new PlanEntryPublication($drafts, $schedules))($entry->id, 1, new \DateTimeImmutable('+1 hour'));
 

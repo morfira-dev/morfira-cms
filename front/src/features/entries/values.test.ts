@@ -1,24 +1,47 @@
 import { describe, expect, it } from 'vitest'
 import type { ContentField } from '../contentTypes/api'
-import { initializeEntryValues, publishedEntryUrl, setEntryValue, validateEntryValues } from './values'
+import { hasVisibleRichText, initializeEntryValues, publishedEntryUrl, setEntryValue, validateEntryValues } from './values'
 import type { PublishedEntry } from './api'
 
 const fields: ContentField[] = [
-  { id: 'title', key: 'summary', label: 'Summary', type: 'text', required: true },
-  { id: 'featured', key: 'featured', label: 'Featured', type: 'boolean', required: true },
-  { id: 'score', key: 'score', label: 'Score', type: 'number', required: false },
+  { id: 'title', key: 'summary', label: 'Summary', type: 'text', required: true, multiple: false },
+  { id: 'featured', key: 'featured', label: 'Featured', type: 'boolean', required: true, multiple: false },
+  { id: 'score', key: 'score', label: 'Score', type: 'number', required: false, multiple: false },
+  { id: 'body', key: 'body', label: 'Body', type: 'richText', required: true, multiple: false },
+  { id: 'related', key: 'related', label: 'Related', type: 'relation', required: true, targetContentTypeId: 'target', multiple: true },
 ]
 
 describe('entry value helpers', () => {
   it('initializes schema keys and validates required values by type', () => {
     const initial = initializeEntryValues(fields)
-    const withSummary = setEntryValue(initial, 'summary', 'Short text')
+    const withSummary = setEntryValue(setEntryValue(initial, 'summary', 'Short text'), 'body', '<p>Useful content</p>')
 
-    expect(initial).toEqual({ summary: null, featured: false, score: null })
-    expect(validateEntryValues(fields, withSummary)).toEqual([])
-    expect(validateEntryValues(fields, { ...withSummary, score: 'wrong' })).toEqual([
+    expect(initial).toEqual({ summary: null, featured: false, score: null, body: null, related: [] })
+    const complete = setEntryValue(withSummary, 'related', ['first', 'second'])
+    expect(validateEntryValues(fields, complete)).toEqual([])
+    expect(validateEntryValues(fields, { ...complete, score: 'wrong' })).toEqual([
       'Score has an invalid number value.',
     ])
+  })
+
+  it('treats formatting-only rich text as empty', () => {
+    expect(hasVisibleRichText('<p><br></p>')).toBe(false)
+    expect(hasVisibleRichText('<p>&nbsp;&#160;&#xA0;</p>')).toBe(false)
+    expect(hasVisibleRichText('<script>alert(1)</script>')).toBe(false)
+    expect(hasVisibleRichText('<p><strong>Useful content</strong></p>')).toBe(true)
+    expect(validateEntryValues(fields, {
+      summary: 'Short text',
+      featured: false,
+      score: null,
+      body: '<p><br></p>',
+      related: ['first'],
+    })).toEqual(['Body is required.'])
+  })
+
+  it('validates required unique multiple relations', () => {
+    const values = { summary: 'Short text', featured: false, score: null, body: '<p>Body</p>', related: [] }
+    expect(validateEntryValues(fields, values)).toEqual(['Related is required.'])
+    expect(validateEntryValues(fields, { ...values, related: ['same', 'same'] })).toEqual(['Related has an invalid relation value.'])
   })
 
   it('uses the immutable published schema API name for the public URL', () => {

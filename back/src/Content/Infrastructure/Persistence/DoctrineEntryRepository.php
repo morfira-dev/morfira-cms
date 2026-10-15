@@ -7,6 +7,7 @@ namespace Cms\Content\Infrastructure\Persistence;
 use Cms\Content\Domain\Entry;
 use Cms\Content\Domain\EntryId;
 use Cms\Content\Domain\EntryRepository;
+use Cms\Content\Domain\EntryRevision;
 use Cms\Content\Domain\EntrySlug;
 use Cms\Content\Domain\EntrySlugAlreadyExists;
 use Cms\Content\Domain\EntryVersionConflict;
@@ -24,7 +25,7 @@ final readonly class DoctrineEntryRepository implements EntryRepository
         try {
             $this->connection->transactional(function (Connection $c) use ($e): void {
                 $c->insert('content_entries', $this->row($e));
-                $this->revision($c, $e);
+                $this->insertRevision($c, $e);
                 $this->replaceRelationIndex($c, $e);
             });
         } catch (UniqueConstraintViolationException) {
@@ -47,7 +48,7 @@ final readonly class DoctrineEntryRepository implements EntryRepository
                 if (1 !== $n) {
                     throw new EntryVersionConflict();
                 }
-                $this->revision($c, $e);
+                $this->insertRevision($c, $e);
                 $this->replaceRelationIndex($c, $e);
             });
         } catch (UniqueConstraintViolationException) {
@@ -62,13 +63,25 @@ final readonly class DoctrineEntryRepository implements EntryRepository
         return array_map($this->hydrate(...), $rows);
     }
 
+    public function revisions(EntryId $id): array
+    {
+        return array_map($this->hydrateRevision(...), $this->connection->fetchAllAssociative('SELECT * FROM content_entry_revisions WHERE entry_id = ? ORDER BY revision_number DESC', [$id->value]));
+    }
+
+    public function revision(EntryId $id, int $revision): ?EntryRevision
+    {
+        $row = $this->connection->fetchAssociative('SELECT * FROM content_entry_revisions WHERE entry_id = ? AND revision_number = ?', [$id->value, $revision]);
+
+        return false === $row ? null : $this->hydrateRevision($row);
+    }
+
     /** @return array<string,int|string> */
     private function row(Entry $e): array
     {
         return ['id' => $e->id->value, 'content_type_id' => $e->contentTypeId, 'title' => $e->title, 'slug' => $e->slug->value, 'values_json' => json_encode($e->values, JSON_THROW_ON_ERROR | JSON_FORCE_OBJECT), 'version' => $e->version, 'created_at' => $e->createdAt->format('Y-m-d H:i:s.u'), 'updated_at' => $e->updatedAt->format('Y-m-d H:i:s.u')];
     }
 
-    private function revision(Connection $c, Entry $e): void
+    private function insertRevision(Connection $c, Entry $e): void
     {
         $c->insert('content_entry_revisions', ['entry_id' => $e->id->value, 'revision_number' => $e->version, 'title' => $e->title, 'slug' => $e->slug->value, 'values_json' => json_encode($e->values, JSON_THROW_ON_ERROR | JSON_FORCE_OBJECT), 'created_at' => $e->updatedAt->format('Y-m-d H:i:s.u')]);
     }
@@ -92,15 +105,17 @@ final readonly class DoctrineEntryRepository implements EntryRepository
             if (!is_string($key)) {
                 throw new \UnexpectedValueException('Relation field key must be a string.');
             }
-            $targetId = $entry->values[$key] ?? null;
-            if (!is_string($targetId)) {
-                continue;
+            $multiple = true === ($field['multiple'] ?? false);
+            $value = $entry->values[$key] ?? null;
+            $targetIds = $multiple && is_array($value) ? $value : (is_string($value) ? [$value] : []);
+            foreach ($targetIds as $position => $targetId) {
+                $connection->insert('content_entry_relations', [
+                    'source_entry_id' => $entry->id->value,
+                    'field_key' => $key,
+                    'position' => $position,
+                    'target_entry_id' => $targetId,
+                ]);
             }
-            $connection->insert('content_entry_relations', [
-                'source_entry_id' => $entry->id->value,
-                'field_key' => $key,
-                'target_entry_id' => $targetId,
-            ]);
         }
     }
 
@@ -110,10 +125,22 @@ final readonly class DoctrineEntryRepository implements EntryRepository
         return Entry::reconstitute(EntryId::fromString(self::s($r, 'id')), self::s($r, 'content_type_id'), self::s($r, 'title'), new EntrySlug(self::s($r, 'slug')), self::values($r), self::i($r, 'version'), new \DateTimeImmutable(self::s($r, 'created_at'), new \DateTimeZone('UTC')), new \DateTimeImmutable(self::s($r, 'updated_at'), new \DateTimeZone('UTC')));
     }
 
+    /** @param array<string,mixed> $row */
+    private function hydrateRevision(array $row): EntryRevision
+    {
+        return new EntryRevision(
+            self::i($row, 'revision_number'),
+            self::s($row, 'title'),
+            new EntrySlug(self::s($row, 'slug')),
+            self::values($row),
+            new \DateTimeImmutable(self::s($row, 'created_at'), new \DateTimeZone('UTC')),
+        );
+    }
+
     /**
      * @param array<string, mixed> $r
      *
-     * @return array<string, string|int|float|bool|null>
+     * @return array<string, string|int|float|bool|list<string>|null>
      */
     private static function values(array $r): array
     {
@@ -123,13 +150,36 @@ final readonly class DoctrineEntryRepository implements EntryRepository
         }
         $result = [];
         foreach ($value as $key => $item) {
-            if (!is_string($key) || (!is_string($item) && !is_int($item) && !is_float($item) && !is_bool($item) && null !== $item)) {
+            if (!is_string($key)) {
                 throw new \UnexpectedValueException('Invalid stored entry value.');
             }
-            $result[$key] = $item;
+            if (is_string($item) || is_int($item) || is_float($item) || is_bool($item) || null === $item) {
+                $result[$key] = $item;
+                continue;
+            }
+            if (self::isStringList($item)) {
+                /** @var list<string> $item */
+                $result[$key] = $item;
+                continue;
+            }
+            throw new \UnexpectedValueException('Invalid stored entry value.');
         }
 
         return $result;
+    }
+
+    private static function isStringList(mixed $value): bool
+    {
+        if (!is_array($value) || !array_is_list($value)) {
+            return false;
+        }
+        foreach ($value as $item) {
+            if (!is_string($item)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /** @param array<string,mixed> $r */

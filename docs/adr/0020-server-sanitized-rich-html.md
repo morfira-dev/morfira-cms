@@ -9,9 +9,9 @@ WYSIWYG editors produce HTML, but client-side filtering cannot protect preview, 
 
 ## Decision
 
-Keep the existing string contract and sanitize HTML in the UpdatePage application boundary using Symfony HTML Sanitizer. Store only the allow-listed result. Preview and public templates reapply the same sanitizer before marking the result as trusted HTML, which protects legacy records that predate the storage invariant.
+Keep the existing string contract and sanitize HTML at the page and entry application write boundaries using Symfony HTML Sanitizer. Store only the allow-listed result. Publication and public templates reapply the same sanitizer before marking the result as trusted HTML, which protects legacy records that predate the storage invariant.
 
-Admin Studio uses Lexical for authoring. Its MIT license and the sanitizer dependency are recorded in the repository license report.
+Admin Studio uses Lexical for authoring. The same sanitizer contract and editor are shared by page blocks and schema-defined rich-text entry fields. Their MIT licenses and the sanitizer dependency are recorded in the repository license report.
 
 ## Alternatives and constraints
 

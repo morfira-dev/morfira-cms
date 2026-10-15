@@ -43,22 +43,23 @@ final readonly class DoctrineContentDeletionGateway implements ContentDeletionGa
     public function referencesToEntry(string $entryId): array
     {
         $rows = $this->connection->fetchAllAssociative(<<<'SQL'
-SELECT source.id, source.title, relation.field_key
+SELECT source.id, source.content_type_id, source.title, relation.field_key
 FROM content_entry_relations relation
 JOIN content_entries source ON source.id = relation.source_entry_id
 WHERE relation.target_entry_id = ? AND relation.source_entry_id <> ?
-ORDER BY source.title, relation.field_key
+ORDER BY source.title, relation.field_key, relation.position
 SQL, [$entryId, $entryId]);
 
         return array_map(static function (array $row): array {
             $id = $row['id'] ?? null;
             $title = $row['title'] ?? null;
+            $contentTypeId = $row['content_type_id'] ?? null;
             $fieldKey = $row['field_key'] ?? null;
-            if (!is_string($id) || !is_string($title) || !is_string($fieldKey)) {
+            if (!is_string($id) || !is_string($contentTypeId) || !is_string($title) || !is_string($fieldKey)) {
                 throw new \UnexpectedValueException('Invalid entry relation index row.');
             }
 
-            return ['id' => $id, 'title' => $title, 'fieldKey' => $fieldKey];
+            return ['id' => $id, 'contentTypeId' => $contentTypeId, 'title' => $title, 'fieldKey' => $fieldKey];
         }, $rows);
     }
 }

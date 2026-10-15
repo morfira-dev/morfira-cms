@@ -7,6 +7,8 @@ export type Entry = components['schemas']['Entry']
 export type EntryCreate = components['schemas']['CreateEntryRequest']
 export type EntryUpdate = components['schemas']['UpdateEntryRequest']
 export type PublishedEntry = components['schemas']['PublishedEntry']
+export type EntryReference = components['schemas']['EntryReference']
+export type EntryRevision = components['schemas']['EntryRevision']
 
 type EntryCollection = components['schemas']['EntryCollection']
 
@@ -25,6 +27,22 @@ export async function getEntry(id: string, signal?: AbortSignal): Promise<Entry>
   const response = await apiFetch(`/api/v1/admin/entries/${id}`, { signal })
   if (!response.ok) throw new Error(await readApiError(response))
   return (await response.json()) as Entry
+}
+
+export async function getEntryReferences(id: string, signal?: AbortSignal): Promise<EntryReference[]> {
+  const response = await apiFetch(`/api/v1/admin/entries/${id}/references`, { signal })
+  if (!response.ok) throw new Error(await readApiError(response))
+  return ((await response.json()) as components['schemas']['EntryReferenceCollection']).items
+}
+
+export async function getEntryRevisions(id: string, signal?: AbortSignal): Promise<EntryRevision[]> {
+  const response = await apiFetch(`/api/v1/admin/entries/${id}/revisions`, { signal })
+  if (!response.ok) throw new Error(await readApiError(response))
+  return ((await response.json()) as components['schemas']['EntryRevisionCollection']).items
+}
+
+export async function restoreEntryRevision(id: string, revision: number, version: number): Promise<Entry> {
+  return sendJson(`/api/v1/admin/entries/${id}/revisions/${revision}/restore`, 'POST', { version })
 }
 
 export async function updateEntry(id: string, payload: EntryUpdate): Promise<Entry> {

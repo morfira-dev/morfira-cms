@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cms\Tests\Taxonomy\Application;
 
 use Cms\Content\Application\CreateEntry;
+use Cms\Content\Application\SanitizeEntryValues;
 use Cms\Publishing\Application\ListPublishedEntries;
 use Cms\Publishing\Application\PublishEntry;
 use Cms\Schema\Application\CreateContentType;
@@ -13,6 +14,7 @@ use Cms\Schema\Application\ValidateEntryValues;
 use Cms\Taxonomy\Application\EntryTerms;
 use Cms\Taxonomy\Application\ManageTaxonomy;
 use Cms\Tests\Content\InMemoryEntryRepository;
+use Cms\Tests\Content\PassThroughRichTextSanitizer;
 use Cms\Tests\Publishing\InMemoryPublishedEntryRepository;
 use Cms\Tests\Schema\InMemoryContentTypeRepository;
 use Cms\Tests\Taxonomy\InMemoryTaxonomyRepository;
@@ -29,9 +31,10 @@ final class TaxonomyLifecycleTest extends TestCase
         $withTerm=$manage->createTerm($taxonomy->id,'Architecture','architecture',null);
         $term=$withTerm->terms[0];
         $types=new InMemoryContentTypeRepository();$type=(new CreateContentType($types))('Article','articles',[]);$definitions=new GetContentTypeDefinition($types);$validator=new ValidateEntryValues($definitions);
-        $entries=new InMemoryEntryRepository();$entry=(new CreateEntry($entries,$validator))($type->id,'First','first',[]);
+        $sanitizer=new SanitizeEntryValues($definitions,new PassThroughRichTextSanitizer());
+        $entries=new InMemoryEntryRepository();$entry=(new CreateEntry($entries,$validator,$sanitizer))($type->id,'First','first',[]);
         $entryTerms=new EntryTerms($entries,$repo);$entryTerms->replace($entry->id,[$term['id']]);
-        $published=new InMemoryPublishedEntryRepository();(new PublishEntry($entries,$published,$definitions,$validator,$entryTerms))($entry->id,1);
+        $published=new InMemoryPublishedEntryRepository();(new PublishEntry($entries,$published,$definitions,$validator,$sanitizer,$entryTerms))($entry->id,1);
         $page=(new ListPublishedEntries($published))('articles',20,0,'topics','architecture');
         self::assertSame(1,$page['total']);self::assertSame('architecture',$page['items'][0]->taxonomies[0]['termSlug']);
         $entryTerms->replace($entry->id,[]);

@@ -9,7 +9,7 @@ Entry values are stored as JSON for schema flexibility. Relation values therefor
 
 ## Decision
 
-Maintain a normalized `content_entry_relations` index alongside mutable entry JSON. Each row identifies the source entry, field key and target entry. Source deletion cascades; target deletion is restricted.
+Maintain a normalized `content_entry_relations` index alongside mutable entry JSON. Each row identifies the source entry, field key, zero-based position and target entry. Source deletion cascades; target deletion is restricted.
 
 Draft deletion is orchestrated by a dedicated gateway using one database transaction across draft-owned lifecycle records. Published snapshots are intentionally outside that transaction and remain immutable.
 
@@ -19,4 +19,4 @@ Draft deletion is orchestrated by a dedicated gateway using one database transac
 - Relation index updates must remain in the same transaction as entry writes.
 - Content-type schema updates rebuild indexes for drafts of that type in the same transaction.
 - Existing JSON relations require migration backfill.
-- Future multi-entry relations can add multiple indexed rows per field with an explicit position.
+- Single and multiple relations share one ordered index; existing single relations use position `0`.

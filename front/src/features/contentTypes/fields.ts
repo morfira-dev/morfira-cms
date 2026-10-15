@@ -1,13 +1,13 @@
 import type { ContentField, ContentFieldType } from './api'
 
 export function createContentField(id: string): ContentField {
-  return { id, key: 'newField', label: 'New field', type: 'text', required: false }
+  return { id, key: 'newField', label: 'New field', type: 'text', required: false, multiple: false }
 }
 
 export function updateContentField(
   fields: ContentField[],
   id: string,
-  changes: Partial<Pick<ContentField, 'key' | 'label' | 'type' | 'required'>>,
+  changes: Partial<Pick<ContentField, 'key' | 'label' | 'type' | 'required' | 'multiple'>>,
 ): ContentField[] {
   return fields.map((field) => field.id === id ? { ...field, ...changes } : field)
 }
@@ -27,4 +27,4 @@ export function moveContentField(fields: ContentField[], id: string, offset: -1 
   return moved
 }
 
-export const contentFieldTypes: ContentFieldType[] = ['text', 'textarea', 'number', 'boolean', 'date', 'media', 'relation']
+export const contentFieldTypes: ContentFieldType[] = ['text', 'textarea', 'richText', 'number', 'boolean', 'date', 'media', 'relation']

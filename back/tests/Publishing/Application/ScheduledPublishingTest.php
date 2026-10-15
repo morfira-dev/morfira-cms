@@ -6,6 +6,7 @@ namespace Cms\Tests\Publishing\Application;
 
 use Cms\Content\Application\CreateEntry;
 use Cms\Content\Application\CreatePage\CreatePage;
+use Cms\Content\Application\SanitizeEntryValues;
 use Cms\Content\Application\UpdatePage\UpdatePage;
 use Cms\Content\Domain\PageSeo;
 use Cms\Publishing\Application\CancelPublicationSchedule;
@@ -87,8 +88,9 @@ final class ScheduledPublishingTest extends TestCase
         $type = (new CreateContentType($types))('Article', 'articles', []);
         $definitions = new GetContentTypeDefinition($types);
         $validator = new ValidateEntryValues($definitions);
+        $sanitizer = new SanitizeEntryValues($definitions, new PassThroughRichTextSanitizer());
         $entries = new InMemoryEntryRepository();
-        $entry = (new CreateEntry($entries, $validator))($type->id, 'First', 'first', []);
+        $entry = (new CreateEntry($entries, $validator, $sanitizer))($type->id, 'First', 'first', []);
         $schedules = new InMemoryPublicationScheduleRepository();
 
         return [
@@ -96,7 +98,7 @@ final class ScheduledPublishingTest extends TestCase
             $entries,
             $schedules,
             new PublishPage($pages, new InMemoryPublishedPageRepository()),
-            new PublishEntry($entries, new InMemoryPublishedEntryRepository(), $definitions, $validator),
+            new PublishEntry($entries, new InMemoryPublishedEntryRepository(), $definitions, $validator, $sanitizer),
             $page->id,
             $entry->id,
         ];

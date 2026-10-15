@@ -42,7 +42,7 @@ import {
   unpublishPage,
   updatePage,
 } from './api'
-import { RichTextEditor } from './RichTextEditor'
+import { RichTextEditor } from '../richText/RichTextEditor'
 import { createUuid } from '../../utils/createUuid'
 import { createReusableSection, deleteReusableSection, getReusableSections, getThemes, type ReusableSection, type Theme } from './catalogApi'
 import { copySectionBlocks, duplicatePageBlock, movePageBlock } from './pageBuilder'

@@ -12,14 +12,14 @@ use Cms\Schema\Application\ValidateEntryValues;
 
 final readonly class CreateEntry
 {
-    public function __construct(private EntryRepository $entries, private ValidateEntryValues $validator)
+    public function __construct(private EntryRepository $entries, private ValidateEntryValues $validator, private SanitizeEntryValues $sanitizer)
     {
     }
 
     /** @param array<string,mixed> $values */
     public function __invoke(string $contentTypeId, string $title, string $slug, array $values): EntryView
     {
-        $validated = ($this->validator)($contentTypeId, $values);
+        $validated = ($this->validator)($contentTypeId, ($this->sanitizer)($contentTypeId, $values));
         $now = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
         $entry = Entry::create(EntryId::new(), $contentTypeId, $title, new EntrySlug($slug), $validated, $now);
         $this->entries->add($entry);

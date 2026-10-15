@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cms\Publishing\Application;
 
+use Cms\Content\Application\SanitizeEntryValues;
 use Cms\Content\Domain\EntryId;
 use Cms\Content\Domain\EntryNotFound;
 use Cms\Content\Domain\EntryRepository;
@@ -16,7 +17,7 @@ use Cms\Taxonomy\Application\EntryTerms;
 
 final readonly class PublishEntry
 {
-    public function __construct(private EntryRepository $entries, private PublishedEntryRepository $published, private GetContentTypeDefinition $definitions, private ValidateEntryValues $validator, private ?EntryTerms $entryTerms = null)
+    public function __construct(private EntryRepository $entries, private PublishedEntryRepository $published, private GetContentTypeDefinition $definitions, private ValidateEntryValues $validator, private SanitizeEntryValues $sanitizer, private ?EntryTerms $entryTerms = null)
     {
     }
 
@@ -37,7 +38,7 @@ final readonly class PublishEntry
         }
 
         $definition = $this->definitions->byId($entry->contentTypeId);
-        $values = ($this->validator)($entry->contentTypeId, $entry->values);
+        $values = ($this->validator)($entry->contentTypeId, ($this->sanitizer)($entry->contentTypeId, $entry->values));
         $snapshot = new PublishedEntry(EntryId::new()->value, $entry->id->value, $entry->version, ['id' => $definition->id, 'name' => $definition->name, 'apiName' => $definition->apiName, 'version' => $definition->version, 'fields' => $definition->fields], $entry->title, $entry->slug->value, $values, $this->entryTerms?->snapshot($entry->id->value) ?? [], new \DateTimeImmutable('now', new \DateTimeZone('UTC')));
 
         return PublishedEntryView::fromEntry($this->published->publish($snapshot));

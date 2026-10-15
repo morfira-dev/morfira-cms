@@ -51,6 +51,54 @@ final class ValidateEntryValuesTest extends TestCase
         $validator($type->id, ['author' => 'cccccccc-cccc-4ccc-8ccc-cccccccccccc']);
     }
 
+    #[Test]
+    public function it_preserves_ordered_unique_multiple_relations(): void
+    {
+        $repository = new InMemoryContentTypeRepository();
+        $targetType = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+        $first = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+        $second = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+        $type = (new CreateContentType($repository))('Landing', 'landings', [[
+            'id' => '55555555-5555-4555-8555-555555555555', 'key' => 'authors', 'label' => 'Authors',
+            'type' => 'relation', 'required' => true, 'targetContentTypeId' => $targetType, 'multiple' => true,
+        ]]);
+        $lookup = new class([$first, $second], $targetType) implements RelationTargetLookup {
+            /** @param list<string> $entryIds */
+            public function __construct(private array $entryIds, private string $typeId) {}
+            public function exists(string $entryId, string $contentTypeId): bool { return in_array($entryId, $this->entryIds, true) && $contentTypeId === $this->typeId; }
+        };
+        $validator = new ValidateEntryValues(new GetContentTypeDefinition($repository), $lookup);
+
+        self::assertSame(['authors' => [$second, $first]], $validator($type->id, ['authors' => [$second, $first]]));
+    }
+
+    #[Test]
+    public function it_rejects_duplicate_or_empty_required_multiple_relations(): void
+    {
+        $repository = new InMemoryContentTypeRepository();
+        $targetType = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+        $entryId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+        $type = (new CreateContentType($repository))('Landing', 'landings', [[
+            'id' => '55555555-5555-4555-8555-555555555555', 'key' => 'authors', 'label' => 'Authors',
+            'type' => 'relation', 'required' => true, 'targetContentTypeId' => $targetType, 'multiple' => true,
+        ]]);
+        $lookup = new class($entryId, $targetType) implements RelationTargetLookup {
+            public function __construct(private string $entryId, private string $typeId) {}
+            public function exists(string $entryId, string $contentTypeId): bool { return $entryId === $this->entryId && $contentTypeId === $this->typeId; }
+        };
+        $validator = new ValidateEntryValues(new GetContentTypeDefinition($repository), $lookup);
+
+        try {
+            $validator($type->id, ['authors' => []]);
+            self::fail('Required multiple relations must reject an empty list.');
+        } catch (\InvalidArgumentException $exception) {
+            self::assertStringContainsString('required', $exception->getMessage());
+        }
+
+        $this->expectExceptionMessage('invalid relation value');
+        $validator($type->id, ['authors' => [$entryId, $entryId]]);
+    }
+
     /** @return array{ValidateEntryValues, string} */
     private function validator(): array
     {
