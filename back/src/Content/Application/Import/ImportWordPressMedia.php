@@ -6,6 +6,7 @@ namespace Cms\Content\Application\Import;
 
 use Cms\Media\Application\ImportLocalImage;
 use Cms\Media\Application\MediaAssetView;
+use Cms\Media\Application\GetMediaAsset\GetMediaAsset;
 
 /**
  * @phpstan-type Attachment array{id:string,path:string,url:string,alt:string,eligible:bool}
@@ -13,7 +14,7 @@ use Cms\Media\Application\MediaAssetView;
  */
 final readonly class ImportWordPressMedia
 {
-    public function __construct(private WordPressImportLedger $ledger, private ImportLocalImage $images)
+    public function __construct(private WordPressImportLedger $ledger, private ImportLocalImage $images, private GetMediaAsset $assets)
     {
     }
 
@@ -40,6 +41,15 @@ final readonly class ImportWordPressMedia
         }
     }
 
+    /** @return ?array{assetId:string,alt:string} */
+    public function reusableImage(string $source, string $id): ?array
+    {
+        $assetId = $this->ledger->mediaAssetId($source, $id);
+        $asset = $assetId === null ? null : ($this->assets)($assetId);
+
+        return $asset === null ? null : ['assetId' => $asset->id, 'alt' => $asset->defaultAlt];
+    }
+
     /**
      * @param Attachment $attachment
      * @param \ArrayObject<int,MediaAssetView> $created
@@ -48,11 +58,15 @@ final readonly class ImportWordPressMedia
     private function importAttachment(string $source, array $attachment, ?string $directory, bool $apply, \ArrayObject $created): array
     {
         $id = $attachment['id'];
-        if ($this->ledger->contains($source, $id)) {
-            return ['id' => $id, 'state' => 'already_imported'];
-        }
         if (!$attachment['eligible']) {
             return ['id' => $id, 'state' => 'unsupported_status'];
+        }
+        if ($this->ledger->contains($source, $id)) {
+            $image = $this->reusableImage($source, $id);
+            if ($image === null) {
+                return ['id' => $id, 'state' => 'already_imported', 'reason' => 'No reusable media asset mapping is available.'];
+            }
+            return ['id' => $id, 'state' => 'already_imported', 'assetId' => $image['assetId']];
         }
         if ($directory === null) {
             return ['id' => $id, 'state' => 'media_directory_required'];
@@ -76,6 +90,7 @@ final readonly class ImportWordPressMedia
                     throw new \LogicException('Applying an image import must produce an asset.');
                 }
                 $created->append($asset);
+                $this->ledger->recordMediaAsset($source, $id, $asset->id);
 
                 return $asset;
             });

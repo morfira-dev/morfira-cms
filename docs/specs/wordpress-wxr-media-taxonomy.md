@@ -12,7 +12,7 @@ Implemented
 
 ## Non-goals
 
-Remote fetching, documents and video, inline image replacement, featured images, custom taxonomies, and guessing destinations for earlier imports are outside this slice.
+Remote fetching, documents and video, custom taxonomies, and guessing destinations for earlier imports are outside this slice. Inline and featured image bindings are described in [the image binding specification](wordpress-wxr-image-bindings.md).
 
 ## Actors and flow
 

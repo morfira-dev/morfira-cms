@@ -19,7 +19,7 @@ final readonly class DoctrinePublishedMediaUsageLookup implements PublishedMedia
         foreach ([
             ['published_page_snapshots', 'blocks', 'published page'],
             ['published_page_snapshots', 'seo', 'published page SEO'],
-            ['published_entry_snapshots', 'values', 'published entry'],
+            ['published_entry_snapshots', 'values_json', 'published entry'],
         ] as [$table, $column, $label]) {
             foreach ($this->connection->fetchFirstColumn(sprintf('SELECT %s FROM %s', $column, $table)) as $payload) {
                 if (is_string($payload) && self::contains(json_decode($payload, true, flags: JSON_THROW_ON_ERROR), $assetId)) {

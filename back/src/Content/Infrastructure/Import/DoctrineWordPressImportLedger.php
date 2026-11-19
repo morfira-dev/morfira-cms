@@ -39,4 +39,22 @@ final readonly class DoctrineWordPressImportLedger implements WordPressImportLed
     {
         return $this->connection->transactional($operation);
     }
+
+    public function mediaAssetId(string $source, string $externalId): ?string
+    {
+        $id = $this->connection->fetchOne(
+            'SELECT media_asset_id FROM content_wordpress_import_items WHERE source_key = ? AND external_id = ?',
+            [$source, $externalId],
+        );
+
+        return is_string($id) ? $id : null;
+    }
+
+    public function recordMediaAsset(string $source, string $externalId, string $assetId): void
+    {
+        $this->connection->update('content_wordpress_import_items', ['media_asset_id' => $assetId], [
+            'source_key' => $source,
+            'external_id' => $externalId,
+        ]);
+    }
 }

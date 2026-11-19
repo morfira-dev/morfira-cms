@@ -11,7 +11,7 @@ use DOMElement;
  * @phpstan-type Term array{taxonomy:string,slug:string,name:string,parent:string}
  * @phpstan-type TermReference array{taxonomy:string,slug:string}
  * @phpstan-type Attachment array{id:string,path:string,url:string,alt:string,eligible:bool}
- * @phpstan-type ExportItem array{id: string, type: string, status: string, title: string, slug: string, html: string, link: string, passwordProtected: bool, terms:list<TermReference>}
+ * @phpstan-type ExportItem array{id: string, type: string, status: string, title: string, slug: string, html: string, link: string, passwordProtected: bool, terms:list<TermReference>, thumbnailId:?string}
  */
 final class WordPressExportReader
 {
@@ -108,6 +108,7 @@ final class WordPressExportReader
 
             $status = trim($this->text($node, 'status', $namespace));
             $protected = $this->text($node, 'post_password', $namespace) !== '';
+            $eligible = !$protected && in_array($status, ['publish', 'draft', 'pending', 'future'], true);
             if ($protected || in_array($status, ['private', 'trash'], true)) {
                 $withheld[$id] = true;
             }
@@ -120,9 +121,10 @@ final class WordPressExportReader
                 'html' => $this->text($node, 'encoded', self::CONTENT_NAMESPACE),
                 'link' => trim($this->text($node, 'link')),
                 'passwordProtected' => $protected,
-                'terms' => $type === 'post' && !$protected && in_array($status, ['publish', 'draft', 'pending', 'future'], true)
+                'terms' => $type === 'post' && $eligible
                     ? $this->postTerms($node, $itemTerms)
                     : [],
+                'thumbnailId' => $eligible ? $this->thumbnailId($node, $namespace) : null,
             ];
         }
 
@@ -165,6 +167,31 @@ final class WordPressExportReader
             'eligible' => in_array(trim($this->text($item, 'status', $namespace)), ['inherit', 'publish'], true)
                 && $this->text($item, 'post_password', $namespace) === '',
         ];
+    }
+
+    private function thumbnailId(DOMElement $item, string $namespace): ?string
+    {
+        $thumbnailId = null;
+        foreach ($item->childNodes as $node) {
+            if (!$node instanceof DOMElement || $node->namespaceURI !== $namespace || $node->localName !== 'postmeta') {
+                continue;
+            }
+            try {
+                if ($this->text($node, 'meta_key', $namespace) !== '_thumbnail_id') {
+                    continue;
+                }
+                $value = trim($this->text($node, 'meta_value', $namespace));
+            } catch (\InvalidArgumentException) {
+                // Optional metadata must not invalidate the draft import.
+                continue;
+            }
+            if (preg_match('/\A[1-9][0-9]{0,19}\z/', $value) !== 1 || ($thumbnailId !== null && $thumbnailId !== $value)) {
+                return null;
+            }
+            $thumbnailId = $value;
+        }
+
+        return $thumbnailId;
     }
 
     /**

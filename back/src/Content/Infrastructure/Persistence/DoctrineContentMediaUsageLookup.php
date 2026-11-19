@@ -21,8 +21,8 @@ final readonly class DoctrineContentMediaUsageLookup implements ContentMediaUsag
             ['content_pages', 'seo', 'page SEO'],
             ['content_page_revisions', 'blocks', 'page revision'],
             ['content_page_revisions', 'seo', 'page revision SEO'],
-            ['content_entries', 'values', 'entry draft'],
-            ['content_entry_revisions', 'values', 'entry revision'],
+            ['content_entries', 'values_json', 'entry draft'],
+            ['content_entry_revisions', 'values_json', 'entry revision'],
         ] as [$table, $column, $label]) {
             $rows = $this->connection->fetchFirstColumn(sprintf('SELECT %s FROM %s', $column, $table));
             foreach ($rows as $payload) {

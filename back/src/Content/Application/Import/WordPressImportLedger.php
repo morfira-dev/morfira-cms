@@ -17,6 +17,10 @@ interface WordPressImportLedger
      */
     public function claim(string $source, string $externalId): void;
 
+    public function mediaAssetId(string $source, string $externalId): ?string;
+
+    public function recordMediaAsset(string $source, string $externalId, string $assetId): void;
+
     /**
      * @template T
      * @param \Closure(): T $operation

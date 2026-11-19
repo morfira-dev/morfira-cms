@@ -147,7 +147,9 @@ docker compose exec -T app php bin/cms cms:import:wordpress /tmp/wordpress-expor
 
 For production, use `docker compose -f compose.prod.yaml` with the installation environment. The import without `--apply` produces a JSON report without writes. With `--apply`, eligible pages and posts are created as drafts, and built-in categories and tags are assigned to newly imported posts. Keep the same source key for every export from that WordPress installation.
 
-For attachments, copy or mount a trusted read-only copy of the WordPress uploads tree into the application container and pass `--media-dir=/path/to/uploads` to both commands. Supported JPEG, PNG and WebP attachments are added to the media library as WebP variants. Review the report and drafts before publishing. Inline image placement, featured images, authors and redirects require separate migration. Earlier imports are not automatically matched to existing destinations for taxonomy assignment. See the [draft import specification](docs/specs/wordpress-wxr-import.md) and the [media and taxonomy specification](docs/specs/wordpress-wxr-media-taxonomy.md).
+For attachments, copy or mount a trusted read-only copy of the WordPress uploads tree into the application container and pass `--media-dir=/path/to/uploads` to both commands. Supported JPEG, PNG and WebP attachments are added to the media library as WebP variants. Imported drafts receive inline image references in content order. Featured images appear in page Open Graph settings or the dedicated post media field. Review unresolved links in the JSON report before publishing.
+
+The importer keeps existing drafts unchanged on replay. Attachment mappings created before image binding support have no target UUID and cannot be reused automatically. Authors and redirects require separate migration. See the [draft import](docs/specs/wordpress-wxr-import.md), [media and taxonomy](docs/specs/wordpress-wxr-media-taxonomy.md) and [image binding](docs/specs/wordpress-wxr-image-bindings.md) specifications.
 
 ## Architecture
 

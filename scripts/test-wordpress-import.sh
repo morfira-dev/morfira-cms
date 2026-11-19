@@ -42,6 +42,8 @@ printf '%s\n' "$report" | jq -e '
     (.items | length) == 2 and
     ([.items[] | select(.state == "planned") | .targetPath] | sort) == ["/content/wordpress-posts/wp-import-news", "/wp-import-about"] and
     ([.media[] | .state] | sort) == ["invalid", "planned", "planned"] and
+    (.items[0].images == {"inline": 1, "missingInline": 1, "featured": "linked"}) and
+    (.items[1].images == {"inline": 1, "missingInline": 0, "featured": "linked"}) and
     ([.taxonomy.terms[] | select(.state == "planned")] | length) == 3 and
     ([.taxonomy.assignments[] | select(.state == "planned")] | length) == 2
 ' >/dev/null
@@ -66,6 +68,22 @@ test "$(db_query "$ledger_query")" = 4
 test "$(db_query "$media_query")" = 2
 test "$(db_query "$taxonomy_query")" = 2
 test "$(db_query "SELECT COUNT(*) FROM media_assets WHERE original_name = 'sample.png' AND default_alt = 'Sample alt'")" = 1
+test "$(db_query "SELECT COUNT(*) FROM content_pages AS page
+    JOIN media_assets AS inline_asset ON inline_asset.id = JSON_UNQUOTE(JSON_EXTRACT(page.blocks, '\$[1].data.assetId'))
+    JOIN media_assets AS featured ON featured.id = JSON_UNQUOTE(JSON_EXTRACT(page.seo, '\$.openGraphImageAssetId'))
+    WHERE page.slug = 'wp-import-about' AND inline_asset.original_name = 'sample.png' AND featured.original_name = 'sample-two.png'
+    AND JSON_UNQUOTE(JSON_EXTRACT(page.blocks, '\$[1].data.alt')) = 'Page image'
+    AND JSON_UNQUOTE(JSON_EXTRACT(page.blocks, '\$[2].data.content')) LIKE '%Page caption%Page tail%'")" = 1
+test "$(db_query "SELECT COUNT(*) FROM content_entries AS entry
+    JOIN media_assets AS inline_asset ON inline_asset.id = JSON_UNQUOTE(JSON_EXTRACT(entry.values_json, '\$.wordpressInlineImage1'))
+    JOIN media_assets AS featured ON featured.id = JSON_UNQUOTE(JSON_EXTRACT(entry.values_json, '\$.wordpressFeaturedImage'))
+    WHERE entry.slug = 'wp-import-news' AND inline_asset.original_name = 'sample-two.png' AND featured.original_name = 'sample.png'
+    AND JSON_UNQUOTE(JSON_EXTRACT(entry.values_json, '\$.wordpressBodyPart2')) LIKE '%Post tail%'")" = 1
+test "$(db_query "SELECT COUNT(*) FROM schema_content_types WHERE api_name = 'wordpress-posts'
+    AND JSON_UNQUOTE(JSON_EXTRACT(fields, '\$[0].key')) = 'wordpressFeaturedImage'
+    AND JSON_UNQUOTE(JSON_EXTRACT(fields, '\$[1].key')) = 'body'
+    AND JSON_UNQUOTE(JSON_EXTRACT(fields, '\$[2].key')) = 'wordpressInlineImage1'
+    AND JSON_UNQUOTE(JSON_EXTRACT(fields, '\$[3].key')) = 'wordpressBodyPart2'")" = 1
 test "$(db_query "SELECT COUNT(*) FROM taxonomy_terms AS child JOIN taxonomy_terms AS parent ON child.parent_id = parent.id WHERE child.slug = 'updates' AND parent.slug = 'news'")" = 1
 test "$(db_query "SELECT COUNT(*) FROM taxonomy_entry_terms AS assignment JOIN content_entries AS entry ON assignment.entry_id = entry.id JOIN taxonomy_terms AS term ON assignment.term_id = term.id WHERE entry.slug = 'wp-import-news' AND term.slug IN ('updates', 'release')")" = 2
 media_after=$(compose exec -T app sh -c 'find public/media -type f | wc -l')
@@ -135,5 +153,23 @@ test "$(compose exec -T app sh -c 'find public/media -type f | wc -l')" = "$medi
 for route in /wp-import-about /api/v1/content/pages/wp-import-about /content/wordpress-posts/wp-import-news /api/v1/content/entries/wordpress-posts/wp-import-news; do
     test "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' "$CMS_PUBLIC_SITE_URL$route")" = 404
 done
+
+compose exec -T app php -r 'if (file_put_contents($argv[1], stream_get_contents(STDIN)) === false) exit(1);' "$container_fixture" <<'XML'
+<rss xmlns:wp="http://wordpress.org/export/1.2/" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel><wp:wxr_version>1.2</wp:wxr_version><item>
+    <title>Reused asset</title><wp:post_id>456</wp:post_id><wp:post_name>wp-import-reused-asset</wp:post_name>
+    <wp:post_type>post</wp:post_type><wp:status>draft</wp:status>
+    <wp:postmeta><wp:meta_key>_thumbnail_id</wp:meta_key><wp:meta_value>453</wp:meta_value></wp:postmeta>
+    <content:encoded><![CDATA[<p>Intro</p><img src="https://wordpress.example/wp-content/uploads/2026/11/sample-two.png" class="wp-image-454"><p>Tail</p>]]></content:encoded>
+  </item></channel>
+</rss>
+XML
+report=$(import wordpress-e2e --apply)
+printf '%s\n' "$report" | jq -e '
+    (.media | length) == 0 and .items[0].state == "imported" and
+    .items[0].images == {"inline": 1, "missingInline": 0, "featured": "linked"}
+' >/dev/null
+test "$(db_query "$media_query")" = 2
+test "$(compose exec -T app sh -c 'find public/media -type f | wc -l')" = "$media_after"
 
 printf '%s\n' 'WordPress import production CLI journey passed.'

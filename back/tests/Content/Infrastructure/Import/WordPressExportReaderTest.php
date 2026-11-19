@@ -49,6 +49,7 @@ final class WordPressExportReaderTest extends TestCase
                     'link' => 'https://wordpress.example/?p=7&lang=en',
                     'passwordProtected' => true,
                     'terms' => [],
+                    'thumbnailId' => null,
                 ],
                 [
                     'id' => '10',
@@ -60,6 +61,7 @@ final class WordPressExportReaderTest extends TestCase
                     'link' => '',
                     'passwordProtected' => false,
                     'terms' => [],
+                    'thumbnailId' => null,
                 ],
             ],
             'skippedTypes' => ['nav_menu_item' => 2],
@@ -126,6 +128,55 @@ final class WordPressExportReaderTest extends TestCase
             XML);
 
         self::assertFalse($export['attachments'][0]['eligible']);
+    }
+
+    public function testReadsThumbnailMetadataForEligiblePagesAndPosts(): void
+    {
+        $export = $this->readXml(<<<'XML'
+            <rss xmlns:wp="http://wordpress.org/export/1.2/"><channel>
+              <wp:wxr_version>1.2</wp:wxr_version>
+              <item>
+                <wp:post_id>1</wp:post_id><wp:post_type>page</wp:post_type><wp:status>publish</wp:status>
+                <wp:postmeta><wp:meta_key><![CDATA[_thumbnail_id]]></wp:meta_key><wp:meta_value><![CDATA[18446744073709551615]]></wp:meta_value></wp:postmeta>
+              </item>
+              <item>
+                <wp:post_id>2</wp:post_id><wp:post_type>post</wp:post_type><wp:status>draft</wp:status>
+                <wp:postmeta><wp:meta_key>_thumbnail_id</wp:meta_key><wp:meta_value>45</wp:meta_value></wp:postmeta>
+                <wp:postmeta><wp:meta_key>_thumbnail_id</wp:meta_key><wp:meta_value>45</wp:meta_value></wp:postmeta>
+              </item>
+              <item>
+                <wp:post_id>3</wp:post_id><wp:post_type>post</wp:post_type><wp:status>publish</wp:status>
+                <wp:post_password>test-only</wp:post_password>
+                <wp:postmeta><wp:meta_key>_thumbnail_id</wp:meta_key><wp:meta_value>46</wp:meta_value></wp:postmeta>
+              </item>
+            </channel></rss>
+            XML);
+
+        self::assertSame(['18446744073709551615', '45', null], array_column($export['items'], 'thumbnailId'));
+    }
+
+    public function testIgnoresMalformedAndConflictingThumbnailMetadata(): void
+    {
+        $export = $this->readXml(<<<'XML'
+            <rss xmlns:wp="http://wordpress.org/export/1.2/"><channel>
+              <wp:wxr_version>1.2</wp:wxr_version>
+              <item>
+                <wp:post_id>1</wp:post_id><wp:post_type>page</wp:post_type><wp:status>publish</wp:status>
+                <wp:postmeta><wp:meta_key>_thumbnail_id</wp:meta_key><wp:meta_value>045</wp:meta_value></wp:postmeta>
+              </item>
+              <item>
+                <wp:post_id>2</wp:post_id><wp:post_type>post</wp:post_type><wp:status>draft</wp:status>
+                <wp:postmeta><wp:meta_key>_thumbnail_id</wp:meta_key><wp:meta_value>45</wp:meta_value></wp:postmeta>
+                <wp:postmeta><wp:meta_key>_thumbnail_id</wp:meta_key><wp:meta_value>46</wp:meta_value></wp:postmeta>
+              </item>
+              <item>
+                <wp:post_id>3</wp:post_id><wp:post_type>post</wp:post_type><wp:status>publish</wp:status>
+                <wp:postmeta><wp:meta_key>_thumbnail_id</wp:meta_key><wp:meta_value>45</wp:meta_value><wp:meta_value>46</wp:meta_value></wp:postmeta>
+              </item>
+            </channel></rss>
+            XML);
+
+        self::assertSame([null, null, null], array_column($export['items'], 'thumbnailId'));
     }
 
     /**

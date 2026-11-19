@@ -20,20 +20,22 @@
     <item>
       <title>Imported About</title>
       <link>https://wordpress.example/wp-import-about/</link>
-      <content:encoded><![CDATA[<p>Page body</p><script>untrusted()</script>]]></content:encoded>
+      <content:encoded><![CDATA[<p>Page body</p><figure><img src="https://wordpress.example/wp-content/uploads/2026/11/sample-64x48.png?version=1" alt="Page image"><figcaption>Page caption</figcaption></figure><img src="https://elsewhere.example/missing.png"><p>Page tail</p><script>untrusted()</script>]]></content:encoded>
       <wp:post_id>451</wp:post_id>
       <wp:post_name>wp-import-about</wp:post_name>
       <wp:status>publish</wp:status>
       <wp:post_type>page</wp:post_type>
+      <wp:postmeta><wp:meta_key>_thumbnail_id</wp:meta_key><wp:meta_value>454</wp:meta_value></wp:postmeta>
     </item>
     <item>
       <title>Imported News</title>
       <link>https://wordpress.example/wp-import-news/</link>
-      <content:encoded><![CDATA[<p>Post body</p><script>untrusted()</script>]]></content:encoded>
+      <content:encoded><![CDATA[<p>Post body</p><img src="https://wordpress.example/wp-content/uploads/2026/11/sample-two.png" class="wp-image-454"><p>Post tail</p><script>untrusted()</script>]]></content:encoded>
       <wp:post_id>452</wp:post_id>
       <wp:post_name>wp-import-news</wp:post_name>
       <wp:status>draft</wp:status>
       <wp:post_type>post</wp:post_type>
+      <wp:postmeta><wp:meta_key>_thumbnail_id</wp:meta_key><wp:meta_value>453</wp:meta_value></wp:postmeta>
       <category domain="category" nicename="updates">Updates</category>
       <category domain="post_tag" nicename="release">Release</category>
     </item>
@@ -55,7 +57,7 @@
       <wp:post_id>455</wp:post_id>
       <wp:post_type>attachment</wp:post_type>
       <wp:status>inherit</wp:status>
-      <wp:attachment_url>https://wordpress.example/wp-content/uploads/2026/11/sample.png</wp:attachment_url>
+      <wp:attachment_url>https://wordpress.example/wp-content/uploads/2026/11/unavailable.png</wp:attachment_url>
       <wp:postmeta><wp:meta_key>_wp_attached_file</wp:meta_key><wp:meta_value>../sample.png</wp:meta_value></wp:postmeta>
     </item>
   </channel>
