@@ -31,6 +31,25 @@ final readonly class WordPressRestEndpoint
         return new self('https://'.$host.rtrim($path, '/'), $host);
     }
 
+    /** Resolve and validate every address before pinning the HTTPS connection. */
+    public function resolvePins(): string
+    {
+        $records = @dns_get_record($this->host.'.', DNS_A | DNS_AAAA);
+        $addresses = [];
+        if ($records !== false) {
+            foreach ($records as $record) {
+                $address = $record['ip'] ?? $record['ipv6'] ?? null;
+                if (is_string($address)) {
+                    $addresses[] = $address;
+                }
+            }
+        }
+        $addresses = self::publicAddresses(array_values(array_unique($addresses)));
+        $pins = array_map(static fn (string $ip): string => str_contains($ip, ':') ? '['.$ip.']' : $ip, $addresses);
+
+        return $this->host.':443:'.implode(',', $pins);
+    }
+
     /**
      * @param list<string> $addresses
      * @return non-empty-list<string>

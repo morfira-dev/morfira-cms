@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+use Cms\Content\Application\Import\WordPressRemoteMedia;
+use Cms\Content\Application\Import\WordPressRemoteMediaFailure;
+use Cms\Content\Infrastructure\Import\WordPressRemoteMediaDownloader;
 use Cms\Content\Infrastructure\Import\WordPressRestTransport;
 use Cms\Content\Infrastructure\Import\WordPressRestJsonTransport;
 use Cms\Kernel;
@@ -30,18 +33,94 @@ $container->set(WordPressRestTransport::class, new class implements WordPressRes
                 'status' => 'publish',
                 'slug' => 'imported-rest-post',
                 'title' => ['rendered' => getenv('CMS_REST_FIXTURE_EDITED') === '1' ? 'Edited REST post' : 'Imported REST post'],
-                'content' => ['rendered' => '<p>REST body</p>', 'protected' => false],
+                'content' => [
+                    'rendered' => '<p>REST body</p><img class="wp-image-92004" src="https://wordpress.example/wp-content/uploads/2026/11/rest-fixture.png" alt="Inline REST image">',
+                    'protected' => false,
+                ],
                 'link' => 'https://wordpress.example/blog/imported-rest-post/',
                 'author' => 92002,
                 'categories' => [92003],
+                'featured_media' => 92004,
             ]],
+            'media' => $this->attachments(),
             'users' => [['id' => 92002, 'slug' => 'fixture-author', 'name' => 'REST Fixture Author']],
             'categories' => [['id' => 92003, 'slug' => 'rest-fixture-category', 'name' => 'REST Fixture Category', 'parent' => 0]],
-            'pages', 'media', 'tags' => [],
+            'pages', 'tags' => [],
             default => throw new RuntimeException('Unknown fixture collection.'),
         };
 
         return ['body' => $records, 'totalPages' => $records === [] ? 0 : 1];
+    }
+
+    /** @return list<array<string,mixed>> */
+    private function attachments(): array
+    {
+        $files = [92004 => 'rest-fixture.png'];
+        if (getenv('CMS_REST_FIXTURE_MEDIA') === 'transient-failure') {
+            $files[92005] = 'rest-fixture-failure.png';
+        }
+
+        $records = [];
+        foreach ($files as $id => $file) {
+            $records[] = [
+                'id' => $id,
+                'source_url' => 'https://wordpress.example/wp-content/uploads/2026/11/'.$file,
+                'media_type' => 'image',
+                'mime_type' => 'image/png',
+                'media_details' => ['file' => '2026/11/'.$file],
+                'alt_text' => 'REST fixture image',
+                'status' => 'inherit',
+                'post' => 92001,
+            ];
+        }
+
+        return $records;
+    }
+});
+$container->set(WordPressRemoteMediaDownloader::class, new class implements WordPressRemoteMedia {
+    public function assertUrl(string $apiUrl, string $attachmentUrl): void
+    {
+        if ($apiUrl !== 'https://wordpress.example/wp-json/wp/v2' || !in_array($attachmentUrl, [
+            'https://wordpress.example/wp-content/uploads/2026/11/rest-fixture.png',
+            'https://wordpress.example/wp-content/uploads/2026/11/rest-fixture-failure.png',
+        ], true)) {
+            throw new RuntimeException('Unexpected fixture media URL.');
+        }
+    }
+
+    /**
+     * @template T
+     * @param Closure(string,string):T $consume
+     * @return T
+     */
+    public function download(string $apiUrl, string $attachmentUrl, Closure $consume): mixed
+    {
+        $this->assertUrl($apiUrl, $attachmentUrl);
+        $mode = getenv('CMS_REST_FIXTURE_MEDIA');
+        $fileName = basename($attachmentUrl);
+        if ($mode === 'reject-download' || $fileName === 'rest-fixture-failure.png') {
+            throw new WordPressRemoteMediaFailure('Fixture media download failed.');
+        }
+
+        $file = tmpfile();
+        if ($file === false) {
+            throw new RuntimeException('Could not open fixture image storage.');
+        }
+
+        try {
+            $path = stream_get_meta_data($file)['uri'] ?? null;
+            $image = imagecreatetruecolor(64, 48);
+            if (!is_string($path) || $image === false || !imagepng($image, $file)) {
+                throw new RuntimeException('Could not stage the fixture image.');
+            }
+            fflush($file);
+
+            return $consume($path, $fileName);
+        } finally {
+            if (is_resource($file)) {
+                fclose($file);
+            }
+        }
     }
 });
 

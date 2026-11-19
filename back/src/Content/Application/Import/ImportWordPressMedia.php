@@ -7,6 +7,7 @@ namespace Cms\Content\Application\Import;
 use Cms\Media\Application\ImportLocalImage;
 use Cms\Media\Application\MediaAssetView;
 use Cms\Media\Application\GetMediaAsset\GetMediaAsset;
+use Cms\Media\Application\UploadImage\UploadImage;
 
 /**
  * @phpstan-type Attachment array{id:string,path:string,url:string,alt:string,eligible:bool}
@@ -14,8 +15,13 @@ use Cms\Media\Application\GetMediaAsset\GetMediaAsset;
  */
 final readonly class ImportWordPressMedia
 {
-    public function __construct(private WordPressImportLedger $ledger, private ImportLocalImage $images, private GetMediaAsset $assets)
-    {
+    public function __construct(
+        private WordPressImportLedger $ledger,
+        private ImportLocalImage $images,
+        private GetMediaAsset $assets,
+        private WordPressRemoteMedia $remote,
+        private UploadImage $upload,
+    ) {
     }
 
     /**
@@ -23,11 +29,11 @@ final readonly class ImportWordPressMedia
      * @param \ArrayObject<int,MediaAssetView> $created
      * @return list<MediaOutcome>
      */
-    public function __invoke(string $source, array $attachments, ?string $directory, bool $apply, \ArrayObject $created): array
+    public function __invoke(string $source, array $attachments, ?string $directory, bool $apply, \ArrayObject $created, ?string $apiUrl = null): array
     {
         $report = [];
         foreach ($attachments as $attachment) {
-            $report[] = $this->importAttachment($source, $attachment, $directory, $apply, $created);
+            $report[] = $this->importAttachment($source, $attachment, $directory, $apply, $created, $apiUrl);
         }
 
         return $report;
@@ -55,7 +61,7 @@ final readonly class ImportWordPressMedia
      * @param \ArrayObject<int,MediaAssetView> $created
      * @return MediaOutcome
      */
-    private function importAttachment(string $source, array $attachment, ?string $directory, bool $apply, \ArrayObject $created): array
+    private function importAttachment(string $source, array $attachment, ?string $directory, bool $apply, \ArrayObject $created, ?string $apiUrl): array
     {
         $id = $attachment['id'];
         if (!$attachment['eligible']) {
@@ -68,24 +74,38 @@ final readonly class ImportWordPressMedia
             }
             return ['id' => $id, 'state' => 'already_imported', 'assetId' => $image['assetId']];
         }
-        if ($directory === null) {
+        if ($directory === null && $apiUrl === null) {
             return ['id' => $id, 'state' => 'media_directory_required'];
         }
 
-        $relativePath = $this->relativePath($attachment);
-        if ($relativePath === '') {
-            return ['id' => $id, 'state' => 'invalid', 'reason' => 'Attachment has no usable uploads path.'];
-        }
-
         try {
+            if ($directory !== null) {
+                $relativePath = $this->relativePath($attachment);
+                if ($relativePath === '') {
+                    throw new \InvalidArgumentException('Attachment has no usable uploads path.');
+                }
+                if (!$apply) {
+                    ($this->images)($directory, $relativePath, $attachment['alt'], false);
+                }
+                $load = fn (): ?MediaAssetView => ($this->images)($directory, $relativePath, $attachment['alt'], true);
+            } else {
+                if (mb_strlen(trim($attachment['alt'])) > 500) {
+                    throw new \InvalidArgumentException('Default alternative text must not exceed 500 characters.');
+                }
+                $this->remote->assertUrl($apiUrl, $attachment['url']);
+                $load = fn (): MediaAssetView => $this->remote->download(
+                    $apiUrl,
+                    $attachment['url'],
+                    fn (string $path, string $fileName): MediaAssetView => ($this->upload)($path, $fileName, $attachment['alt']),
+                );
+            }
             if (!$apply) {
-                ($this->images)($directory, $relativePath, $attachment['alt'], false);
                 return ['id' => $id, 'state' => 'planned'];
             }
 
-            $asset = $this->ledger->transactional(function () use ($source, $id, $directory, $relativePath, $attachment, $created): MediaAssetView {
+            $asset = $this->ledger->transactional(function () use ($source, $id, $load, $created): MediaAssetView {
                 $this->ledger->claim($source, $id);
-                $asset = ($this->images)($directory, $relativePath, $attachment['alt'], true);
+                $asset = $load();
                 if ($asset === null) {
                     throw new \LogicException('Applying an image import must produce an asset.');
                 }

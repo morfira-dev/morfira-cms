@@ -24,8 +24,7 @@ final class WordPressRestTransport implements WordPressRestJsonTransport
         if (!extension_loaded('curl')) {
             throw new \RuntimeException('WordPress REST import requires PHP cURL.');
         }
-        $addresses = $this->resolve($endpoint->host);
-        $pins = array_map(static fn (string $ip): string => str_contains($ip, ':') ? '['.$ip.']' : $ip, $addresses);
+        $pins = $endpoint->resolvePins();
         $url = $endpoint->url.'/'.$resource.'?'.http_build_query($query, '', '&', PHP_QUERY_RFC3986);
         $handle = curl_init($url);
         if ($handle === false) {
@@ -43,7 +42,7 @@ final class WordPressRestTransport implements WordPressRestJsonTransport
             CURLOPT_PROXY => '',
             CURLOPT_SSL_VERIFYPEER => true,
             CURLOPT_SSL_VERIFYHOST => 2,
-            CURLOPT_RESOLVE => [$endpoint->host.':443:'.implode(',', $pins)],
+            CURLOPT_RESOLVE => [$pins],
             CURLOPT_CONNECTTIMEOUT => 5,
             CURLOPT_TIMEOUT => 15,
             CURLOPT_HTTPHEADER => ['Accept: application/json'],
@@ -99,23 +98,6 @@ final class WordPressRestTransport implements WordPressRestJsonTransport
         $items = $this->decode($body);
 
         return ['body' => $items, 'totalPages' => (int) $totalPages];
-    }
-
-    /** @return non-empty-list<string> */
-    private function resolve(string $host): array
-    {
-        $records = @dns_get_record($host.'.', DNS_A | DNS_AAAA);
-        $addresses = [];
-        if ($records !== false) {
-            foreach ($records as $record) {
-                $address = $record['ip'] ?? $record['ipv6'] ?? null;
-                if (is_string($address)) {
-                    $addresses[] = $address;
-                }
-            }
-        }
-
-        return WordPressRestEndpoint::publicAddresses(array_values(array_unique($addresses)));
     }
 
     /** @return list<array<string,mixed>> */

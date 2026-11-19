@@ -154,9 +154,9 @@ docker compose exec -T app php bin/cms cms:import:wordpress --api-url=https://ex
 docker compose exec -T app php bin/cms cms:import:wordpress --api-url=https://example.com/wp-json/wp/v2 --source=legacy-site --apply
 ```
 
-REST mode requires PHP cURL and public access to the standard collections. Pages, posts and attachments share their WordPress IDs with WXR when the source key matches. Private content and remote attachment downloads are outside this mode. See the [REST import specification](docs/specs/wordpress-rest-import.md).
+REST mode requires PHP cURL and public access to the standard collections. Pages, posts and attachments share their WordPress IDs with WXR when the source key matches. REST apply downloads eligible images from the configured WordPress HTTPS host. Dry-run plans them from metadata without fetching image bytes. Attachments served by another hostname need a local uploads copy. See the [REST import specification](docs/specs/wordpress-rest-import.md) and the [download specification](docs/specs/wordpress-rest-media-download.md).
 
-For attachments, copy or mount a trusted read-only copy of the WordPress uploads tree into the application container and pass `--media-dir=/path/to/uploads` to both commands. Supported JPEG, PNG and WebP attachments are added to the media library as WebP variants. Imported drafts receive inline image references in content order. Featured images appear in page Open Graph settings or the dedicated post media field. Review unresolved links in the JSON report before publishing.
+For WXR attachments or to use a local copy with REST, mount a trusted read-only WordPress uploads tree into the application container and pass `--media-dir=/path/to/uploads`. Supported JPEG, PNG and WebP attachments are added to the media library as WebP variants. Imported drafts receive inline image references in content order. Featured images appear in page Open Graph settings or the dedicated post media field. Review unresolved links in the JSON report before publishing.
 
 WordPress authors become content profiles and new posts retain author attribution and a profile relation. For published WordPress items, supported old URLs are staged as permanent redirects and become active when the new drafts are published in Morfira.
 

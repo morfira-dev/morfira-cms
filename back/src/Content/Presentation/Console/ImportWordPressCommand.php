@@ -6,6 +6,7 @@ namespace Cms\Content\Presentation\Console;
 
 use Cms\Content\Application\Import\ImportWordPressDrafts;
 use Cms\Content\Application\Import\WordPressImportClaimConflict;
+use Cms\Content\Application\Import\WordPressRemoteMediaFailure;
 use Cms\Content\Infrastructure\Import\WordPressExportReader;
 use Cms\Content\Infrastructure\Import\WordPressRestReader;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -32,7 +33,7 @@ final class ImportWordPressCommand extends Command
         $this->addArgument('file', InputArgument::OPTIONAL, 'Path to the local WXR export.')
             ->addOption('api-url', null, InputOption::VALUE_REQUIRED, 'Public HTTPS WordPress REST namespace ending in /wp-json/wp/v2.')
             ->addOption('source', null, InputOption::VALUE_REQUIRED, 'Stable key for the WordPress installation.')
-            ->addOption('media-dir', null, InputOption::VALUE_REQUIRED, 'Local directory containing the WordPress uploads tree.')
+            ->addOption('media-dir', null, InputOption::VALUE_REQUIRED, 'Local WordPress uploads tree. REST downloads eligible images when omitted.')
             ->addOption('apply', null, InputOption::VALUE_NONE, 'Create drafts. Omit to inspect the plan.');
     }
 
@@ -59,11 +60,13 @@ final class ImportWordPressCommand extends Command
         }
 
         try {
-            $report = ($this->import)($source, $export['items'], $apply, $export['terms'], $export['attachments'], $mediaDirectory, $export['authors'], $export['sourceUrl']);
+            $report = ($this->import)($source, $export['items'], $apply, $export['terms'], $export['attachments'], $mediaDirectory, $export['authors'], $export['sourceUrl'], $apiUrl);
         } catch (WordPressImportClaimConflict) {
             return $this->fail($output, 'Another import claimed an item. Apply was rolled back. Run the plan again.', Command::FAILURE);
         } catch (\InvalidArgumentException) {
             return $this->fail($output, 'Invalid source key or draft inputs. Check the options and run the plan again.', Command::INVALID);
+        } catch (WordPressRemoteMediaFailure $error) {
+            return $this->fail($output, $error->getMessage().' Apply was rolled back.', Command::FAILURE);
         } catch (\Throwable) {
             return $this->fail($output, 'Import failed. Check migrations and database connectivity, then run the plan again.', Command::FAILURE);
         }

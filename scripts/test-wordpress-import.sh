@@ -222,33 +222,67 @@ test "$(db_query "$media_query")" = 2
 test "$(compose exec -T app sh -c 'find public/media -type f | wc -l')" = "$media_after"
 
 rest_import() {
-    compose exec -T -e "CMS_REST_FIXTURE_EDITED=${CMS_REST_FIXTURE_EDITED:-0}" app php tests/Content/Fixtures/wordpress-rest-import.php \
+    compose exec -T -e "CMS_REST_FIXTURE_EDITED=${CMS_REST_FIXTURE_EDITED:-0}" -e "CMS_REST_FIXTURE_MEDIA=${CMS_REST_FIXTURE_MEDIA:-}" \
+        app php tests/Content/Fixtures/wordpress-rest-import.php \
         --api-url=https://wordpress.example/wp-json/wp/v2 --source=wordpress-rest-e2e "$@"
 }
 rest_post_query="SELECT COUNT(*) FROM content_entries WHERE slug = 'imported-rest-post'"
 rest_ledger_query="SELECT COUNT(*) FROM content_wordpress_import_items WHERE source_key = 'wordpress-rest-e2e'"
 rest_author_query="SELECT COUNT(*) FROM content_wordpress_import_authors WHERE source_key = 'wordpress-rest-e2e'"
-report=$(rest_import)
+rest_media_query="SELECT COUNT(*) FROM media_assets WHERE original_name = 'rest-fixture.png'"
+
+if failure=$(CMS_REST_FIXTURE_MEDIA=transient-failure rest_import --apply 2>&1); then
+    printf '%s\n' 'REST import unexpectedly succeeded after an injected media download failure.' >&2
+    exit 1
+fi
+printf '%s\n' "$failure" | grep -F 'Fixture media download failed. Apply was rolled back.' >/dev/null
+test "$(db_query "$rest_ledger_query")" = 0
+test "$(db_query "$rest_post_query")" = 0
+test "$(db_query "$rest_media_query")" = 0
+test "$(compose exec -T app sh -c 'find public/media -type f | wc -l')" = "$media_after"
+
+report=$(CMS_REST_FIXTURE_MEDIA=reject-download rest_import)
 printf '%s\n' "$report" | jq -e '
     .input == "rest" and .mode == "dry-run" and .items[0].state == "planned" and
-    .items[0].author == "linked" and .items[0].redirect == "planned"
+    .items[0].author == "linked" and .items[0].redirect == "planned" and
+    .items[0].images == {"inline": 1, "missingInline": 0, "featured": "linked"} and
+    (.media | length) == 1 and .media[0].state == "planned"
 ' >/dev/null
 test "$(db_query "$rest_post_query")" = 0
 test "$(db_query "$rest_ledger_query")" = 0
 test "$(db_query "$rest_author_query")" = 0
+test "$(db_query "$rest_media_query")" = 0
+test "$(compose exec -T app sh -c 'find public/media -type f | wc -l')" = "$media_after"
 
 report=$(rest_import --apply)
-printf '%s\n' "$report" | jq -e '.items[0].state == "imported" and .authors[0].state == "imported"' >/dev/null
+printf '%s\n' "$report" | jq -e '
+    .items[0].state == "imported" and .authors[0].state == "imported" and
+    .items[0].images == {"inline": 1, "missingInline": 0, "featured": "linked"} and
+    .media[0].state == "imported" and (.media[0].assetId | type) == "string"
+' >/dev/null
+rest_asset_id=$(printf '%s\n' "$report" | jq -er .media[0].assetId)
 test "$(db_query "$rest_post_query")" = 1
-test "$(db_query "$rest_ledger_query")" = 1
+test "$(db_query "$rest_ledger_query")" = 2
 test "$(db_query "$rest_author_query")" = 1
+test "$(db_query "$rest_media_query")" = 1
+test "$(db_query "SELECT COUNT(*) FROM media_assets WHERE id = '$rest_asset_id' AND mime_type = 'image/webp' AND default_alt = 'REST fixture image'")" = 1
+test "$(db_query "SELECT COUNT(*) FROM content_entries WHERE slug = 'imported-rest-post'
+    AND JSON_UNQUOTE(JSON_EXTRACT(values_json, '\$.wordpressInlineImage1')) = '$rest_asset_id'
+    AND JSON_UNQUOTE(JSON_EXTRACT(values_json, '\$.wordpressFeaturedImage')) = '$rest_asset_id'")" = 1
+rest_media_after=$(compose exec -T app sh -c 'find public/media -type f | wc -l')
+test "$rest_media_after" -gt "$media_after"
 
-report=$(CMS_REST_FIXTURE_EDITED=1 rest_import --apply)
-printf '%s\n' "$report" | jq -e '.items[0].state == "already_imported" and .authors[0].state == "already_imported"' >/dev/null
+report=$(CMS_REST_FIXTURE_EDITED=1 CMS_REST_FIXTURE_MEDIA=reject-download rest_import --apply)
+printf '%s\n' "$report" | jq -e --arg asset "$rest_asset_id" '
+    .items[0].state == "already_imported" and .authors[0].state == "already_imported" and
+    .media[0].state == "already_imported" and .media[0].assetId == $asset
+' >/dev/null
 test "$(db_query "$rest_post_query")" = 1
 test "$(db_query "SELECT title FROM content_entries WHERE slug = 'imported-rest-post'")" = 'Imported REST post'
-test "$(db_query "$rest_ledger_query")" = 1
+test "$(db_query "$rest_ledger_query")" = 2
 test "$(db_query "$rest_author_query")" = 1
+test "$(db_query "$rest_media_query")" = 1
+test "$(compose exec -T app sh -c 'find public/media -type f | wc -l')" = "$rest_media_after"
 test "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' "$CMS_PUBLIC_SITE_URL/content/wordpress-posts/imported-rest-post")" = 404
 
 printf '%s\n' 'WordPress import production CLI journey passed.'

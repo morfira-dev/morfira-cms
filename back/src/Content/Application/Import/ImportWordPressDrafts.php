@@ -68,7 +68,7 @@ final readonly class ImportWordPressDrafts
      * @param list<Author> $authors
      * @return ImportReport
      */
-    public function __invoke(string $source, array $items, bool $apply, array $terms, array $attachments, ?string $mediaDirectory, array $authors, ?string $sourceUrl): array
+    public function __invoke(string $source, array $items, bool $apply, array $terms, array $attachments, ?string $mediaDirectory, array $authors, ?string $sourceUrl, ?string $apiUrl = null): array
     {
         if (!self::validSourceKey($source)) {
             throw new \InvalidArgumentException('Source must be a lowercase identifier of at most 80 characters.');
@@ -76,8 +76,8 @@ final readonly class ImportWordPressDrafts
 
         /** @var \ArrayObject<int,MediaAssetView> $created */
         $created = new \ArrayObject();
-        $run = function () use ($source, $items, $apply, $terms, $attachments, $mediaDirectory, $created, $authors, $sourceUrl): array {
-            $media = ($this->media)($source, $attachments, $mediaDirectory, $apply, $created);
+        $run = function () use ($source, $items, $apply, $terms, $attachments, $mediaDirectory, $created, $authors, $sourceUrl, $apiUrl): array {
+            $media = ($this->media)($source, $attachments, $mediaDirectory, $apply, $created, $apiUrl);
             $logins = [];
             foreach ($items as $item) {
                 if ($item['type'] === 'post' && $item['authorLogin'] !== null) {
