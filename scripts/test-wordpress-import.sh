@@ -1,0 +1,98 @@
+#!/bin/sh
+set -eu
+
+project_name=${1:?Run with CMS_TEST_WORDPRESS_IMPORT=1 ./scripts/test-e2e.sh}
+test "$project_name" = morfira-e2e
+fixture=back/tests/Content/Fixtures/wordpress-import.xml
+container_fixture=/tmp/morfira-wordpress-import.xml
+
+compose() {
+    docker compose -p "$project_name" -f compose.prod.yaml -f compose.e2e.yaml "$@"
+}
+
+import() {
+    import_source=$1
+    shift
+    compose exec -T app php bin/cms cms:import:wordpress "$container_fixture" --source="$import_source" "$@"
+}
+
+db_query() {
+    compose exec -T database sh -c 'MYSQL_PWD="$MARIADB_PASSWORD" exec mariadb --batch --skip-column-names -u "$MARIADB_USER" "$MARIADB_DATABASE"' <<SQL
+$1
+SQL
+}
+
+page_query="SELECT COUNT(*) FROM content_pages WHERE slug IN ('wp-import-about', 'wp-import-edited-about')"
+schema_query="SELECT COUNT(*) FROM schema_content_types WHERE api_name = 'wordpress-posts'"
+entry_query="SELECT COUNT(*) FROM content_entries WHERE slug IN ('wp-import-news', 'wp-import-edited-news')"
+ledger_query="SELECT COUNT(*) FROM content_wordpress_import_items WHERE source_key = 'wordpress-e2e'"
+
+compose cp "$fixture" "app:$container_fixture"
+report=$(import wordpress-e2e)
+printf '%s\n' "$report" | jq -e '
+    (.items | length) == 2 and
+    ([.items[] | select(.state == "planned") | .targetPath] | sort) == ["/content/wordpress-posts/wp-import-news", "/wp-import-about"]
+' >/dev/null
+test "$(db_query "$page_query")" = 0
+test "$(db_query "$schema_query")" = 0
+test "$(db_query "$entry_query")" = 0
+test "$(db_query "$ledger_query")" = 0
+
+report=$(import wordpress-e2e --apply)
+printf '%s\n' "$report" | jq -e '
+    (.items | length) == 2 and
+    ([.items[] | select(.state == "imported") | .type] | sort) == ["page", "post"]
+' >/dev/null
+test "$(db_query "$page_query")" = 1
+test "$(db_query "$schema_query")" = 1
+test "$(db_query "$entry_query")" = 1
+test "$(db_query "$ledger_query")" = 2
+test "$(db_query "SELECT COUNT(*) FROM content_pages WHERE slug = 'wp-import-about' AND title = 'Imported About' AND status = 'draft' AND blocks LIKE '%Page body%' AND blocks NOT LIKE '%<script%'")" = 1
+test "$(db_query "SELECT COUNT(*) FROM content_entries AS entry JOIN schema_content_types AS schema_type ON schema_type.id = entry.content_type_id WHERE entry.slug = 'wp-import-news' AND entry.title = 'Imported News' AND schema_type.api_name = 'wordpress-posts' AND JSON_UNQUOTE(JSON_EXTRACT(entry.values_json, '$.body')) LIKE '%Post body%' AND entry.values_json NOT LIKE '%<script%'")" = 1
+
+report=$(import wordpress-e2e-collision --apply)
+printf '%s\n' "$report" | jq -e '
+    (.items | length) == 2 and all(.items[]; .state == "invalid" and .reason == "Draft slug already exists.")
+' >/dev/null
+test "$(db_query "SELECT COUNT(*) FROM content_wordpress_import_items WHERE source_key = 'wordpress-e2e-collision'")" = 0
+
+compose exec -T app php -r 'if (file_put_contents($argv[1], stream_get_contents(STDIN)) === false) exit(1);' "$container_fixture" <<XML
+$(sed -e 's/wp-import-about/wp-import-edited-about/g' -e 's/wp-import-news/wp-import-edited-news/g' -e 's/Imported About/Edited About/g' -e 's/Imported News/Edited News/g' "$fixture")
+XML
+report=$(import wordpress-e2e --apply)
+printf '%s\n' "$report" | jq -e '
+    (.items | length) == 2 and
+    ([.items[] | select(.state == "already_imported") | .type] | sort) == ["page", "post"]
+' >/dev/null
+test "$(db_query "$page_query")" = 1
+test "$(db_query "$schema_query")" = 1
+test "$(db_query "$entry_query")" = 1
+test "$(db_query "$ledger_query")" = 2
+test "$(db_query "SELECT COUNT(*) FROM content_page_revisions AS revision JOIN content_pages AS page ON page.id = revision.page_id WHERE page.slug = 'wp-import-about' AND page.title = 'Imported About'")" = 2
+test "$(db_query "SELECT COUNT(*) FROM content_entry_revisions AS revision JOIN content_entries AS entry ON entry.id = revision.entry_id WHERE entry.slug = 'wp-import-news' AND entry.title = 'Imported News'")" = 1
+
+report=$(import wordpress-e2e-rollback)
+printf '%s\n' "$report" | jq -e '
+    (.items | length) == 2 and all(.items[]; .state == "planned")
+' >/dev/null
+db_query "DELIMITER //
+CREATE TRIGGER wordpress_e2e_reject_entry BEFORE INSERT ON content_entries FOR EACH ROW
+BEGIN
+    IF NEW.slug = 'wp-import-edited-news' THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Synthetic import write failure';
+    END IF;
+END//
+DELIMITER ;"
+if import wordpress-e2e-rollback --apply >/dev/null 2>&1; then
+    printf '%s\n' 'WordPress import unexpectedly succeeded after an injected database write failure.' >&2
+    exit 1
+fi
+test "$(db_query "$page_query")" = 1
+test "$(db_query "$entry_query")" = 1
+test "$(db_query "SELECT COUNT(*) FROM content_wordpress_import_items WHERE source_key = 'wordpress-e2e-rollback'")" = 0
+
+for route in /wp-import-about /api/v1/content/pages/wp-import-about /content/wordpress-posts/wp-import-news /api/v1/content/entries/wordpress-posts/wp-import-news; do
+    test "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' "$CMS_PUBLIC_SITE_URL$route")" = 404
+done
+
+printf '%s\n' 'WordPress import production CLI journey passed.'

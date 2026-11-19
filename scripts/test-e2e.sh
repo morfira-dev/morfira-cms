@@ -18,3 +18,7 @@ trap cleanup EXIT INT TERM
 cleanup
 docker compose -p "$project_name" -f compose.prod.yaml -f compose.e2e.yaml build app e2e
 docker compose -p "$project_name" -f compose.prod.yaml -f compose.e2e.yaml run --rm e2e
+
+if [ "${CMS_TEST_WORDPRESS_IMPORT:-0}" = 1 ]; then
+    sh ./scripts/test-wordpress-import.sh "$project_name"
+fi

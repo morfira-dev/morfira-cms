@@ -135,6 +135,18 @@ The initial foundation contains:
 
 Remote theme/extension installation, live-linked sections and advanced editorial workflows are intentionally deferred. They will be introduced through vertical slices and explicit ADRs.
 
+## Import drafts from WordPress
+
+Export a WXR file (1.0–1.2, up to 8 MiB and 5,000 items) from WordPress. Start the Morfira stack and apply pending migrations before using the importer. For the development stack, run:
+
+```bash
+docker compose cp /absolute/path/to/export.xml app:/tmp/wordpress-export.xml
+docker compose exec -T app php bin/cms cms:import:wordpress /tmp/wordpress-export.xml --source=legacy-site
+docker compose exec -T app php bin/cms cms:import:wordpress /tmp/wordpress-export.xml --source=legacy-site --apply
+```
+
+For production, use `docker compose -f compose.prod.yaml` with the installation environment. The import without `--apply` produces a JSON report without writes. With `--apply`, eligible pages and posts are created as drafts. Keep the same source key for every export from that WordPress installation. Review the report and drafts before publishing. Media, taxonomy, authors and redirects require separate migration. See the [import specification](docs/specs/wordpress-wxr-import.md).
+
 ## Architecture
 
 See [docs/architecture.md](docs/architecture.md) and [docs/adr](docs/adr).

@@ -53,6 +53,8 @@ jobs:
         run: docker compose run --rm --no-deps front npm run check
 
       - name: Verify production browser journey
+        env:
+          CMS_TEST_WORDPRESS_IMPORT: '1'
         run: ./scripts/test-e2e.sh
 
       - name: Create release
