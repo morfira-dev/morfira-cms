@@ -7,6 +7,7 @@ namespace Cms\Content\Presentation\Console;
 use Cms\Content\Application\Import\ImportWordPressDrafts;
 use Cms\Content\Application\Import\WordPressImportClaimConflict;
 use Cms\Content\Infrastructure\Import\WordPressExportReader;
+use Cms\Content\Infrastructure\Import\WordPressRestReader;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -15,11 +16,12 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\ConsoleOutputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
-#[AsCommand(name: 'cms:import:wordpress', description: 'Plan or import drafts from a local WordPress WXR export.')]
+#[AsCommand(name: 'cms:import:wordpress', description: 'Plan or import WordPress drafts from WXR or the public REST API.')]
 final class ImportWordPressCommand extends Command
 {
     public function __construct(
         private readonly WordPressExportReader $reader,
+        private readonly WordPressRestReader $restReader,
         private readonly ImportWordPressDrafts $import,
     ) {
         parent::__construct();
@@ -27,7 +29,8 @@ final class ImportWordPressCommand extends Command
 
     protected function configure(): void
     {
-        $this->addArgument('file', InputArgument::REQUIRED, 'Path to the local WXR export.')
+        $this->addArgument('file', InputArgument::OPTIONAL, 'Path to the local WXR export.')
+            ->addOption('api-url', null, InputOption::VALUE_REQUIRED, 'Public HTTPS WordPress REST namespace ending in /wp-json/wp/v2.')
             ->addOption('source', null, InputOption::VALUE_REQUIRED, 'Stable key for the WordPress installation.')
             ->addOption('media-dir', null, InputOption::VALUE_REQUIRED, 'Local directory containing the WordPress uploads tree.')
             ->addOption('apply', null, InputOption::VALUE_NONE, 'Create drafts. Omit to inspect the plan.');
@@ -36,17 +39,23 @@ final class ImportWordPressCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $path = $input->getArgument('file');
+        $apiUrl = $input->getOption('api-url');
         $source = $input->getOption('source');
         $mediaDirectory = $input->getOption('media-dir');
         $apply = $input->getOption('apply') === true;
-        if (!is_string($path) || !is_string($source) || ($mediaDirectory !== null && !is_string($mediaDirectory))) {
-            return $this->fail($output, 'A local export path and --source are required.', Command::INVALID);
+        if (!is_string($source) || !ImportWordPressDrafts::validSourceKey($source) || ($mediaDirectory !== null && !is_string($mediaDirectory))) {
+            return $this->fail($output, 'A stable lowercase --source key is required.', Command::INVALID);
+        }
+        if (($path === null) === ($apiUrl === null) || ($apiUrl !== null && !is_string($apiUrl)) || ($path !== null && !is_string($path))) {
+            return $this->fail($output, 'Provide either a local export file or --api-url.', Command::INVALID);
         }
 
         try {
-            $export = $this->reader->read($path);
-        } catch (\InvalidArgumentException|\RuntimeException $error) {
+            $export = $apiUrl === null ? $this->reader->read((string) $path) : $this->restReader->read($apiUrl);
+        } catch (\InvalidArgumentException $error) {
             return $this->fail($output, $error->getMessage(), Command::INVALID);
+        } catch (\RuntimeException|\JsonException $error) {
+            return $this->fail($output, $error instanceof \JsonException ? 'Invalid WordPress response data.' : $error->getMessage(), $apiUrl === null ? Command::INVALID : Command::FAILURE);
         }
 
         try {
@@ -62,6 +71,7 @@ final class ImportWordPressCommand extends Command
         $counts = array_count_values(array_column($report['items'], 'state'));
         $output->writeln(json_encode([
             'mode' => $apply ? 'apply' : 'dry-run',
+            'input' => $apiUrl === null ? 'wxr' : 'rest',
             'source' => $source,
             'counts' => (object) $counts,
             'skippedTypes' => (object) $export['skippedTypes'],

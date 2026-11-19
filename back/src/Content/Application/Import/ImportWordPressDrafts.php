@@ -70,7 +70,7 @@ final readonly class ImportWordPressDrafts
      */
     public function __invoke(string $source, array $items, bool $apply, array $terms, array $attachments, ?string $mediaDirectory, array $authors, ?string $sourceUrl): array
     {
-        if (preg_match('/\A[a-z0-9]+(?:-[a-z0-9]+)*\z/', $source) !== 1 || strlen($source) > 80) {
+        if (!self::validSourceKey($source)) {
             throw new \InvalidArgumentException('Source must be a lowercase identifier of at most 80 characters.');
         }
 
@@ -104,6 +104,11 @@ final readonly class ImportWordPressDrafts
             $this->media->compensate($created);
             throw $error;
         }
+    }
+
+    public static function validSourceKey(string $source): bool
+    {
+        return strlen($source) <= 80 && preg_match('/\A[a-z0-9]+(?:-[a-z0-9]+)*\z/', $source) === 1;
     }
 
     /**

@@ -38,6 +38,8 @@ use Cms\Content\Application\ContentMediaUsageLookup;
 use Cms\Content\Application\Import\WordPressImportLedger;
 use Cms\Content\Application\RichTextSanitizer;
 use Cms\Content\Infrastructure\Import\DoctrineWordPressImportLedger;
+use Cms\Content\Infrastructure\Import\WordPressRestJsonTransport;
+use Cms\Content\Infrastructure\Import\WordPressRestTransport;
 use Cms\Content\Infrastructure\Persistence\DoctrineContentDeletionGateway;
 use Cms\Content\Infrastructure\Html\SymfonyRichTextSanitizer;
 use Cms\Settings\Domain\SiteSettingsRepository;
@@ -86,6 +88,7 @@ return static function (ContainerConfigurator $container): void {
     $services->alias(RelationTargetLookup::class, DoctrineRelationTargetLookup::class);
     $services->alias(ContentDeletionGateway::class, DoctrineContentDeletionGateway::class);
     $services->alias(WordPressImportLedger::class, DoctrineWordPressImportLedger::class);
+    $services->alias(WordPressRestJsonTransport::class, WordPressRestTransport::class);
     $services->alias(RichTextSanitizer::class, SymfonyRichTextSanitizer::class);
     $services->alias(SiteSettingsRepository::class, DoctrineSiteSettingsRepository::class);
     $services->alias(ContentMediaUsageLookup::class, DoctrineContentMediaUsageLookup::class);

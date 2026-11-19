@@ -221,4 +221,34 @@ printf '%s\n' "$report" | jq -e '
 test "$(db_query "$media_query")" = 2
 test "$(compose exec -T app sh -c 'find public/media -type f | wc -l')" = "$media_after"
 
+rest_import() {
+    compose exec -T -e "CMS_REST_FIXTURE_EDITED=${CMS_REST_FIXTURE_EDITED:-0}" app php tests/Content/Fixtures/wordpress-rest-import.php \
+        --api-url=https://wordpress.example/wp-json/wp/v2 --source=wordpress-rest-e2e "$@"
+}
+rest_post_query="SELECT COUNT(*) FROM content_entries WHERE slug = 'imported-rest-post'"
+rest_ledger_query="SELECT COUNT(*) FROM content_wordpress_import_items WHERE source_key = 'wordpress-rest-e2e'"
+rest_author_query="SELECT COUNT(*) FROM content_wordpress_import_authors WHERE source_key = 'wordpress-rest-e2e'"
+report=$(rest_import)
+printf '%s\n' "$report" | jq -e '
+    .input == "rest" and .mode == "dry-run" and .items[0].state == "planned" and
+    .items[0].author == "linked" and .items[0].redirect == "planned"
+' >/dev/null
+test "$(db_query "$rest_post_query")" = 0
+test "$(db_query "$rest_ledger_query")" = 0
+test "$(db_query "$rest_author_query")" = 0
+
+report=$(rest_import --apply)
+printf '%s\n' "$report" | jq -e '.items[0].state == "imported" and .authors[0].state == "imported"' >/dev/null
+test "$(db_query "$rest_post_query")" = 1
+test "$(db_query "$rest_ledger_query")" = 1
+test "$(db_query "$rest_author_query")" = 1
+
+report=$(CMS_REST_FIXTURE_EDITED=1 rest_import --apply)
+printf '%s\n' "$report" | jq -e '.items[0].state == "already_imported" and .authors[0].state == "already_imported"' >/dev/null
+test "$(db_query "$rest_post_query")" = 1
+test "$(db_query "SELECT title FROM content_entries WHERE slug = 'imported-rest-post'")" = 'Imported REST post'
+test "$(db_query "$rest_ledger_query")" = 1
+test "$(db_query "$rest_author_query")" = 1
+test "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' "$CMS_PUBLIC_SITE_URL/content/wordpress-posts/imported-rest-post")" = 404
+
 printf '%s\n' 'WordPress import production CLI journey passed.'

@@ -147,6 +147,15 @@ docker compose exec -T app php bin/cms cms:import:wordpress /tmp/wordpress-expor
 
 For production, use `docker compose -f compose.prod.yaml` with the installation environment. The import without `--apply` produces a JSON report without writes. With `--apply`, eligible pages and posts are created as drafts, and built-in categories and tags are assigned to newly imported posts. Keep the same source key for every export from that WordPress installation.
 
+To read public content directly over WordPress REST, use the canonical HTTPS namespace:
+
+```bash
+docker compose exec -T app php bin/cms cms:import:wordpress --api-url=https://example.com/wp-json/wp/v2 --source=legacy-site
+docker compose exec -T app php bin/cms cms:import:wordpress --api-url=https://example.com/wp-json/wp/v2 --source=legacy-site --apply
+```
+
+REST mode requires PHP cURL and public access to the standard collections. Pages, posts and attachments share their WordPress IDs with WXR when the source key matches. Private content and remote attachment downloads are outside this mode. See the [REST import specification](docs/specs/wordpress-rest-import.md).
+
 For attachments, copy or mount a trusted read-only copy of the WordPress uploads tree into the application container and pass `--media-dir=/path/to/uploads` to both commands. Supported JPEG, PNG and WebP attachments are added to the media library as WebP variants. Imported drafts receive inline image references in content order. Featured images appear in page Open Graph settings or the dedicated post media field. Review unresolved links in the JSON report before publishing.
 
 WordPress authors become content profiles and new posts retain author attribution and a profile relation. For published WordPress items, supported old URLs are staged as permanent redirects and become active when the new drafts are published in Morfira.
