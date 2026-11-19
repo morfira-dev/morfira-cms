@@ -14,11 +14,13 @@ namespace Cms\Content\Infrastructure\Import;
  */
 final class WordPressRestMapper
 {
+    private const array IMPORTABLE_STATUSES = ['publish', 'private', 'draft', 'pending', 'future'];
+
     /**
      * @param array<string,list<array<string,mixed>>> $collections
      * @return Export
      */
-    public function __invoke(string $sourceUrl, array $collections): array
+    public function __invoke(string $sourceUrl, array $collections, bool $includePrivate = false): array
     {
         $posts = $this->index($collections['posts'] ?? []);
         $pages = $this->index($collections['pages'] ?? []);
@@ -34,9 +36,9 @@ final class WordPressRestMapper
         $publicItems = [];
         foreach (['post' => $posts, 'page' => $pages] as $type => $records) {
             foreach ($records as $id => $record) {
-                $item = $this->item($id, $type, $record, $categories, $tags);
+                $item = $this->item($id, $type, $record, $categories, $tags, $includePrivate);
                 $items[] = $item;
-                if ($item['status'] === 'publish' && !$item['passwordProtected']) {
+                if ($item['status'] === 'publish' && !$item['passwordProtected'] && !($item['restrictedSource'] ?? false)) {
                     $publicItems[$id] = true;
                 }
             }
@@ -92,22 +94,30 @@ final class WordPressRestMapper
      * @param array<string,array<string,mixed>> $tags
      * @return ExportItem
      */
-    private function item(string $id, string $type, array $record, array $categories, array $tags): array
+    private function item(string $id, string $type, array $record, array $categories, array $tags, bool $includePrivate): array
     {
         $content = $record['content'] ?? null;
-        $protected = !is_array($content) || ($content['protected'] ?? null) !== false;
-        $public = ($record['status'] ?? null) === 'publish';
-        $eligible = $public && !$protected;
+        $protection = is_array($content) ? ($content['protected'] ?? null) : null;
+        $protected = $protection !== false;
+        $status = self::string($record['status'] ?? null);
+        $public = $status === 'publish' && !$protected;
+        $raw = is_array($content) ? ($content['raw'] ?? null) : null;
+        // Treat an absent protection flag as an incomplete edit-context response.
+        $restricted = $includePrivate && !$public && is_bool($protection) && is_string($raw)
+            && in_array($status, self::IMPORTABLE_STATUSES, true);
+        $eligible = $public || $restricted;
         $author = self::id($record['author'] ?? null);
+        $title = $record['title'] ?? null;
+        $rawTitle = is_array($title) ? ($title['raw'] ?? null) : null;
 
         return [
             'id' => substr($id, 1),
             'type' => $type,
-            'status' => $public ? 'publish' : 'private',
-            'title' => $eligible ? self::plain(self::rendered($record['title'] ?? null)) : '',
+            'status' => $restricted || $status === 'publish' ? $status : 'private',
+            'title' => $eligible ? self::plain($restricted && is_string($rawTitle) ? $rawTitle : self::rendered($title)) : '',
             'slug' => $eligible ? trim(self::string($record['slug'] ?? null)) : '',
-            'html' => $eligible ? self::rendered($content) : '',
-            'link' => $eligible ? trim(self::string($record['link'] ?? null)) : '',
+            'html' => $restricted ? $raw : ($public ? self::rendered($content) : ''),
+            'link' => $public ? trim(self::string($record['link'] ?? null)) : '',
             'passwordProtected' => $protected,
             'terms' => $eligible && $type === 'post' ? [
                 ...$this->references('category', $record['categories'] ?? null, $categories),
@@ -115,7 +125,7 @@ final class WordPressRestMapper
             ] : [],
             'thumbnailId' => $eligible ? self::decimal($record['featured_media'] ?? null) : null,
             'authorLogin' => $eligible && $author !== null ? 'rest-author-'.substr($author, 1) : null,
-        ];
+        ] + ($restricted ? ['restrictedSource' => true] : []);
     }
 
     /**

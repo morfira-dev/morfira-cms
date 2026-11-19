@@ -33,8 +33,8 @@ use Cms\Taxonomy\Application\ImportWordPressTaxonomies;
  * @phpstan-import-type AuthorOutcome from ImportWordPressAuthors
  * @phpstan-type TermReference array{taxonomy:string,slug:string}
  * @phpstan-type Term array{taxonomy:string,slug:string,name:string,parent:string}
- * @phpstan-type SourceItem array{id:string,type:string,status:string,title:string,slug:string,html:string,link:string,passwordProtected:bool,terms:list<TermReference>,thumbnailId:?string,authorLogin:?string}
- * @phpstan-type ReportItem array{id:string,type:string,status:string,sourcePath:?string,targetPath:?string,state:string,reason?:string,images?:array{inline:int,missingInline:int,featured:string},author?:string,redirect?:string}
+ * @phpstan-type SourceItem array{id:string,type:string,status:string,title:string,slug:string,html:string,link:string,passwordProtected:bool,terms:list<TermReference>,thumbnailId:?string,authorLogin:?string,restrictedSource?:bool}
+ * @phpstan-type ReportItem array{id:string,type:string,status:string,sourcePath:?string,targetPath:?string,state:string,reason?:string,images?:array{inline:int,missingInline:int,featured:string},author?:string,redirect?:string,restrictedSource?:bool}
  * @phpstan-type TaxonomyOutcomes array{terms:list<array{taxonomy:string,slug:string,state:string}>,assignments:list<array{entryId:string,taxonomy:string,slug:string,state:string}>}
  * @phpstan-type ImportReport array{items:list<ReportItem>,media:list<MediaOutcome>,taxonomy:TaxonomyOutcomes,authors:list<AuthorOutcome>}
  */
@@ -69,7 +69,7 @@ final readonly class ImportWordPressDrafts
      * @param list<string> $allowedMediaHosts
      * @return ImportReport
      */
-    public function __invoke(string $source, array $items, bool $apply, array $terms, array $attachments, ?string $mediaDirectory, array $authors, ?string $sourceUrl, ?string $apiUrl = null, array $allowedMediaHosts = []): array
+    public function __invoke(string $source, array $items, bool $apply, array $terms, array $attachments, ?string $mediaDirectory, array $authors, ?string $sourceUrl, ?string $apiUrl = null, array $allowedMediaHosts = [], bool $includePrivate = false): array
     {
         if (!self::validSourceKey($source)) {
             throw new \InvalidArgumentException('Source must be a lowercase identifier of at most 80 characters.');
@@ -77,7 +77,8 @@ final readonly class ImportWordPressDrafts
 
         /** @var \ArrayObject<int,MediaAssetView> $created */
         $created = new \ArrayObject();
-        $run = function () use ($source, $items, $apply, $terms, $attachments, $mediaDirectory, $created, $authors, $sourceUrl, $apiUrl, $allowedMediaHosts): array {
+        $includePrivate = $includePrivate && $apiUrl !== null;
+        $run = function () use ($source, $items, $apply, $terms, $attachments, $mediaDirectory, $created, $authors, $sourceUrl, $apiUrl, $allowedMediaHosts, $includePrivate): array {
             $media = ($this->media)($source, $attachments, $mediaDirectory, $apply, $created, $apiUrl, $allowedMediaHosts);
             $logins = [];
             foreach ($items as $item) {
@@ -88,7 +89,7 @@ final readonly class ImportWordPressDrafts
             $importedAuthors = ($this->authors)($source, $authors, $logins, $apply);
             $assignments = [];
             $images = new WordPressImageIndex($attachments, $media, fn (string $id): ?array => $this->media->reusableImage($source, $id));
-            $report = $this->process($source, $items, $apply, $assignments, $images, $importedAuthors['profiles'], $sourceUrl);
+            $report = $this->process($source, $items, $apply, $assignments, $images, $importedAuthors['profiles'], $sourceUrl, $includePrivate);
             $taxonomy = ($this->taxonomies)($terms, $assignments, $apply);
 
             return [
@@ -118,7 +119,7 @@ final readonly class ImportWordPressDrafts
      * @param array<string,AuthorReference> $authors
      * @return list<ReportItem>
      */
-    private function process(string $source, array $items, bool $apply, array &$assignments, WordPressImageIndex $images, array $authors, ?string $sourceUrl): array
+    private function process(string $source, array $items, bool $apply, array &$assignments, WordPressImageIndex $images, array $authors, ?string $sourceUrl, bool $includePrivate): array
     {
         $locale = ($this->settings)()->defaultLocale;
         $postSchema = $this->findPostSchema();
@@ -141,7 +142,7 @@ final readonly class ImportWordPressDrafts
         foreach ($items as $item) {
             $targetId = null;
             $author = $item['type'] === 'post' && $item['authorLogin'] !== null ? ($authors[ImportWordPressAuthors::key($item['authorLogin'])] ?? null) : null;
-            $row = $this->processItem($item, $source, $locale, $apply, $occupied, $postSchema, $postFields, $compatibleSchema, $targetId, $images, $author);
+            $row = $this->processItem($item, $source, $locale, $apply, $occupied, $postSchema, $postFields, $compatibleSchema, $targetId, $images, $author, $includePrivate);
             if (in_array($row['state'], ['planned', 'imported'], true)) {
                 $row['redirect'] = $this->redirect($item, $sourceUrl, $row['targetPath'], $targetId);
             }
@@ -164,7 +165,7 @@ final readonly class ImportWordPressDrafts
      * @param ?AuthorReference $author
      * @return ReportItem
      */
-    private function processItem(array $item, string $source, string $locale, bool $apply, array &$occupied, ?ContentTypeDefinition &$postSchema, array &$postFields, bool $compatibleSchema, ?string &$targetId, WordPressImageIndex $images, ?array $author): array
+    private function processItem(array $item, string $source, string $locale, bool $apply, array &$occupied, ?ContentTypeDefinition &$postSchema, array &$postFields, bool $compatibleSchema, ?string &$targetId, WordPressImageIndex $images, ?array $author, bool $includePrivate): array
     {
         $path = parse_url($item['link'], PHP_URL_PATH);
         $row = [
@@ -174,10 +175,17 @@ final readonly class ImportWordPressDrafts
             'sourcePath' => is_string($path) && str_starts_with($path, '/') ? $path : null,
             'targetPath' => null,
         ];
+        $restricted = $item['restrictedSource'] ?? false;
+        if ($restricted) {
+            $row['restrictedSource'] = true;
+            $row['sourcePath'] = null;
+        }
         if ($this->ledger->contains($source, $item['id'])) {
             return $row + ['state' => 'already_imported'];
         }
-        if ($item['passwordProtected'] || !in_array($item['status'], ['publish', 'draft', 'pending', 'future'], true)) {
+        $ordinaryEligible = !$restricted && !$item['passwordProtected'] && in_array($item['status'], ['publish', 'draft', 'pending', 'future'], true);
+        $restrictedEligible = $restricted && $includePrivate && in_array($item['status'], ['publish', 'private', 'draft', 'pending', 'future'], true);
+        if (!$ordinaryEligible && !$restrictedEligible) {
             return $row + ['state' => 'unsupported_status', 'reason' => 'Source status or password protection is outside the import policy.'];
         }
 
@@ -244,7 +252,7 @@ final readonly class ImportWordPressDrafts
     /** @param SourceItem $item */
     private function redirect(array $item, ?string $sourceUrl, ?string $targetPath, ?string $targetId): string
     {
-        if ($item['status'] !== 'publish' || $item['link'] === '') {
+        if ($item['status'] !== 'publish' || ($item['restrictedSource'] ?? false) || $item['link'] === '') {
             return 'none';
         }
         $source = $sourceUrl === null ? false : parse_url($sourceUrl);

@@ -18,7 +18,7 @@ The local file argument and `--api-url` are mutually exclusive. The command repo
 
 ## Security and data invariants
 
-The operator provides a canonical public HTTPS namespace. Requests use bounded time and sizes, validated public addresses, and no redirects. The metadata reader does not follow hypermedia links. Apply handles eligible attachments under the [download policy](wordpress-rest-media-download.md) or uses the optional local uploads directory. Private posts, authentication, custom endpoints, and query-based REST routing are outside this slice.
+The operator provides a canonical public HTTPS namespace. Requests use bounded time and sizes, validated public addresses, and no redirects. The metadata reader does not follow hypermedia links. Apply handles eligible attachments under the [download policy](wordpress-rest-media-download.md) or uses the optional local uploads directory. Public REST is the default, and restricted items use the opt-in [authenticated REST mode](wordpress-rest-private-import.md). Custom endpoints and query-based REST routing are outside scope.
 
 Stable WordPress content and attachment IDs continue to use `--source` as their namespace across inputs. REST author profiles use stable public numeric IDs. WXR author profiles use logins, so using both formats may create distinct author profiles. Reapplying an import cannot overwrite previous drafts. The shared taxonomy importer matches terms by vocabulary and slug. A changed term slug is treated as a distinct term.
 

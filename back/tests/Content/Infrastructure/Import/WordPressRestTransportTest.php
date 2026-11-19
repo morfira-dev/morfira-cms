@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cms\Tests\Content\Infrastructure\Import;
 
+use Cms\Content\Infrastructure\Import\WordPressRestCredentials;
 use Cms\Content\Infrastructure\Import\WordPressRestEndpoint;
 use Cms\Content\Infrastructure\Import\WordPressRestTransport;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -11,6 +12,17 @@ use PHPUnit\Framework\TestCase;
 
 final class WordPressRestTransportTest extends TestCase
 {
+    public function testRejectsCredentialsOutsideContentEditRequestsBeforeConnecting(): void
+    {
+        $this->expectExceptionMessage('WordPress credentials are only allowed for edit-context posts and pages.');
+        new WordPressRestTransport()->get(
+            'https://example.test/wp-json/wp/v2',
+            'media',
+            ['context' => 'view'],
+            new WordPressRestCredentials('fixture-editor', 'fixtureAppPassword'),
+        );
+    }
+
     public function testNormalizesStandardAndSubdirectoryEndpoints(): void
     {
         self::assertSame('https://example.test/wp-json/wp/v2', WordPressRestTransport::normalizeBaseUrl('https://Example.Test:443/wp-json/wp/v2/'));
@@ -45,6 +57,48 @@ final class WordPressRestTransportTest extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
         new WordPressRestTransport()->get('https://example.test/wp-json/wp/v2', '../other', []);
+    }
+
+    public function testAuthenticatedTransportStillRejectsUnsafeEndpointsBeforeConnecting(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new WordPressRestTransport()->get(
+            'http://example.test/wp-json/wp/v2',
+            'posts',
+            ['context' => 'edit'],
+            new WordPressRestCredentials('fixture-user', 'synthetic'),
+        );
+    }
+
+    public function testApplicationPasswordUngroupsAndCredentialsAreRedacted(): void
+    {
+        $credentials = new WordPressRestCredentials('fixture-user', 'abcd 1234 efgh');
+
+        self::assertSame('fixture-user', $credentials->username);
+        self::assertSame('abcd1234efgh', $credentials->applicationPassword());
+        self::assertSame(['credentials' => '[redacted]'], $credentials->__debugInfo());
+        self::assertSame('{"credentials":"[redacted]"}', json_encode($credentials, JSON_THROW_ON_ERROR));
+        $this->expectException(\LogicException::class);
+        serialize($credentials);
+    }
+
+    #[DataProvider('invalidCredentials')]
+    public function testRejectsMalformedCredentials(string $username, #[\SensitiveParameter] string $password): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new WordPressRestCredentials($username, $password);
+    }
+
+    /** @return iterable<string,array{string,string}> */
+    public static function invalidCredentials(): iterable
+    {
+        yield 'empty username' => ['', 'synthetic'];
+        yield 'username separator' => ['fixture:user', 'synthetic'];
+        yield 'username with null byte' => ["fixture\0user", 'synthetic'];
+        yield 'leading username space' => [' fixture-user', 'synthetic'];
+        yield 'blank password' => ['fixture-user', '  '];
+        yield 'password with newline' => ['fixture-user', "synthetic\n"];
+        yield 'password with separator' => ['fixture-user', 'synthetic:password'];
     }
 
     public function testAcceptsPublicUnicastFromBothAddressFamilies(): void

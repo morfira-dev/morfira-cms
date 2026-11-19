@@ -15,11 +15,14 @@ final class WordPressRestTransport implements WordPressRestJsonTransport
         return WordPressRestEndpoint::fromUrl($url)->url;
     }
 
-    public function get(string $baseUrl, string $resource, array $query): array
+    public function get(string $baseUrl, string $resource, array $query, ?WordPressRestCredentials $credentials = null): array
     {
         $endpoint = WordPressRestEndpoint::fromUrl($baseUrl);
         if (!in_array($resource, self::RESOURCES, true)) {
             throw new \InvalidArgumentException('Unsupported WordPress REST collection.');
+        }
+        if ($credentials !== null && (!in_array($resource, ['posts', 'pages'], true) || ($query['context'] ?? null) !== 'edit')) {
+            throw new \InvalidArgumentException('WordPress credentials are only allowed for edit-context posts and pages.');
         }
         if (!extension_loaded('curl')) {
             throw new \RuntimeException('WordPress REST import requires PHP cURL.');
@@ -36,9 +39,15 @@ final class WordPressRestTransport implements WordPressRestJsonTransport
         $headerBytes = 0;
         $overflow = false;
         $ambiguousPagination = false;
+        $auth = $credentials === null ? [] : [
+            CURLOPT_HTTPAUTH => CURLAUTH_BASIC,
+            CURLOPT_USERNAME => $credentials->username,
+            CURLOPT_PASSWORD => $credentials->applicationPassword(),
+        ];
         if (!curl_setopt_array($handle, [
             CURLOPT_PROTOCOLS_STR => 'https',
             CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_UNRESTRICTED_AUTH => false,
             CURLOPT_PROXY => '',
             CURLOPT_SSL_VERIFYPEER => true,
             CURLOPT_SSL_VERIFYHOST => 2,
@@ -72,7 +81,7 @@ final class WordPressRestTransport implements WordPressRestJsonTransport
 
                 return strlen($line);
             },
-        ])) {
+        ] + $auth)) {
             throw new \RuntimeException('Could not configure the WordPress REST connection safely.');
         }
 
@@ -84,6 +93,9 @@ final class WordPressRestTransport implements WordPressRestJsonTransport
             throw new \RuntimeException('Could not read the WordPress REST response. Check the connection and TLS certificate.');
         }
         $status = curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
+        if ($credentials !== null && ($status === 401 || $status === 403)) {
+            throw new \RuntimeException('WordPress denied the REST request. Check the Application Password and account permissions.');
+        }
         if ($status !== 200) {
             throw new \RuntimeException(sprintf('The WordPress REST collection %s returned HTTP %d.', $resource, $status));
         }

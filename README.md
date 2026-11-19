@@ -166,6 +166,16 @@ docker compose exec -T app php bin/cms cms:import:wordpress \
 
 Use the same options with `--apply` to run the plan. The WordPress API hostname remains allowed. The list is scoped to this invocation and supports hostnames on HTTPS port 443. See the [REST import specification](docs/specs/wordpress-rest-import.md), the [download specification](docs/specs/wordpress-rest-media-download.md) and the [CDN policy](docs/specs/wordpress-rest-cdn-media.md).
 
+To migrate restricted posts and pages, create a WordPress Application Password for an account that can edit the intended content. Export `CMS_WORDPRESS_USERNAME` and `CMS_WORDPRESS_APPLICATION_PASSWORD` in your shell, then run:
+
+```bash
+docker compose exec -T -e CMS_WORDPRESS_USERNAME -e CMS_WORDPRESS_APPLICATION_PASSWORD \
+  app php bin/cms cms:import:wordpress --api-url=https://example.com/wp-json/wp/v2 \
+  --source=legacy-site --include-private
+```
+
+Without `--apply` this is a dry-run in Morfira. Apply stores restricted items as ordinary drafts without imported redirects. Publish only after checking whether the material may be public. WordPress passwords and restricted attachments are excluded from the import. See the [authenticated import specification](docs/specs/wordpress-rest-private-import.md) and [WordPress Application Password documentation](https://developer.wordpress.org/advanced-administration/security/application-passwords/).
+
 For WXR attachments or to use a local copy with REST, mount a trusted read-only WordPress uploads tree into the application container and pass `--media-dir=/path/to/uploads`. Supported JPEG, PNG and WebP attachments are added to the media library as WebP variants. Imported drafts receive inline image references in content order. Featured images appear in page Open Graph settings or the dedicated post media field. Review unresolved links in the JSON report before publishing.
 
 WordPress authors become content profiles and new posts retain author attribution and a profile relation. For published WordPress items, supported old URLs are staged as permanent redirects and become active when the new drafts are published in Morfira.

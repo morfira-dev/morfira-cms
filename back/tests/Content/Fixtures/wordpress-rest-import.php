@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Cms\Content\Application\Import\WordPressRemoteMedia;
 use Cms\Content\Application\Import\WordPressRemoteMediaFailure;
 use Cms\Content\Infrastructure\Import\WordPressRemoteMediaDownloader;
+use Cms\Content\Infrastructure\Import\WordPressRestCredentials;
 use Cms\Content\Infrastructure\Import\WordPressRestTransport;
 use Cms\Content\Infrastructure\Import\WordPressRestJsonTransport;
 use Cms\Kernel;
@@ -29,10 +30,17 @@ if (!$container instanceof ContainerInterface) {
 }
 $container->set(WordPressRestTransport::class, new class implements WordPressRestJsonTransport {
     /** @param array<string,int|string> $query */
-    public function get(string $baseUrl, string $resource, array $query): array
+    public function get(string $baseUrl, string $resource, array $query, ?WordPressRestCredentials $credentials = null): array
     {
-        if ($baseUrl !== 'https://wordpress.example/wp-json/wp/v2' || $query['context'] !== 'view' || $query['page'] !== 1) {
+        if ($baseUrl !== 'https://wordpress.example/wp-json/wp/v2' || $query['page'] !== 1) {
             throw new RuntimeException('Unexpected fixture request.');
+        }
+        $mode = getenv('CMS_REST_FIXTURE_AUTH');
+        if (in_array($mode, ['private', 'denied'], true)) {
+            return $this->privateCollection($resource, $query, $credentials, $mode === 'denied');
+        }
+        if ($query['context'] !== 'view' || $credentials !== null) {
+            throw new RuntimeException('The public fixture requires anonymous view requests.');
         }
         $records = match ($resource) {
             'posts' => [[
@@ -57,6 +65,50 @@ $container->set(WordPressRestTransport::class, new class implements WordPressRes
         };
 
         return ['body' => $records, 'totalPages' => $records === [] ? 0 : 1];
+    }
+
+    /**
+     * @param array<string,int|string> $query
+     * @return array{body:list<array<string,mixed>>,totalPages:int}
+     */
+    private function privateCollection(string $resource, array $query, ?WordPressRestCredentials $credentials, bool $denyPage): array
+    {
+        $content = in_array($resource, ['posts', 'pages'], true);
+        if ($content) {
+            if ($credentials?->username !== 'fixture-wp-editor' || $credentials->applicationPassword() !== 'fixtureApplicationPassword'
+                || ($query['context'] ?? null) !== 'edit' || ($query['status'] ?? null) !== 'publish,private,draft,pending,future') {
+                throw new RuntimeException('Expected scoped WordPress edit credentials.');
+            }
+        } elseif ($credentials !== null || ($query['context'] ?? null) !== 'view') {
+            throw new RuntimeException('Non-content collections must stay anonymous.');
+        }
+
+        if ($denyPage && $resource === 'pages') {
+            throw new RuntimeException('WordPress refused access to the fixture pages collection.');
+        }
+        $edited = getenv('CMS_REST_FIXTURE_EDITED') === '1';
+        $rows = match ($resource) {
+            'posts' => [[
+                'id' => 93101, 'status' => 'private', 'slug' => 'restricted-rest-post',
+                'title' => ['raw' => $edited ? 'Edited private draft' : 'Imported private post'],
+                'content' => ['raw' => '<p>Restricted fixture post body</p>', 'protected' => false],
+                'link' => 'https://wordpress.example/old/private-post/', 'featured_media' => 93103,
+            ]],
+            'pages' => [[
+                'id' => 93102, 'status' => 'publish', 'slug' => 'restricted-rest-page',
+                'title' => ['raw' => 'Imported protected page'],
+                'content' => ['raw' => '<p>Restricted fixture page body</p>', 'protected' => true],
+                'link' => 'https://wordpress.example/old/protected-page/',
+                'password' => 'synthetic-post-password',
+            ]],
+            'media' => [[
+                'id' => 93103, 'source_url' => restFixtureAttachmentUrl('restricted-image.png'),
+                'media_type' => 'image', 'mime_type' => 'image/png', 'status' => 'inherit', 'post' => 93101,
+            ]],
+            default => [],
+        };
+
+        return ['body' => $rows, 'totalPages' => $rows === [] ? 0 : 1];
     }
 
     /** @return list<array<string,mixed>> */

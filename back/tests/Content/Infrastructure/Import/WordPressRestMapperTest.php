@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cms\Tests\Content\Infrastructure\Import;
 
 use Cms\Content\Infrastructure\Import\WordPressRestMapper;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 final class WordPressRestMapperTest extends TestCase
@@ -118,6 +119,78 @@ final class WordPressRestMapperTest extends TestCase
         $this->expectExceptionMessage('overlapping content identifier');
 
         new WordPressRestMapper()('https://wordpress.example', ['posts' => [['id' => 1]], 'media' => [['id' => '1']]]);
+    }
+
+    #[DataProvider('restrictedStatuses')]
+    public function testAuthenticatedReaderUsesTheEditContextBodyAndConcealsTheSourceLink(string $status, bool $protected): void
+    {
+        $collections = [
+            'posts' => [[
+                'id' => 51,
+                'status' => $status,
+                'slug' => 'closed-source-slug',
+                'title' => ['raw' => 'Original &amp; title', 'rendered' => 'Filtered title'],
+                'content' => ['raw' => '<!-- wp:paragraph --><p>Editor body.</p><!-- /wp:paragraph -->', 'rendered' => 'Filtered body', 'protected' => $protected],
+                'link' => 'https://wordpress.example/?p=51',
+                'password' => 'ignored-post-protection-value',
+                'author' => 23,
+                'categories' => [10],
+            ]],
+            'categories' => [['id' => 10, 'slug' => 'migration', 'name' => 'Migration']],
+            'media' => [
+                ['id' => 9, 'status' => 'inherit', 'media_type' => 'image', 'mime_type' => 'image/jpeg', 'post' => 51],
+                ['id' => 10, 'status' => 'inherit', 'media_type' => 'image', 'mime_type' => 'image/jpeg', 'post' => 0],
+            ],
+        ];
+
+        $mapper = new WordPressRestMapper();
+        $export = $mapper('https://wordpress.example', $collections, true);
+        self::assertSame([
+            'id' => '51',
+            'type' => 'post',
+            'status' => $status,
+            'title' => 'Original & title',
+            'slug' => 'closed-source-slug',
+            'html' => '<!-- wp:paragraph --><p>Editor body.</p><!-- /wp:paragraph -->',
+            'link' => '',
+            'passwordProtected' => $protected,
+            'terms' => [['taxonomy' => 'category', 'slug' => 'migration']],
+            'thumbnailId' => null,
+            'authorLogin' => 'rest-author-23',
+            'restrictedSource' => true,
+        ], $export['items'][0]);
+        self::assertSame([false, true], array_column($export['attachments'], 'eligible'));
+        self::assertStringNotContainsString('ignored-post-protection-value', json_encode($export, JSON_THROW_ON_ERROR));
+
+        $public = $mapper('https://wordpress.example', $collections);
+        self::assertSame('', $public['items'][0]['html']);
+        self::assertArrayNotHasKey('restrictedSource', $public['items'][0]);
+    }
+
+    /** @return iterable<string,array{string,bool}> */
+    public static function restrictedStatuses(): iterable
+    {
+        yield 'private' => ['private', false];
+        yield 'draft' => ['draft', false];
+        yield 'pending' => ['pending', false];
+        yield 'scheduled' => ['future', false];
+        yield 'password-protected published' => ['publish', true];
+    }
+
+    public function testIncompleteEditContextDoesNotFallBackToRenderedRestrictedContent(): void
+    {
+        $records = [
+            ['id' => 51, 'status' => 'draft', 'content' => ['rendered' => 'Filtered draft', 'protected' => false]],
+            ['id' => 52, 'status' => 'publish', 'content' => ['raw' => 'Missing protection flag']],
+            ['id' => 53, 'status' => 'publish', 'content' => ['raw' => ['Not a body'], 'protected' => true]],
+            ['id' => 54, 'status' => 'trash', 'content' => ['raw' => 'Trashed content', 'protected' => false]],
+        ];
+        $export = new WordPressRestMapper()('https://wordpress.example', ['posts' => $records], true);
+
+        self::assertSame(['private', 'publish', 'publish', 'private'], array_column($export['items'], 'status'));
+        self::assertSame(['', '', '', ''], array_column($export['items'], 'html'));
+        self::assertSame([false, true, true, false], array_column($export['items'], 'passwordProtected'));
+        self::assertSame([], array_column($export['items'], 'restrictedSource'));
     }
 
     public function testRejectsDuplicateIdsFromPagination(): void

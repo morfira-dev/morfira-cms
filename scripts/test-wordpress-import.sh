@@ -306,4 +306,64 @@ test "$(db_query "$rest_media_query")" = 1
 test "$(compose exec -T app sh -c 'find public/media -type f | wc -l')" = "$rest_media_after"
 test "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' "$CMS_PUBLIC_SITE_URL/content/wordpress-posts/imported-rest-post")" = 404
 
+printf '%s\n' 'Verifying restricted REST credentials and refusal handling.'
+if failure=$(rest_import --include-private 2>&1); then
+    printf '%s\n' 'REST private import unexpectedly accepted missing credentials.' >&2
+    exit 1
+fi
+printf '%s\n' "$failure" | grep -F 'Set CMS_WORDPRESS_USERNAME and CMS_WORDPRESS_APPLICATION_PASSWORD' >/dev/null
+
+rest_import_private() {
+    compose exec -T -e "CMS_REST_FIXTURE_AUTH=${CMS_REST_FIXTURE_AUTH:-private}" -e "CMS_REST_FIXTURE_EDITED=${CMS_REST_FIXTURE_EDITED:-0}" \
+        -e CMS_WORDPRESS_USERNAME=fixture-wp-editor -e 'CMS_WORDPRESS_APPLICATION_PASSWORD=fixture Application Password' \
+        -e CMS_REST_FIXTURE_MEDIA=reject-download app php tests/Content/Fixtures/wordpress-rest-import.php \
+        --api-url=https://wordpress.example/wp-json/wp/v2 --source=wordpress-private-e2e --include-private --media-host=cdn.wordpress.example "$@"
+}
+private_ledger="SELECT COUNT(*) FROM content_wordpress_import_items WHERE source_key = 'wordpress-private-e2e'"
+private_post="SELECT COUNT(*) FROM content_entries WHERE slug = 'restricted-rest-post'"
+private_page="SELECT COUNT(*) FROM content_pages WHERE slug = 'restricted-rest-page'"
+redirects_before=$(db_query 'SELECT COUNT(*) FROM published_import_redirects')
+
+if failure=$(CMS_REST_FIXTURE_AUTH=denied rest_import_private --apply 2>&1); then
+    printf '%s\n' 'REST private import unexpectedly succeeded after the source denied access.' >&2
+    exit 1
+fi
+printf '%s\n' "$failure" | grep -F 'WordPress refused access to the fixture pages collection.' >/dev/null
+test "$(db_query "$private_ledger")" = 0
+
+printf '%s\n' 'Verifying restricted REST dry-run and draft creation.'
+report=$(rest_import_private)
+printf '%s\n' "$report" | jq -e '
+    .mode == "dry-run" and (.items | length) == 2 and
+    ([.items[].status] | sort) == ["private", "publish"] and
+    all(.items[]; .state == "planned" and .restrictedSource and .redirect == "none" and .sourcePath == null) and
+    .media[0].state == "unsupported_status"
+' >/dev/null
+test "$(db_query "$private_ledger")" = 0
+test "$(db_query "$private_post")" = 0
+test "$(db_query "$private_page")" = 0
+
+report=$(rest_import_private --apply)
+printf '%s\n' "$report" | jq -e 'all(.items[]; .state == "imported" and .restrictedSource and .redirect == "none")' >/dev/null
+if printf '%s\n' "$report" | grep -Eq 'fixture-wp-editor|fixture Application Password|fixtureApplicationPassword|synthetic-post-password|Restricted fixture'; then
+    printf '%s\n' 'REST private import leaked a fixture credential or body into its report.' >&2
+    exit 1
+fi
+test "$(db_query "$private_ledger")" = 2
+test "$(db_query "$private_post")" = 1
+test "$(db_query "$private_page")" = 1
+test "$(db_query "SELECT COUNT(*) FROM content_entries WHERE slug = 'restricted-rest-post' AND values_json LIKE '%Restricted fixture post body%'")" = 1
+test "$(db_query "SELECT COUNT(*) FROM content_pages WHERE slug = 'restricted-rest-page' AND status = 'draft' AND blocks LIKE '%Restricted fixture page body%'")" = 1
+test "$(db_query 'SELECT COUNT(*) FROM published_import_redirects')" = "$redirects_before"
+test "$(compose exec -T app sh -c 'find public/media -type f | wc -l')" = "$rest_media_after"
+
+printf '%s\n' 'Verifying restricted REST replay and anonymous visibility.'
+report=$(CMS_REST_FIXTURE_EDITED=1 rest_import_private --apply)
+printf '%s\n' "$report" | jq -e '(.items | length) == 2 and all(.items[]; .state == "already_imported")' >/dev/null
+test "$(db_query "$private_ledger")" = 2
+test "$(db_query "SELECT title FROM content_entries WHERE slug = 'restricted-rest-post'")" = 'Imported private post'
+for route in /restricted-rest-page /api/v1/content/pages/restricted-rest-page /content/wordpress-posts/restricted-rest-post /api/v1/content/entries/wordpress-posts/restricted-rest-post /old/private-post /old/protected-page; do
+    test "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' "$CMS_PUBLIC_SITE_URL$route")" = 404
+done
+
 printf '%s\n' 'WordPress import production CLI journey passed.'

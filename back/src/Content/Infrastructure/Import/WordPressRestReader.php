@@ -27,12 +27,14 @@ final readonly class WordPressRestReader
     }
 
     /** @return Export */
-    public function read(string $baseUrl): array
+    public function read(string $baseUrl, ?WordPressRestCredentials $credentials = null): array
     {
         $baseUrl = WordPressRestTransport::normalizeBaseUrl($baseUrl);
         $collections = [];
         $requests = $records = $bytes = 0;
         foreach (self::FIELDS as $resource => $fields) {
+            $content = in_array($resource, ['posts', 'pages'], true);
+            $collectionCredentials = $content ? $credentials : null;
             $rows = [];
             $lastPage = 1;
             $totalPages = null;
@@ -41,17 +43,17 @@ final readonly class WordPressRestReader
                     throw new \RuntimeException('WordPress REST request limit exceeded.');
                 }
                 $query = [
-                    'context' => 'view',
+                    'context' => $collectionCredentials === null ? 'view' : 'edit',
                     'per_page' => self::PAGE_SIZE,
                     'page' => $page,
                     '_fields' => $fields,
                     'orderby' => 'id',
                     'order' => 'asc',
                 ];
-                if (in_array($resource, ['posts', 'pages'], true)) {
-                    $query['status'] = 'publish';
+                if ($content) {
+                    $query['status'] = $collectionCredentials === null ? 'publish' : 'publish,private,draft,pending,future';
                 }
-                $response = $this->transport->get($baseUrl, $resource, $query);
+                $response = $this->transport->get($baseUrl, $resource, $query, $collectionCredentials);
                 if ($response['totalPages'] < 0 || $response['totalPages'] > self::MAX_REQUESTS
                     || ($totalPages !== null && $response['totalPages'] !== $totalPages)) {
                     throw new \RuntimeException('WordPress REST pagination changed or exceeds the import limits.');
@@ -80,7 +82,7 @@ final readonly class WordPressRestReader
             $collections[$resource] = array_values($rows);
         }
 
-        return ($this->mapper)(substr($baseUrl, 0, -strlen('/wp-json/wp/v2')), $collections);
+        return ($this->mapper)(substr($baseUrl, 0, -strlen('/wp-json/wp/v2')), $collections, $credentials !== null);
     }
 
     private static function recordId(mixed $value): ?string
