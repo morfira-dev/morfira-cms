@@ -20,6 +20,7 @@ final readonly class MediaAsset
         public array $tags,
         public array $variants,
         public \DateTimeImmutable $createdAt,
+        public bool $isPrivate,
     ) {
         if ($originalName === '' || mb_strlen($originalName) > 255) {
             throw new \InvalidArgumentException('Original file name must contain between 1 and 255 characters.');
@@ -31,6 +32,11 @@ final readonly class MediaAsset
 
         if ($width < 1 || $height < 1 || $bytes < 1 || $variants === []) {
             throw new \InvalidArgumentException('Media asset dimensions, byte size and variants must be present.');
+        }
+        foreach ($variants as $variant) {
+            if ($variant->url !== MediaVariant::urlFor($id, $variant->width, $isPrivate)) {
+                throw new \InvalidArgumentException('Media variant URL must match the asset and its visibility.');
+            }
         }
 
         if (mb_strlen($defaultAlt) > 500) {
@@ -60,6 +66,7 @@ final readonly class MediaAsset
         string $defaultAlt,
         array $variants,
         \DateTimeImmutable $createdAt,
+        bool $isPrivate = false,
     ): self {
         return new self(
             $id,
@@ -73,6 +80,7 @@ final readonly class MediaAsset
             [],
             $variants,
             $createdAt,
+            $isPrivate,
         );
     }
 
@@ -91,8 +99,9 @@ final readonly class MediaAsset
         array $tags,
         array $variants,
         \DateTimeImmutable $createdAt,
+        bool $isPrivate = false,
     ): self {
-        return new self($id, $originalName, $mimeType, $width, $height, $bytes, $defaultAlt, $collection, $tags, $variants, $createdAt);
+        return new self($id, $originalName, $mimeType, $width, $height, $bytes, $defaultAlt, $collection, $tags, $variants, $createdAt, $isPrivate);
     }
 
     /** @param list<string> $tags */
@@ -113,6 +122,7 @@ final readonly class MediaAsset
             $normalizedTags,
             $this->variants,
             $this->createdAt,
+            $this->isPrivate,
         );
     }
 }

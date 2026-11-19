@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Cms\Tests\Content\Infrastructure\Import;
 
-use Cms\Content\Infrastructure\Import\WordPressRestCredentials;
+use Cms\Content\Application\Import\WordPressRestCredentials;
 use Cms\Content\Infrastructure\Import\WordPressRestEndpoint;
 use Cms\Content\Infrastructure\Import\WordPressRestTransport;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -14,7 +14,7 @@ final class WordPressRestTransportTest extends TestCase
 {
     public function testRejectsCredentialsOutsideContentEditRequestsBeforeConnecting(): void
     {
-        $this->expectExceptionMessage('WordPress credentials are only allowed for edit-context posts and pages.');
+        $this->expectExceptionMessage('WordPress credentials are only allowed for edit-context posts, pages and media.');
         new WordPressRestTransport()->get(
             'https://example.test/wp-json/wp/v2',
             'media',

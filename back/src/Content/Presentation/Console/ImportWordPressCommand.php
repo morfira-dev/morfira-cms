@@ -10,7 +10,7 @@ use Cms\Content\Application\Import\WordPressMediaHosts;
 use Cms\Content\Application\Import\WordPressRemoteMediaFailure;
 use Cms\Content\Infrastructure\Import\WordPressExportReader;
 use Cms\Content\Infrastructure\Import\WordPressRestReader;
-use Cms\Content\Infrastructure\Import\WordPressRestCredentials;
+use Cms\Content\Application\Import\WordPressRestCredentials;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
@@ -80,7 +80,7 @@ final class ImportWordPressCommand extends Command
         try {
             $report = ($this->import)(
                 $source, $export['items'], $apply, $export['terms'], $export['attachments'],
-                $mediaDirectory, $export['authors'], $export['sourceUrl'], $apiUrl, $allowedMediaHosts, $includePrivate,
+                $mediaDirectory, $export['authors'], $export['sourceUrl'], $apiUrl, $allowedMediaHosts, $credentials,
             );
         } catch (WordPressImportClaimConflict) {
             return $this->fail($output, 'Another import claimed an item. Apply was rolled back. Run the plan again.', Command::FAILURE);

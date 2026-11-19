@@ -69,7 +69,7 @@ final readonly class ImportWordPressDrafts
      * @param list<string> $allowedMediaHosts
      * @return ImportReport
      */
-    public function __invoke(string $source, array $items, bool $apply, array $terms, array $attachments, ?string $mediaDirectory, array $authors, ?string $sourceUrl, ?string $apiUrl = null, array $allowedMediaHosts = [], bool $includePrivate = false): array
+    public function __invoke(string $source, array $items, bool $apply, array $terms, array $attachments, ?string $mediaDirectory, array $authors, ?string $sourceUrl, ?string $apiUrl = null, array $allowedMediaHosts = [], ?WordPressRestCredentials $credentials = null): array
     {
         if (!self::validSourceKey($source)) {
             throw new \InvalidArgumentException('Source must be a lowercase identifier of at most 80 characters.');
@@ -77,9 +77,9 @@ final readonly class ImportWordPressDrafts
 
         /** @var \ArrayObject<int,MediaAssetView> $created */
         $created = new \ArrayObject();
-        $includePrivate = $includePrivate && $apiUrl !== null;
-        $run = function () use ($source, $items, $apply, $terms, $attachments, $mediaDirectory, $created, $authors, $sourceUrl, $apiUrl, $allowedMediaHosts, $includePrivate): array {
-            $media = ($this->media)($source, $attachments, $mediaDirectory, $apply, $created, $apiUrl, $allowedMediaHosts);
+        $credentials = $apiUrl === null ? null : $credentials;
+        $run = function () use ($source, $items, $apply, $terms, $attachments, $mediaDirectory, $created, $authors, $sourceUrl, $apiUrl, $allowedMediaHosts, $credentials): array {
+            $media = ($this->media)($source, $attachments, $mediaDirectory, $apply, $created, $apiUrl, $allowedMediaHosts, $credentials);
             $logins = [];
             foreach ($items as $item) {
                 if ($item['type'] === 'post' && $item['authorLogin'] !== null) {
@@ -89,7 +89,7 @@ final readonly class ImportWordPressDrafts
             $importedAuthors = ($this->authors)($source, $authors, $logins, $apply);
             $assignments = [];
             $images = new WordPressImageIndex($attachments, $media, fn (string $id): ?array => $this->media->reusableImage($source, $id));
-            $report = $this->process($source, $items, $apply, $assignments, $images, $importedAuthors['profiles'], $sourceUrl, $includePrivate);
+            $report = $this->process($source, $items, $apply, $assignments, $images, $importedAuthors['profiles'], $sourceUrl, $credentials !== null);
             $taxonomy = ($this->taxonomies)($terms, $assignments, $apply);
 
             return [

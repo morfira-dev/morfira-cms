@@ -316,13 +316,15 @@ printf '%s\n' "$failure" | grep -F 'Set CMS_WORDPRESS_USERNAME and CMS_WORDPRESS
 rest_import_private() {
     compose exec -T -e "CMS_REST_FIXTURE_AUTH=${CMS_REST_FIXTURE_AUTH:-private}" -e "CMS_REST_FIXTURE_EDITED=${CMS_REST_FIXTURE_EDITED:-0}" \
         -e CMS_WORDPRESS_USERNAME=fixture-wp-editor -e 'CMS_WORDPRESS_APPLICATION_PASSWORD=fixture Application Password' \
-        -e CMS_REST_FIXTURE_MEDIA=reject-download app php tests/Content/Fixtures/wordpress-rest-import.php \
+        -e "CMS_REST_FIXTURE_MEDIA=${CMS_REST_FIXTURE_MEDIA:-}" app php tests/Content/Fixtures/wordpress-rest-import.php \
         --api-url=https://wordpress.example/wp-json/wp/v2 --source=wordpress-private-e2e --include-private --media-host=cdn.wordpress.example "$@"
 }
 private_ledger="SELECT COUNT(*) FROM content_wordpress_import_items WHERE source_key = 'wordpress-private-e2e'"
 private_post="SELECT COUNT(*) FROM content_entries WHERE slug = 'restricted-rest-post'"
 private_page="SELECT COUNT(*) FROM content_pages WHERE slug = 'restricted-rest-page'"
+private_media="SELECT COUNT(*) FROM media_assets WHERE original_name = 'restricted-image.png' AND is_private = 1"
 redirects_before=$(db_query 'SELECT COUNT(*) FROM published_import_redirects')
+private_files_before=$(compose exec -T app sh -c 'find var/private-media -type f | wc -l')
 
 if failure=$(CMS_REST_FIXTURE_AUTH=denied rest_import_private --apply 2>&1); then
     printf '%s\n' 'REST private import unexpectedly succeeded after the source denied access.' >&2
@@ -331,36 +333,84 @@ fi
 printf '%s\n' "$failure" | grep -F 'WordPress refused access to the fixture pages collection.' >/dev/null
 test "$(db_query "$private_ledger")" = 0
 
+if failure=$(CMS_REST_FIXTURE_MEDIA=private-failure rest_import_private --apply 2>&1); then
+    printf '%s\n' 'REST import unexpectedly retained private media after a failed attachment request.' >&2
+    exit 1
+fi
+printf '%s\n' "$failure" | grep -F 'Fixture media download failed. Apply was rolled back.' >/dev/null
+test "$(db_query "$private_ledger")" = 0
+test "$(db_query "$private_media")" = 0
+test "$(compose exec -T app sh -c 'find var/private-media -type f | wc -l')" = "$private_files_before"
+
 printf '%s\n' 'Verifying restricted REST dry-run and draft creation.'
-report=$(rest_import_private)
+report=$(CMS_REST_FIXTURE_MEDIA=reject-download rest_import_private)
 printf '%s\n' "$report" | jq -e '
     .mode == "dry-run" and (.items | length) == 2 and
     ([.items[].status] | sort) == ["private", "publish"] and
     all(.items[]; .state == "planned" and .restrictedSource and .redirect == "none" and .sourcePath == null) and
-    .media[0].state == "unsupported_status"
+    .media[0].state == "planned" and .media[0].isPrivate and
+    all(.items[]; .images.featured == "linked")
 ' >/dev/null
 test "$(db_query "$private_ledger")" = 0
 test "$(db_query "$private_post")" = 0
 test "$(db_query "$private_page")" = 0
+test "$(db_query "$private_media")" = 0
+test "$(compose exec -T app sh -c 'find var/private-media -type f | wc -l')" = "$private_files_before"
 
 report=$(rest_import_private --apply)
-printf '%s\n' "$report" | jq -e 'all(.items[]; .state == "imported" and .restrictedSource and .redirect == "none")' >/dev/null
+printf '%s\n' "$report" | jq -e '
+    all(.items[]; .state == "imported" and .restrictedSource and .redirect == "none") and
+    .media[0].state == "imported" and .media[0].isPrivate
+' >/dev/null
 if printf '%s\n' "$report" | grep -Eq 'fixture-wp-editor|fixture Application Password|fixtureApplicationPassword|synthetic-post-password|Restricted fixture'; then
     printf '%s\n' 'REST private import leaked a fixture credential or body into its report.' >&2
     exit 1
 fi
-test "$(db_query "$private_ledger")" = 2
+private_asset=$(printf '%s\n' "$report" | jq -er .media[0].assetId)
+test "$(db_query "$private_ledger")" = 3
 test "$(db_query "$private_post")" = 1
 test "$(db_query "$private_page")" = 1
+test "$(db_query "$private_media")" = 1
 test "$(db_query "SELECT COUNT(*) FROM content_entries WHERE slug = 'restricted-rest-post' AND values_json LIKE '%Restricted fixture post body%'")" = 1
 test "$(db_query "SELECT COUNT(*) FROM content_pages WHERE slug = 'restricted-rest-page' AND status = 'draft' AND blocks LIKE '%Restricted fixture page body%'")" = 1
+test "$(db_query "SELECT COUNT(*) FROM content_entries WHERE slug = 'restricted-rest-post'
+    AND JSON_UNQUOTE(JSON_EXTRACT(values_json, '\$.wordpressInlineImage1')) = '$private_asset'")" = 1
+test "$(db_query "SELECT COUNT(*) FROM content_pages WHERE slug = 'restricted-rest-page'
+    AND JSON_UNQUOTE(JSON_EXTRACT(seo, '\$.openGraphImageAssetId')) = '$private_asset'")" = 1
 test "$(db_query 'SELECT COUNT(*) FROM published_import_redirects')" = "$redirects_before"
 test "$(compose exec -T app sh -c 'find public/media -type f | wc -l')" = "$rest_media_after"
+private_files_after=$(compose exec -T app sh -c 'find var/private-media -type f | wc -l')
+test "$private_files_after" -gt "$private_files_before"
+
+variant_path=$(request "$CMS_PUBLIC_SITE_URL/api/v1/admin/media" | jq -er --arg id "$private_asset" '
+    .items[] | select(.id == $id and .isPrivate) | .variants[0].url
+')
+test "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' "$CMS_PUBLIC_SITE_URL$variant_path")" = 401
+test "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' "$CMS_PUBLIC_SITE_URL/media/$private_asset/${variant_path##*/}")" = 404
+headers=$(request -I "$CMS_PUBLIC_SITE_URL$variant_path")
+printf '%s\n' "$headers" | grep -qi '^Content-Type: image/webp'
+printf '%s\n' "$headers" | grep -qi '^Cache-Control:.*no-store'
+request "$CMS_PUBLIC_SITE_URL$variant_path" >/dev/null
+
+private_page_id=$(db_query "SELECT id FROM content_pages WHERE slug = 'restricted-rest-page'")
+private_post_id=$(db_query "SELECT id FROM content_entries WHERE slug = 'restricted-rest-post'")
+for publication in "pages/$private_page_id:2" "entries/$private_post_id:1"; do
+    publication_path=${publication%:*}
+    publication_version=${publication##*:}
+    test "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' -b "$session_cookie" \
+        -H "X-CSRF-Token: $csrf" -H 'Content-Type: application/json' --data "{\"version\":$publication_version}" \
+        "$CMS_PUBLIC_SITE_URL/api/v1/admin/$publication_path/publish")" = 422
+done
 
 printf '%s\n' 'Verifying restricted REST replay and anonymous visibility.'
-report=$(CMS_REST_FIXTURE_EDITED=1 rest_import_private --apply)
-printf '%s\n' "$report" | jq -e '(.items | length) == 2 and all(.items[]; .state == "already_imported")' >/dev/null
-test "$(db_query "$private_ledger")" = 2
+report=$(CMS_REST_FIXTURE_EDITED=1 CMS_REST_FIXTURE_MEDIA=reject-download rest_import_private --apply)
+printf '%s\n' "$report" | jq -e --arg id "$private_asset" '
+    (.items | length) == 2 and all(.items[]; .state == "already_imported") and
+    .media[0].state == "already_imported" and .media[0].isPrivate and .media[0].assetId == $id
+' >/dev/null
+test "$(db_query "$private_ledger")" = 3
+test "$(db_query "$private_media")" = 1
+test "$(compose exec -T app sh -c 'find var/private-media -type f | wc -l')" = "$private_files_after"
 test "$(db_query "SELECT title FROM content_entries WHERE slug = 'restricted-rest-post'")" = 'Imported private post'
 for route in /restricted-rest-page /api/v1/content/pages/restricted-rest-page /content/wordpress-posts/restricted-rest-post /api/v1/content/entries/wordpress-posts/restricted-rest-post /old/private-post /old/protected-page; do
     test "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' "$CMS_PUBLIC_SITE_URL$route")" = 404

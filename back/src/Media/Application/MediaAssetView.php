@@ -23,6 +23,7 @@ final readonly class MediaAssetView
         public array $tags,
         public array $variants,
         public string $createdAt,
+        public bool $isPrivate = false,
     ) {
     }
 
@@ -44,10 +45,11 @@ final readonly class MediaAssetView
                 'height' => $variant->height,
             ], $asset->variants),
             $asset->createdAt->format(DATE_ATOM),
+            $asset->isPrivate,
         );
     }
 
-    /** @return array{id: string, originalName: string, mimeType: string, size: int, width: int, height: int, defaultAlt: string, collection: ?string, tags: list<string>, variants: list<array{url: string, width: int, height: int}>, createdAt: string} */
+    /** @return array{id: string, originalName: string, mimeType: string, size: int, width: int, height: int, defaultAlt: string, collection: ?string, tags: list<string>, variants: list<array{url: string, width: int, height: int}>, createdAt: string, isPrivate: bool} */
     public function toArray(): array
     {
         return [
@@ -62,6 +64,7 @@ final readonly class MediaAssetView
             'tags' => $this->tags,
             'variants' => $this->variants,
             'createdAt' => $this->createdAt,
+            'isPrivate' => $this->isPrivate,
         ];
     }
 }

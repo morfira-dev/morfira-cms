@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted. [ADR 0034](0034-private-media-authoring-boundary.md) extends the credential scope to approved attachment requests.
 
 ## Context
 

@@ -25,7 +25,8 @@ final class WordPressRestMapper
         $posts = $this->index($collections['posts'] ?? []);
         $pages = $this->index($collections['pages'] ?? []);
         $media = $this->index($collections['media'] ?? []);
-        if (array_intersect_key($posts, $pages) !== [] || array_intersect_key($posts + $pages, $media) !== []) {
+        $authenticatedMedia = $includePrivate ? $this->index($collections['authenticatedMedia'] ?? []) : [];
+        if (array_intersect_key($posts, $pages) !== [] || array_intersect_key($posts + $pages, $media + $authenticatedMedia) !== []) {
             throw new \InvalidArgumentException('WordPress REST collections contain an overlapping content identifier.');
         }
         $categories = $this->index($collections['categories'] ?? []);
@@ -46,12 +47,23 @@ final class WordPressRestMapper
 
         $attachments = [];
         $skippedTypes = [];
-        foreach ($media as $id => $record) {
+        foreach ($authenticatedMedia + $media as $id => $record) {
+            $publicRecord = $media[$id] ?? null;
+            $parent = $record['post'] ?? null;
+            $publicParent = $parent === null || $parent === 0 || $parent === '0' || isset($publicItems[self::id($parent) ?? '']);
+            $private = $includePrivate && isset($authenticatedMedia[$id]) && (
+                $publicRecord === null || !$publicParent || ($record['status'] ?? null) === 'private'
+                || !$this->attachment($id, $publicRecord, $publicItems)['eligible']
+            );
+            // Public metadata always comes from the anonymous collection.
+            if (!$private && $publicRecord !== null) {
+                $record = $publicRecord;
+            }
             if (($record['media_type'] ?? null) !== 'image' || !in_array($record['mime_type'] ?? null, ['image/jpeg', 'image/png', 'image/webp'], true)) {
                 $skippedTypes['unsupported_media'] = ($skippedTypes['unsupported_media'] ?? 0) + 1;
                 continue;
             }
-            $attachments[] = $this->attachment($id, $record, $publicItems);
+            $attachments[] = $this->attachment($id, $record, $publicItems, $private);
         }
 
         $authors = [];
@@ -133,7 +145,7 @@ final class WordPressRestMapper
      * @param array<string,true> $publicItems
      * @return Attachment
      */
-    private function attachment(string $id, array $record, array $publicItems): array
+    private function attachment(string $id, array $record, array $publicItems, bool $private = false): array
     {
         $details = $record['media_details'] ?? null;
         $parent = $record['post'] ?? null;
@@ -144,9 +156,11 @@ final class WordPressRestMapper
             'path' => is_array($details) ? trim(self::string($details['file'] ?? null)) : '',
             'url' => trim(self::string($record['source_url'] ?? null)),
             'alt' => trim(self::string($record['alt_text'] ?? null)),
-            'eligible' => in_array($record['status'] ?? null, ['inherit', 'publish'], true)
-                && ($parent === null || $parent === 0 || $parent === '0' || ($parentId !== null && isset($publicItems[$parentId]))),
-        ];
+            'eligible' => $private
+                ? in_array($record['status'] ?? null, ['inherit', 'publish', 'private'], true)
+                : in_array($record['status'] ?? null, ['inherit', 'publish'], true)
+                    && ($parent === null || $parent === 0 || $parent === '0' || ($parentId !== null && isset($publicItems[$parentId]))),
+        ] + ($private ? ['isPrivate' => true] : []);
     }
 
     /**

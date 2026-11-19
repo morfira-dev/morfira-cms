@@ -33,6 +33,7 @@ final readonly class DoctrineMediaAssetRepository implements MediaAssetRepositor
                 JSON_THROW_ON_ERROR,
             ),
             'created_at' => $asset->createdAt->format('Y-m-d H:i:s.u'),
+            'is_private' => $asset->isPrivate ? 1 : 0,
         ]);
     }
 
@@ -109,6 +110,7 @@ final readonly class DoctrineMediaAssetRepository implements MediaAssetRepositor
             $tags,
             $variants,
             new \DateTimeImmutable(self::stringValue($row, 'created_at'), new \DateTimeZone('UTC')),
+            self::intValue($row, 'is_private') !== 0,
         );
     }
 

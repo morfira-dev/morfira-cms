@@ -584,6 +584,50 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MediaAssetInUseError'
+  /api/v1/admin/media/{id}/variants/{filename}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: filename
+        in: path
+        required: true
+        schema: { type: string, pattern: '^[1-9][0-9]{0,3}w\.webp$' }
+    get:
+      operationId: getPrivateMediaVariant
+      tags: [Media]
+      summary: Read a private WebP variant with an editor session
+      security: [{ sessionCookie: [] }]
+      responses:
+        '200':
+          description: Private image bytes. Responses are not cacheable.
+          headers:
+            Cache-Control:
+              schema: { type: string }
+          content:
+            image/webp:
+              schema: { type: string, format: binary }
+        '401':
+          description: Sign-in required.
+        '403':
+          description: Editor access required.
+        '404':
+          description: The requested private variant does not exist.
+    head:
+      operationId: headPrivateMediaVariant
+      tags: [Media]
+      summary: Check an editor-accessible private WebP variant
+      security: [{ sessionCookie: [] }]
+      responses:
+        '200':
+          description: Non-cacheable headers for the private image.
+        '401':
+          description: Sign-in required.
+        '403':
+          description: Editor access required.
+        '404':
+          description: The requested private variant does not exist.
   /api/v1/admin/themes:
     get:
       operationId: listThemes
@@ -3223,6 +3267,9 @@ components:
           type: string
           const: image/webp
           description: MIME type of the canonical safely re-encoded asset.
+        isPrivate:
+          type: boolean
+          description: When true, the variants require an editor session and cannot be published.
         size:
           type: integer
           minimum: 1

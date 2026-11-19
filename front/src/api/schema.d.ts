@@ -238,6 +238,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/media/{id}/variants/{filename}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                filename: string;
+            };
+            cookie?: never;
+        };
+        /** Read a private WebP variant with an editor session */
+        get: operations["getPrivateMediaVariant"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        /** Check an editor-accessible private WebP variant */
+        head: operations["headPrivateMediaVariant"];
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/themes": {
         parameters: {
             query?: never;
@@ -1361,6 +1382,8 @@ export interface components {
              * @constant
              */
             mimeType: "image/webp";
+            /** @description When true, the variants require an editor session and cannot be published. */
+            isPrivate?: boolean;
             /** @description Canonical encoded asset size in bytes. */
             size: number;
             width: number;
@@ -2373,6 +2396,93 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MediaAssetInUseError"];
                 };
+            };
+        };
+    };
+    getPrivateMediaVariant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                filename: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Private image bytes. Responses are not cacheable. */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/webp": string;
+                };
+            };
+            /** @description Sign-in required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Editor access required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The requested private variant does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    headPrivateMediaVariant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                filename: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Non-cacheable headers for the private image. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sign-in required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Editor access required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The requested private variant does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

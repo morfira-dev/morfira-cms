@@ -9,6 +9,7 @@ services:
       - .:/app
       - ./back/Caddyfile:/etc/frankenphp/Caddyfile:ro
       - media_data:/app/back/public/media
+      - private_media_data:/app/back/var/private-media
     environment:
       APP_ENV: dev
       APP_DEBUG: 1
@@ -61,3 +62,4 @@ volumes:
   database_data:
   front_node_modules:
   media_data:
+  private_media_data:

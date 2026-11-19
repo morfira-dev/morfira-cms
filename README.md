@@ -33,7 +33,7 @@ docker compose -f compose.prod.yaml up -d --build
 
 Open `/admin`; `/health` is the dependency-free liveness endpoint and `/ready` includes database readiness. Startup applies pending migrations before accepting traffic. Set `CMS_MAINTENANCE_MODE=1` and recreate the app container to return controlled `503` responses while preserving health checks.
 
-Back up database and media together to a new, operator-controlled directory:
+Back up the database and both public and private media together to a new, access-restricted directory:
 
 ```bash
 ./scripts/backup.sh /absolute/path/to/backup
@@ -174,7 +174,7 @@ docker compose exec -T -e CMS_WORDPRESS_USERNAME -e CMS_WORDPRESS_APPLICATION_PA
   --source=legacy-site --include-private
 ```
 
-Without `--apply` this is a dry-run in Morfira. Apply stores restricted items as ordinary drafts without imported redirects. Publish only after checking whether the material may be public. WordPress passwords and restricted attachments are excluded from the import. See the [authenticated import specification](docs/specs/wordpress-rest-private-import.md) and [WordPress Application Password documentation](https://developer.wordpress.org/advanced-administration/security/application-passwords/).
+Without `--apply` this is a dry-run in Morfira. Apply stores restricted items as drafts without imported redirects. Supported private image attachments are re-encoded into the private media volume and are available with a Morfira editor or owner session. Remove or replace private references before public publication. Authenticated file downloads require a same-host HTTPS URL that accepts the Application Password. An explicitly supplied local uploads copy is also supported. See the [authenticated import specification](docs/specs/wordpress-rest-private-import.md), [private attachment specification](docs/specs/wordpress-rest-private-media.md) and [WordPress Application Password documentation](https://developer.wordpress.org/advanced-administration/security/application-passwords/).
 
 For WXR attachments or to use a local copy with REST, mount a trusted read-only WordPress uploads tree into the application container and pass `--media-dir=/path/to/uploads`. Supported JPEG, PNG and WebP attachments are added to the media library as WebP variants. Imported drafts receive inline image references in content order. Featured images appear in page Open Graph settings or the dedicated post media field. Review unresolved links in the JSON report before publishing.
 

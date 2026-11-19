@@ -17,7 +17,7 @@ use Cms\Taxonomy\Application\EntryTerms;
 
 final readonly class PublishEntry
 {
-    public function __construct(private EntryRepository $entries, private PublishedEntryRepository $published, private GetContentTypeDefinition $definitions, private ValidateEntryValues $validator, private SanitizeEntryValues $sanitizer, private ?EntryTerms $entryTerms = null)
+    public function __construct(private EntryRepository $entries, private PublishedEntryRepository $published, private GetContentTypeDefinition $definitions, private ValidateEntryValues $validator, private SanitizeEntryValues $sanitizer, private ?EntryTerms $entryTerms = null, private ?AssertPublicMedia $publicMedia = null)
     {
     }
 
@@ -39,6 +39,16 @@ final readonly class PublishEntry
 
         $definition = $this->definitions->byId($entry->contentTypeId);
         $values = ($this->validator)($entry->contentTypeId, ($this->sanitizer)($entry->contentTypeId, $entry->values));
+        if ($this->publicMedia !== null) {
+            $assetIds = [];
+            foreach ($definition->fields as $field) {
+                $value = $values[$field['key']] ?? null;
+                if ($field['type'] === 'media' && is_string($value)) {
+                    $assetIds[] = $value;
+                }
+            }
+            ($this->publicMedia)($assetIds);
+        }
         $snapshot = new PublishedEntry(EntryId::new()->value, $entry->id->value, $entry->version, ['id' => $definition->id, 'name' => $definition->name, 'apiName' => $definition->apiName, 'version' => $definition->version, 'fields' => $definition->fields], $entry->title, $entry->slug->value, $values, $this->entryTerms?->snapshot($entry->id->value) ?? [], new \DateTimeImmutable('now', new \DateTimeZone('UTC')));
 
         return PublishedEntryView::fromEntry($this->published->publish($snapshot));

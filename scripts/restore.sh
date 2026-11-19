@@ -19,6 +19,10 @@ docker compose -f compose.prod.yaml stop app
 gzip -dc "$backup_directory/database.sql.gz" | docker compose -f compose.prod.yaml exec -T database sh -c 'mariadb -ucms -p"$MARIADB_PASSWORD" cms'
 docker compose -f compose.prod.yaml run --rm --no-deps app sh -c 'find /app/back/public/media -mindepth 1 -delete'
 docker compose -f compose.prod.yaml run --rm --no-deps -T app tar -C /app/back/public -xzf - < "$backup_directory/media.tar.gz"
+docker compose -f compose.prod.yaml run --rm --no-deps app sh -c 'find /app/back/var/private-media -mindepth 1 -delete'
+if [ -f "$backup_directory/private-media.tar.gz" ]; then
+    docker compose -f compose.prod.yaml run --rm --no-deps -T app tar -C /app/back/var -xzf - < "$backup_directory/private-media.tar.gz"
+fi
 docker compose -f compose.prod.yaml up -d app
 
 printf 'Restore completed from %s\n' "$backup_directory"

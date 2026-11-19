@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cms\Tests\Content\Infrastructure\Import;
 
 use Cms\Content\Application\Import\WordPressMediaHosts;
+use Cms\Content\Application\Import\WordPressRestCredentials;
 use Cms\Content\Infrastructure\Import\WordPressRemoteMediaDownloader;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -12,6 +13,18 @@ use PHPUnit\Framework\TestCase;
 final class WordPressRemoteMediaDownloaderTest extends TestCase
 {
     private const string API = 'https://example.test/blog/wp-json/wp/v2';
+
+    public function testPrivateMediaCredentialsAreNeverSentToAnAllowedCdn(): void
+    {
+        $this->expectExceptionMessage('Authenticated WordPress attachments must use the REST host.');
+        new WordPressRemoteMediaDownloader()->download(
+            self::API,
+            'https://cdn.example.org/uploads/one.jpg',
+            static fn (): never => self::fail('The consumer must not run for an authenticated CDN request.'),
+            ['cdn.example.org'],
+            new WordPressRestCredentials('fixture-user', 'syntheticPassword'),
+        );
+    }
 
     public function testAcceptsSameHostPercentEncodedFilenamesAndQueryWithoutConnecting(): void
     {

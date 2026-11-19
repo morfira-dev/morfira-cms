@@ -23,7 +23,8 @@ final readonly class LocalGdImageProcessor implements ImageProcessor
 
     public function __construct(
         #[Autowire('%kernel.project_dir%/public/media')]
-        private string $publicDirectory,
+        private string $directory,
+        private bool $isPrivate = false,
     ) {
     }
 
@@ -116,7 +117,7 @@ final readonly class LocalGdImageProcessor implements ImageProcessor
                     $width,
                     $height,
                     $bytes,
-                    sprintf('/media/%s/%s', $assetId->value, $filename),
+                    MediaVariant::urlFor($assetId, $width, $this->isPrivate),
                 );
             }
         } catch (\Throwable $exception) {
@@ -160,7 +161,7 @@ final readonly class LocalGdImageProcessor implements ImageProcessor
 
     private function assetDirectory(MediaAssetId $assetId): string
     {
-        return rtrim($this->publicDirectory, '/') . '/' . $assetId->value;
+        return rtrim($this->directory, '/') . '/' . $assetId->value;
     }
 
     private function decode(string $sourcePath, int $imageType): \GdImage|false

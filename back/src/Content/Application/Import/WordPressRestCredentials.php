@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Cms\Content\Infrastructure\Import;
+namespace Cms\Content\Application\Import;
 
 final readonly class WordPressRestCredentials implements \JsonSerializable
 {

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cms\Tests\Content\Infrastructure\Import;
 
+use Cms\Content\Application\Import\WordPressRestCredentials;
 use Cms\Content\Infrastructure\Import\WordPressRestJsonTransport;
 use Cms\Content\Infrastructure\Import\WordPressRestMapper;
 use Cms\Content\Infrastructure\Import\WordPressRestReader;
@@ -13,6 +14,30 @@ use PHPUnit\Framework\TestCase;
 final class WordPressRestReaderTest extends TestCase
 {
     private const string API = 'https://wordpress.example/blog/wp-json/wp/v2';
+
+    public function testReadsAnonymousAndAuthenticatedMediaSeparately(): void
+    {
+        $seen = [];
+        $credentials = new WordPressRestCredentials('fixture-editor', 'fixtureApplicationPassword');
+        $transport = $this->createStub(WordPressRestJsonTransport::class);
+        $transport->method('get')->willReturnCallback(static function (string $base, string $resource, array $query, ?WordPressRestCredentials $auth) use (&$seen, $credentials): array {
+            self::assertSame(self::API, $base);
+            $seen[] = [$resource, $query['context'], $query['status'] ?? null, $auth === $credentials];
+            return ['body' => [], 'totalPages' => 0];
+        });
+
+        new WordPressRestReader($transport, new WordPressRestMapper())->read(self::API, $credentials);
+
+        self::assertSame([
+            ['posts', 'edit', 'publish,private,draft,pending,future', true],
+            ['pages', 'edit', 'publish,private,draft,pending,future', true],
+            ['media', 'view', null, false],
+            ['categories', 'view', null, false],
+            ['tags', 'view', null, false],
+            ['users', 'view', null, false],
+            ['media', 'edit', 'inherit,private', true],
+        ], $seen);
+    }
 
     public function testFetchesNumberedPagesAndNormalizesTheWholeBatch(): void
     {

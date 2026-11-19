@@ -11,7 +11,7 @@ interface WordPressRemoteMedia
      *
      * @param list<string> $allowedHosts
      */
-    public function assertUrl(string $apiUrl, string $attachmentUrl, array $allowedHosts = []): void;
+    public function assertUrl(string $apiUrl, string $attachmentUrl, array $allowedHosts = [], ?WordPressRestCredentials $credentials = null): void;
 
     /**
      * Provide a bounded download to the consumer while its temporary file exists.
@@ -21,5 +21,5 @@ interface WordPressRemoteMedia
      * @param list<string> $allowedHosts
      * @return T
      */
-    public function download(string $apiUrl, string $attachmentUrl, \Closure $consume, array $allowedHosts = []): mixed;
+    public function download(string $apiUrl, string $attachmentUrl, \Closure $consume, array $allowedHosts = [], ?WordPressRestCredentials $credentials = null): mixed;
 }

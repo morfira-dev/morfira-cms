@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Cms\Content\Infrastructure\Import;
 
+use Cms\Content\Application\Import\WordPressRestCredentials;
+
 final class WordPressRestTransport implements WordPressRestJsonTransport
 {
     private const int MAX_BODY_BYTES = 2 * 1024 * 1024;
@@ -21,8 +23,8 @@ final class WordPressRestTransport implements WordPressRestJsonTransport
         if (!in_array($resource, self::RESOURCES, true)) {
             throw new \InvalidArgumentException('Unsupported WordPress REST collection.');
         }
-        if ($credentials !== null && (!in_array($resource, ['posts', 'pages'], true) || ($query['context'] ?? null) !== 'edit')) {
-            throw new \InvalidArgumentException('WordPress credentials are only allowed for edit-context posts and pages.');
+        if ($credentials !== null && (!in_array($resource, ['posts', 'pages', 'media'], true) || ($query['context'] ?? null) !== 'edit')) {
+            throw new \InvalidArgumentException('WordPress credentials are only allowed for edit-context posts, pages and media.');
         }
         if (!extension_loaded('curl')) {
             throw new \RuntimeException('WordPress REST import requires PHP cURL.');

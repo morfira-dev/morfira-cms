@@ -7,6 +7,7 @@ namespace Cms\Media\Application\UploadImage;
 use Cms\Media\Application\ImageProcessor;
 use Cms\Media\Application\MediaAssetView;
 use Cms\Media\Application\MediaTooLarge;
+use Cms\Media\Application\PrivateImageProcessor;
 use Cms\Media\Domain\MediaAsset;
 use Cms\Media\Domain\MediaAssetId;
 use Cms\Media\Domain\MediaAssetRepository;
@@ -18,10 +19,11 @@ final readonly class UploadImage
     public function __construct(
         private MediaAssetRepository $assets,
         private ImageProcessor $processor,
+        private ?PrivateImageProcessor $privateProcessor = null,
     ) {
     }
 
-    public function __invoke(string $sourcePath, string $originalName, string $defaultAlt): MediaAssetView
+    public function __invoke(string $sourcePath, string $originalName, string $defaultAlt, bool $isPrivate = false): MediaAssetView
     {
         if (!is_file($sourcePath) || !is_readable($sourcePath)) {
             throw new \InvalidArgumentException('Uploaded image is not readable.');
@@ -41,7 +43,8 @@ final readonly class UploadImage
         }
 
         $id = MediaAssetId::new();
-        $processed = $this->processor->process($sourcePath, $id);
+        $processor = $this->processorFor($isPrivate);
+        $processed = $processor->process($sourcePath, $id);
 
         try {
             $asset = MediaAsset::create(
@@ -53,13 +56,21 @@ final readonly class UploadImage
                 $defaultAlt,
                 $processed->variants,
                 new \DateTimeImmutable('now', new \DateTimeZone('UTC')),
+                $isPrivate,
             );
             $this->assets->add($asset);
         } catch (\Throwable $exception) {
-            $this->processor->remove($id);
+            $processor->remove($id);
             throw $exception;
         }
 
         return MediaAssetView::fromAsset($asset);
+    }
+
+    private function processorFor(bool $isPrivate): ImageProcessor
+    {
+        return $isPrivate
+            ? ($this->privateProcessor ?? throw new \LogicException('Private media storage is not configured.'))
+            : $this->processor;
     }
 }

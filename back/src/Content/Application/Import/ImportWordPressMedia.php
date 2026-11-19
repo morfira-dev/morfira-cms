@@ -10,8 +10,8 @@ use Cms\Media\Application\GetMediaAsset\GetMediaAsset;
 use Cms\Media\Application\UploadImage\UploadImage;
 
 /**
- * @phpstan-type Attachment array{id:string,path:string,url:string,alt:string,eligible:bool}
- * @phpstan-type MediaOutcome array{id:string,state:string,assetId?:string,reason?:string}
+ * @phpstan-type Attachment array{id:string,path:string,url:string,alt:string,eligible:bool,isPrivate?:bool}
+ * @phpstan-type MediaOutcome array{id:string,state:string,assetId?:string,reason?:string,isPrivate?:bool}
  */
 final readonly class ImportWordPressMedia
 {
@@ -30,11 +30,11 @@ final readonly class ImportWordPressMedia
      * @param list<string> $allowedHosts
      * @return list<MediaOutcome>
      */
-    public function __invoke(string $source, array $attachments, ?string $directory, bool $apply, \ArrayObject $created, ?string $apiUrl = null, array $allowedHosts = []): array
+    public function __invoke(string $source, array $attachments, ?string $directory, bool $apply, \ArrayObject $created, ?string $apiUrl = null, array $allowedHosts = [], ?WordPressRestCredentials $credentials = null): array
     {
         $report = [];
         foreach ($attachments as $attachment) {
-            $report[] = $this->importAttachment($source, $attachment, $directory, $apply, $created, $apiUrl, $allowedHosts);
+            $report[] = $this->importAttachment($source, $attachment, $directory, $apply, $created, $apiUrl, $allowedHosts, $credentials);
         }
 
         return $report;
@@ -63,18 +63,23 @@ final readonly class ImportWordPressMedia
      * @param list<string> $allowedHosts
      * @return MediaOutcome
      */
-    private function importAttachment(string $source, array $attachment, ?string $directory, bool $apply, \ArrayObject $created, ?string $apiUrl, array $allowedHosts): array
+    private function importAttachment(string $source, array $attachment, ?string $directory, bool $apply, \ArrayObject $created, ?string $apiUrl, array $allowedHosts, ?WordPressRestCredentials $credentials): array
     {
         $id = $attachment['id'];
-        if (!$attachment['eligible']) {
+        $private = $attachment['isPrivate'] ?? false;
+        if (!$attachment['eligible'] || ($private && $credentials === null)) {
             return ['id' => $id, 'state' => 'unsupported_status'];
         }
         if ($this->ledger->contains($source, $id)) {
-            $image = $this->reusableImage($source, $id);
-            if ($image === null) {
+            $assetId = $this->ledger->mediaAssetId($source, $id);
+            $asset = $assetId === null ? null : ($this->assets)($assetId);
+            if ($private && $asset !== null && !$asset->isPrivate) {
+                return ['id' => $id, 'state' => 'invalid', 'reason' => 'An existing public asset cannot be reused as private media.'];
+            }
+            if ($asset === null) {
                 return ['id' => $id, 'state' => 'already_imported', 'reason' => 'No reusable media asset mapping is available.'];
             }
-            return ['id' => $id, 'state' => 'already_imported', 'assetId' => $image['assetId']];
+            return ['id' => $id, 'state' => 'already_imported', 'assetId' => $asset->id] + ($asset->isPrivate ? ['isPrivate' => true] : []);
         }
         if ($directory === null && $apiUrl === null) {
             return ['id' => $id, 'state' => 'media_directory_required'];
@@ -87,23 +92,25 @@ final readonly class ImportWordPressMedia
                     throw new \InvalidArgumentException('Attachment has no usable uploads path.');
                 }
                 if (!$apply) {
-                    ($this->images)($directory, $relativePath, $attachment['alt'], false);
+                    ($this->images)($directory, $relativePath, $attachment['alt'], false, $private);
                 }
-                $load = fn (): ?MediaAssetView => ($this->images)($directory, $relativePath, $attachment['alt'], true);
+                $load = fn (): ?MediaAssetView => ($this->images)($directory, $relativePath, $attachment['alt'], true, $private);
             } else {
                 if (mb_strlen(trim($attachment['alt'])) > 500) {
                     throw new \InvalidArgumentException('Default alternative text must not exceed 500 characters.');
                 }
-                $this->remote->assertUrl($apiUrl, $attachment['url'], $allowedHosts);
+                $downloadCredentials = $private ? $credentials : null;
+                $this->remote->assertUrl($apiUrl, $attachment['url'], $allowedHosts, $downloadCredentials);
                 $load = fn (): MediaAssetView => $this->remote->download(
                     $apiUrl,
                     $attachment['url'],
-                    fn (string $path, string $fileName): MediaAssetView => ($this->upload)($path, $fileName, $attachment['alt']),
+                    fn (string $path, string $fileName): MediaAssetView => ($this->upload)($path, $fileName, $attachment['alt'], $private),
                     $allowedHosts,
+                    $downloadCredentials,
                 );
             }
             if (!$apply) {
-                return ['id' => $id, 'state' => 'planned'];
+                return ['id' => $id, 'state' => 'planned'] + ($private ? ['isPrivate' => true] : []);
             }
 
             $asset = $this->ledger->transactional(function () use ($source, $id, $load, $created): MediaAssetView {
@@ -121,7 +128,7 @@ final readonly class ImportWordPressMedia
             return ['id' => $id, 'state' => 'invalid', 'reason' => $error->getMessage()];
         }
 
-        return ['id' => $id, 'state' => 'imported', 'assetId' => $asset->id];
+        return ['id' => $id, 'state' => 'imported', 'assetId' => $asset->id] + ($asset->isPrivate ? ['isPrivate' => true] : []);
     }
 
     /** @param Attachment $attachment */

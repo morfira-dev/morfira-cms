@@ -6,6 +6,7 @@ namespace Cms\Tests\Media\Application;
 
 use Cms\Media\Application\ImageProcessor;
 use Cms\Media\Application\ProcessedImage;
+use Cms\Media\Application\PrivateImageProcessor;
 use Cms\Media\Application\UploadImage\UploadImage;
 use Cms\Media\Domain\MediaAssetId;
 use Cms\Media\Domain\MediaVariant;
@@ -54,6 +55,27 @@ final class UploadImageTest extends TestCase
         ]], $view->variants);
         self::assertCount(1, $repository->items);
         self::assertFalse($processor->removed);
+    }
+
+    #[Test]
+    public function it_processes_private_images_only_in_private_storage(): void
+    {
+        $repository = new InMemoryMediaAssetRepository();
+        $public = new FakeImageProcessor();
+        $private = $this->createMock(PrivateImageProcessor::class);
+        $private->expects(self::once())->method('process')->willReturnCallback(
+            static fn (string $path, MediaAssetId $id): ProcessedImage => new ProcessedImage(480, 240, 10, [
+                new MediaVariant(480, 240, 10, MediaVariant::urlFor($id, 480, true)),
+            ]),
+        );
+        $upload = new UploadImage($repository, $public, $private);
+
+        $view = $upload($this->sourcePath, 'private.png', '', true);
+
+        self::assertFalse($public->processed);
+        self::assertTrue($view->isPrivate);
+        self::assertTrue($repository->get(MediaAssetId::fromString($view->id))?->isPrivate);
+        self::assertSame('/api/v1/admin/media/'.$view->id.'/variants/480w.webp', $view->variants[0]['url']);
     }
 
     #[Test]

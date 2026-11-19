@@ -121,6 +121,32 @@ final class WordPressRestMapperTest extends TestCase
         new WordPressRestMapper()('https://wordpress.example', ['posts' => [['id' => 1]], 'media' => [['id' => '1']]]);
     }
 
+    public function testEditMediaIsPrivateUnlessTheAnonymousCollectionConfirmsPublicVisibility(): void
+    {
+        $base = ['status' => 'inherit', 'media_type' => 'image', 'mime_type' => 'image/jpeg', 'post' => 0];
+        $source = 'https://wordpress.example';
+        $authenticated = [
+            ['id' => 1, 'alt_text' => 'Edit-only metadata'] + $base,
+            ['id' => 2, 'status' => 'private'] + $base,
+            ['id' => 3, 'post' => 50] + $base,
+            ['id' => 4, 'post' => 999] + $base,
+            ['id' => 5] + $base,
+            ['id' => 6, 'status' => 'trash'] + $base,
+        ];
+        $export = new WordPressRestMapper()($source, [
+            'posts' => [['id' => 50, 'status' => 'private', 'content' => ['raw' => '', 'protected' => false]]],
+            'media' => [['id' => 1, 'alt_text' => 'Public metadata'] + $base, ['id' => 3, 'post' => 50] + $base],
+            'authenticatedMedia' => $authenticated,
+        ], true);
+
+        self::assertSame('Public metadata', $export['attachments'][0]['alt']);
+        self::assertArrayNotHasKey('isPrivate', $export['attachments'][0]);
+        self::assertSame([true, true, true, true, true, false], array_column($export['attachments'], 'eligible'));
+        foreach (array_slice($export['attachments'], 1) as $attachment) {
+            self::assertTrue($attachment['isPrivate'] ?? false);
+        }
+    }
+
     #[DataProvider('restrictedStatuses')]
     public function testAuthenticatedReaderUsesTheEditContextBodyAndConcealsTheSourceLink(string $status, bool $protected): void
     {

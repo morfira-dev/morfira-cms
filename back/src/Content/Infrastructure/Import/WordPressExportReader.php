@@ -10,7 +10,7 @@ use DOMElement;
 /**
  * @phpstan-type Term array{taxonomy:string,slug:string,name:string,parent:string}
  * @phpstan-type TermReference array{taxonomy:string,slug:string}
- * @phpstan-type Attachment array{id:string,path:string,url:string,alt:string,eligible:bool}
+ * @phpstan-type Attachment array{id:string,path:string,url:string,alt:string,eligible:bool,isPrivate?:bool}
  * @phpstan-type Author array{login:string,name:string}
  * @phpstan-type ExportItem array{id: string, type: string, status: string, title: string, slug: string, html: string, link: string, passwordProtected: bool, terms:list<TermReference>, thumbnailId:?string, authorLogin:?string, restrictedSource?:bool}
  * @phpstan-type Export array{items:list<ExportItem>,skippedTypes:array<string,int>,attachments:list<Attachment>,terms:list<Term>,authors:list<Author>,sourceUrl:?string}

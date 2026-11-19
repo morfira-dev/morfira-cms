@@ -9,11 +9,15 @@ use Cms\Media\Domain\MediaAssetId;
 
 final readonly class ImportLocalImage
 {
-    public function __construct(private UploadImage $upload, private ImageProcessor $processor)
+    public function __construct(
+        private UploadImage $upload,
+        private ImageProcessor $processor,
+        private ?PrivateImageProcessor $privateProcessor = null,
+    )
     {
     }
 
-    public function __invoke(string $directory, string $relativePath, string $alt, bool $apply): ?MediaAssetView
+    public function __invoke(string $directory, string $relativePath, string $alt, bool $apply, bool $isPrivate = false): ?MediaAssetView
     {
         $source = $this->sourcePath($directory, $relativePath);
         $name = trim(basename($relativePath));
@@ -48,7 +52,7 @@ final readonly class ImportLocalImage
                 throw new \RuntimeException('Could not resolve the staged import image.');
             }
 
-            return ($this->upload)($temporaryPath, $name, $alt);
+            return ($this->upload)($temporaryPath, $name, $alt, $isPrivate);
         } finally {
             fclose($temporary);
         }
@@ -57,7 +61,10 @@ final readonly class ImportLocalImage
     /** Discard only the variants created by a failed import transaction. */
     public function rollback(MediaAssetView $asset): void
     {
-        $this->processor->remove(MediaAssetId::fromString($asset->id));
+        $processor = $asset->isPrivate
+            ? ($this->privateProcessor ?? throw new \LogicException('Private media storage is not configured.'))
+            : $this->processor;
+        $processor->remove(MediaAssetId::fromString($asset->id));
     }
 
     private function sourcePath(string $directory, string $relativePath): string

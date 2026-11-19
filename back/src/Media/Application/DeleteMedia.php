@@ -18,13 +18,15 @@ final readonly class DeleteMedia
         private ImageProcessor $images,
         private ContentMediaUsage $contentUsage,
         private PublishedMediaUsage $publishedUsage,
+        private ?PrivateImageProcessor $privateImages = null,
     ) {
     }
 
     public function __invoke(string $id): void
     {
         $assetId = MediaAssetId::fromString($id);
-        if ($this->assets->get($assetId) === null) {
+        $asset = $this->assets->get($assetId);
+        if ($asset === null) {
             throw new MediaAssetNotFound();
         }
         $usages = [...$this->contentUsage->references($id), ...$this->publishedUsage->references($id)];
@@ -32,7 +34,10 @@ final readonly class DeleteMedia
             throw new MediaAssetInUse(array_values(array_unique($usages)));
         }
 
+        $processor = $asset->isPrivate
+            ? ($this->privateImages ?? throw new \LogicException('Private media storage is not configured.'))
+            : $this->images;
         $this->assets->remove($assetId);
-        $this->images->remove($assetId);
+        $processor->remove($assetId);
     }
 }

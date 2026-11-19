@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Cms\Content\Infrastructure\Import;
 
+use Cms\Content\Application\Import\WordPressRestCredentials;
+
 /**
  * @phpstan-import-type Export from WordPressExportReader
  */
@@ -32,9 +34,15 @@ final readonly class WordPressRestReader
         $baseUrl = WordPressRestTransport::normalizeBaseUrl($baseUrl);
         $collections = [];
         $requests = $records = $bytes = 0;
-        foreach (self::FIELDS as $resource => $fields) {
+        $fieldsByCollection = self::FIELDS;
+        if ($credentials !== null) {
+            $fieldsByCollection['authenticatedMedia'] = self::FIELDS['media'];
+        }
+        foreach ($fieldsByCollection as $collection => $fields) {
+            $authenticatedMedia = $collection === 'authenticatedMedia';
+            $resource = $authenticatedMedia ? 'media' : $collection;
             $content = in_array($resource, ['posts', 'pages'], true);
-            $collectionCredentials = $content ? $credentials : null;
+            $collectionCredentials = $content || $authenticatedMedia ? $credentials : null;
             $rows = [];
             $lastPage = 1;
             $totalPages = null;
@@ -52,6 +60,8 @@ final readonly class WordPressRestReader
                 ];
                 if ($content) {
                     $query['status'] = $collectionCredentials === null ? 'publish' : 'publish,private,draft,pending,future';
+                } elseif ($authenticatedMedia) {
+                    $query['status'] = 'inherit,private';
                 }
                 $response = $this->transport->get($baseUrl, $resource, $query, $collectionCredentials);
                 if ($response['totalPages'] < 0 || $response['totalPages'] > self::MAX_REQUESTS
@@ -79,7 +89,7 @@ final readonly class WordPressRestReader
                     $rows[$id] = $record;
                 }
             }
-            $collections[$resource] = array_values($rows);
+            $collections[$collection] = array_values($rows);
         }
 
         return ($this->mapper)(substr($baseUrl, 0, -strlen('/wp-json/wp/v2')), $collections, $credentials !== null);

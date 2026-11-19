@@ -14,8 +14,10 @@ use Cms\Identity\Domain\UserRepository;
 use Cms\Identity\Infrastructure\Persistence\DoctrineUserRepository;
 use Cms\Identity\Infrastructure\Security\SymfonyPasswordHasher;
 use Cms\Media\Application\ImageProcessor;
+use Cms\Media\Application\PrivateImageProcessor;
 use Cms\Media\Domain\MediaAssetRepository;
 use Cms\Media\Infrastructure\Image\LocalGdImageProcessor;
+use Cms\Media\Infrastructure\Image\LocalPrivateImageProcessor;
 use Cms\Media\Infrastructure\Persistence\DoctrineMediaAssetRepository;
 use Cms\Navigation\Domain\NavigationMenuRepository;
 use Cms\Navigation\Domain\PublishedNavigationRepository;
@@ -80,6 +82,7 @@ return static function (ContainerConfigurator $container): void {
     $services->alias(PasswordHasher::class, SymfonyPasswordHasher::class);
     $services->alias(MediaAssetRepository::class, DoctrineMediaAssetRepository::class);
     $services->alias(ImageProcessor::class, LocalGdImageProcessor::class);
+    $services->alias(PrivateImageProcessor::class, LocalPrivateImageProcessor::class);
     $services->alias(NavigationMenuRepository::class, DoctrineNavigationMenuRepository::class);
     $services->alias(PublishedNavigationRepository::class, DoctrinePublishedNavigationRepository::class);
     $services->alias(ContentTypeRepository::class, DoctrineContentTypeRepository::class);

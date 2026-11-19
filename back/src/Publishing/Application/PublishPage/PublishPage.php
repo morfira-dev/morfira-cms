@@ -10,6 +10,7 @@ use Cms\Content\Domain\PageNotFound;
 use Cms\Content\Domain\PageRepository;
 use Cms\Content\Domain\PageVersionConflict;
 use Cms\Publishing\Application\PublishedPageView;
+use Cms\Publishing\Application\AssertPublicMedia;
 use Cms\Publishing\Domain\PublishedPage;
 use Cms\Publishing\Domain\PublishedPageRepository;
 use Cms\Extensions\Application\PagePublishedContext;
@@ -25,6 +26,7 @@ final readonly class PublishPage
         private ?ThemeCatalog $themes = null,
         private ?PagePublishedHookBus $extensions = null,
         private ?GetSiteSettings $siteSettings = null,
+        private ?AssertPublicMedia $publicMedia = null,
     ) {
     }
 
@@ -38,6 +40,18 @@ final readonly class PublishPage
 
         if ($draft->version !== $expectedVersion) {
             throw new PageVersionConflict();
+        }
+        if ($this->publicMedia !== null) {
+            $assetIds = [];
+            foreach ($draft->blocks as $block) {
+                if ($block->type === 'image' && isset($block->data['assetId'])) {
+                    $assetIds[] = $block->data['assetId'];
+                }
+            }
+            if ($draft->seo->openGraphImageAssetId !== null) {
+                $assetIds[] = $draft->seo->openGraphImageAssetId;
+            }
+            ($this->publicMedia)($assetIds);
         }
         if ($this->themes !== null && !$this->themes->supports($draft->layout->theme, $draft->layout->template)) {
             throw new \InvalidArgumentException('Unsupported theme or template.');

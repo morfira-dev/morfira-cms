@@ -25,7 +25,8 @@ COPY docker/Caddyfile.production /etc/frankenphp/Caddyfile
 COPY docker/entrypoint.sh /usr/local/bin/morfira-entrypoint
 
 RUN chmod 755 /usr/local/bin/morfira-entrypoint \
-    && mkdir -p var public/media \
+    && mkdir -p var/private-media public/media \
+    && chmod 0750 var/private-media \
     && chown -R www-data:www-data var public/media
 
 ENTRYPOINT ["morfira-entrypoint"]

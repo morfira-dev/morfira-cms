@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Cms\Content\Infrastructure\Import;
 
+use Cms\Content\Application\Import\WordPressRestCredentials;
+
 interface WordPressRestJsonTransport
 {
     /**
