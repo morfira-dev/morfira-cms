@@ -14,15 +14,23 @@ use Cms\Content\Domain\PageId;
 use Cms\Content\Domain\PageRepository;
 use Cms\Content\Domain\PageSeo;
 use Cms\Content\Domain\PageTitle;
+use Cms\Media\Application\MediaAssetView;
 use Cms\Schema\Application\ContentTypeDefinition;
 use Cms\Schema\Application\CreateContentType;
 use Cms\Schema\Application\GetContentTypeDefinition;
 use Cms\Schema\Domain\ContentTypeNotFound;
 use Cms\Settings\Application\GetSiteSettings;
+use Cms\Taxonomy\Application\ImportWordPressTaxonomies;
 
 /**
- * @phpstan-type SourceItem array{id:string,type:string,status:string,title:string,slug:string,html:string,link:string,passwordProtected:bool}
+ * @phpstan-import-type Attachment from ImportWordPressMedia
+ * @phpstan-import-type MediaOutcome from ImportWordPressMedia
+ * @phpstan-type TermReference array{taxonomy:string,slug:string}
+ * @phpstan-type Term array{taxonomy:string,slug:string,name:string,parent:string}
+ * @phpstan-type SourceItem array{id:string,type:string,status:string,title:string,slug:string,html:string,link:string,passwordProtected:bool,terms:list<TermReference>}
  * @phpstan-type ReportItem array{id:string,type:string,status:string,sourcePath:?string,targetPath:?string,state:string,reason?:string}
+ * @phpstan-type TaxonomyOutcomes array{terms:list<array{taxonomy:string,slug:string,state:string}>,assignments:list<array{entryId:string,taxonomy:string,slug:string,state:string}>}
+ * @phpstan-type ImportReport array{items:list<ReportItem>,media:list<MediaOutcome>,taxonomy:TaxonomyOutcomes}
  */
 final readonly class ImportWordPressDrafts
 {
@@ -39,31 +47,51 @@ final readonly class ImportWordPressDrafts
         private PageRepository $pages,
         private EntryRepository $entries,
         private RichTextSanitizer $sanitizer,
+        private ImportWordPressTaxonomies $taxonomies,
+        private ImportWordPressMedia $media,
     ) {
     }
 
     /**
      * @param list<SourceItem> $items
-     * @return list<ReportItem>
+     * @param list<Term> $terms
+     * @param list<Attachment> $attachments
+     * @return ImportReport
      */
-    public function __invoke(string $source, array $items, bool $apply): array
+    public function __invoke(string $source, array $items, bool $apply, array $terms, array $attachments, ?string $mediaDirectory): array
     {
         if (preg_match('/\A[a-z0-9]+(?:-[a-z0-9]+)*\z/', $source) !== 1 || strlen($source) > 80) {
             throw new \InvalidArgumentException('Source must be a lowercase identifier of at most 80 characters.');
         }
 
-        if (!$apply) {
-            return $this->process($source, $items, false);
-        }
+        /** @var \ArrayObject<int,MediaAssetView> $created */
+        $created = new \ArrayObject();
+        $run = function () use ($source, $items, $apply, $terms, $attachments, $mediaDirectory, $created): array {
+            $assignments = [];
+            $report = $this->process($source, $items, $apply, $assignments);
+            $taxonomy = ($this->taxonomies)($terms, $assignments, $apply);
 
-        return $this->ledger->transactional(fn (): array => $this->process($source, $items, true));
+            return [
+                'items' => $report,
+                'taxonomy' => $taxonomy,
+                'media' => ($this->media)($source, $attachments, $mediaDirectory, $apply, $created),
+            ];
+        };
+
+        try {
+            return $apply ? $this->ledger->transactional($run) : $run();
+        } catch (\Throwable $error) {
+            $this->media->compensate($created);
+            throw $error;
+        }
     }
 
     /**
      * @param list<SourceItem> $items
+     * @param array<string,list<TermReference>> $assignments
      * @return list<ReportItem>
      */
-    private function process(string $source, array $items, bool $apply): array
+    private function process(string $source, array $items, bool $apply, array &$assignments): array
     {
         $locale = ($this->settings)()->defaultLocale;
         $postSchema = $this->findPostSchema();
@@ -83,7 +111,15 @@ final readonly class ImportWordPressDrafts
 
         $report = [];
         foreach ($items as $item) {
-            $report[] = $this->processItem($item, $source, $locale, $apply, $occupied, $postTypeId, $compatibleSchema);
+            $entryId = null;
+            $row = $this->processItem($item, $source, $locale, $apply, $occupied, $postTypeId, $compatibleSchema, $entryId);
+            $report[] = $row;
+            if ($item['type'] === 'post' && $item['terms'] !== []) {
+                $assignmentKey = $apply ? $entryId : ($row['state'] === 'planned' ? 'wp-'.$item['id'] : null);
+                if ($assignmentKey !== null) {
+                    $assignments[$assignmentKey] = $item['terms'];
+                }
+            }
         }
 
         return $report;
@@ -94,7 +130,7 @@ final readonly class ImportWordPressDrafts
      * @param array<string,bool> $occupied
      * @return ReportItem
      */
-    private function processItem(array $item, string $source, string $locale, bool $apply, array &$occupied, ?string &$postTypeId, bool $compatibleSchema): array
+    private function processItem(array $item, string $source, string $locale, bool $apply, array &$occupied, ?string &$postTypeId, bool $compatibleSchema, ?string &$entryId): array
     {
         $path = parse_url($item['link'], PHP_URL_PATH);
         $row = [
@@ -161,7 +197,7 @@ final readonly class ImportWordPressDrafts
                 'type' => 'richText',
                 'required' => false,
             ]])->id;
-            ($this->createEntry)($postTypeId, $title, $slug, $html === '' ? [] : ['body' => $html]);
+            $entryId = ($this->createEntry)($postTypeId, $title, $slug, $html === '' ? [] : ['body' => $html])->id;
         }
 
         return $row + ['state' => 'imported'];

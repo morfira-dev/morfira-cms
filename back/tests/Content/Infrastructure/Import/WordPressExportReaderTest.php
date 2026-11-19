@@ -30,8 +30,8 @@ final class WordPressExportReaderTest extends TestCase
                   <w:post_name>about</w:post_name>
                   <w:post_password><![CDATA[synthetic-fixture-value]]></w:post_password>
                 </item>
-                <item><w:post_id>8</w:post_id><w:post_type>attachment</w:post_type></item>
-                <item><w:post_id>9</w:post_id><w:post_type>attachment</w:post_type></item>
+                <item><w:post_id>8</w:post_id><w:post_type>nav_menu_item</w:post_type></item>
+                <item><w:post_id>9</w:post_id><w:post_type>nav_menu_item</w:post_type></item>
                 <item><w:post_id>10</w:post_id><w:post_type>post</w:post_type><w:status>draft</w:status></item>
               </channel>
             </rss>
@@ -48,6 +48,7 @@ final class WordPressExportReaderTest extends TestCase
                     'html' => '<p>Body &amp; details.</p>',
                     'link' => 'https://wordpress.example/?p=7&lang=en',
                     'passwordProtected' => true,
+                    'terms' => [],
                 ],
                 [
                     'id' => '10',
@@ -58,9 +59,12 @@ final class WordPressExportReaderTest extends TestCase
                     'html' => '',
                     'link' => '',
                     'passwordProtected' => false,
+                    'terms' => [],
                 ],
             ],
-            'skippedTypes' => ['attachment' => 2],
+            'skippedTypes' => ['nav_menu_item' => 2],
+            'attachments' => [],
+            'terms' => [],
         ], $export);
     }
 
@@ -99,7 +103,34 @@ final class WordPressExportReaderTest extends TestCase
         new WordPressExportReader()->read('https://invalid.example/site.xml');
     }
 
-    /** @return array{items: list<array{id: string, type: string, status: string, title: string, slug: string, html: string, link: string, passwordProtected: bool}>, skippedTypes: array<string, int>} */
+    public function testReadsMediaAndTaxonomyFromTheMigrationFixture(): void
+    {
+        $export = new WordPressExportReader()->read(dirname(__DIR__, 2).'/Fixtures/wordpress-import.xml');
+
+        self::assertSame('2026/11/sample.png', $export['attachments'][0]['path']);
+        self::assertSame('Sample alt', $export['attachments'][0]['alt']);
+        self::assertSame('', $export['attachments'][1]['path']);
+        self::assertSame(['taxonomy' => 'category', 'slug' => 'updates', 'name' => 'Updates', 'parent' => 'news'], $export['terms'][0]);
+        self::assertSame(['taxonomy' => 'post_tag', 'slug' => 'release', 'name' => 'Release', 'parent' => ''], $export['terms'][2]);
+        self::assertCount(2, $export['items'][1]['terms']);
+    }
+
+    public function testAttachmentOfExportedPrivatePostIsIneligible(): void
+    {
+        $export = $this->readXml(<<<'XML'
+            <rss xmlns:wp="http://wordpress.org/export/1.2/"><channel>
+              <wp:wxr_version>1.2</wp:wxr_version>
+              <item><wp:post_id>2</wp:post_id><wp:post_type>attachment</wp:post_type><wp:status>inherit</wp:status><wp:post_parent>3</wp:post_parent></item>
+              <item><wp:post_id>3</wp:post_id><wp:post_type>post</wp:post_type><wp:status>private</wp:status></item>
+            </channel></rss>
+            XML);
+
+        self::assertFalse($export['attachments'][0]['eligible']);
+    }
+
+    /**
+     * @return array{items:list<array<string,mixed>>,skippedTypes:array<string,int>,attachments:list<array<string,mixed>>,terms:list<array<string,mixed>>}
+     */
     private function readXml(string $xml): array
     {
         $file = tmpfile();

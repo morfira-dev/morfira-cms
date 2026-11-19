@@ -8,6 +8,15 @@
     <wp:wxr_version>1.2</wp:wxr_version>
     <wp:base_site_url>https://wordpress.example</wp:base_site_url>
     <wp:base_blog_url>https://wordpress.example</wp:base_blog_url>
+    <wp:category>
+      <wp:category_nicename>updates</wp:category_nicename>
+      <wp:category_parent>news</wp:category_parent>
+      <wp:cat_name>Updates</wp:cat_name>
+    </wp:category>
+    <wp:category>
+      <wp:category_nicename>news</wp:category_nicename>
+      <wp:cat_name>News</wp:cat_name>
+    </wp:category>
     <item>
       <title>Imported About</title>
       <link>https://wordpress.example/wp-import-about/</link>
@@ -25,6 +34,29 @@
       <wp:post_name>wp-import-news</wp:post_name>
       <wp:status>draft</wp:status>
       <wp:post_type>post</wp:post_type>
+      <category domain="category" nicename="updates">Updates</category>
+      <category domain="post_tag" nicename="release">Release</category>
+    </item>
+    <item>
+      <wp:post_id>453</wp:post_id>
+      <wp:post_type>attachment</wp:post_type>
+      <wp:status>inherit</wp:status>
+      <wp:attachment_url>https://wordpress.example/wp-content/uploads/2026/11/sample.png</wp:attachment_url>
+      <wp:postmeta><wp:meta_key>_wp_attached_file</wp:meta_key><wp:meta_value>2026/11/sample.png</wp:meta_value></wp:postmeta>
+      <wp:postmeta><wp:meta_key>_wp_attachment_image_alt</wp:meta_key><wp:meta_value>Sample alt</wp:meta_value></wp:postmeta>
+    </item>
+    <item>
+      <wp:post_id>454</wp:post_id>
+      <wp:post_type>attachment</wp:post_type>
+      <wp:status>inherit</wp:status>
+      <wp:attachment_url>https://wordpress.example/wp-content/uploads/2026/11/sample-two.png</wp:attachment_url>
+    </item>
+    <item>
+      <wp:post_id>455</wp:post_id>
+      <wp:post_type>attachment</wp:post_type>
+      <wp:status>inherit</wp:status>
+      <wp:attachment_url>https://wordpress.example/wp-content/uploads/2026/11/sample.png</wp:attachment_url>
+      <wp:postmeta><wp:meta_key>_wp_attached_file</wp:meta_key><wp:meta_value>../sample.png</wp:meta_value></wp:postmeta>
     </item>
   </channel>
 </rss>

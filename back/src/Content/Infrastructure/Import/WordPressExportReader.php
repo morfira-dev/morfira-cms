@@ -8,7 +8,10 @@ use DOMDocument;
 use DOMElement;
 
 /**
- * @phpstan-type ExportItem array{id: string, type: string, status: string, title: string, slug: string, html: string, link: string, passwordProtected: bool}
+ * @phpstan-type Term array{taxonomy:string,slug:string,name:string,parent:string}
+ * @phpstan-type TermReference array{taxonomy:string,slug:string}
+ * @phpstan-type Attachment array{id:string,path:string,url:string,alt:string,eligible:bool}
+ * @phpstan-type ExportItem array{id: string, type: string, status: string, title: string, slug: string, html: string, link: string, passwordProtected: bool, terms:list<TermReference>}
  */
 final class WordPressExportReader
 {
@@ -22,7 +25,7 @@ final class WordPressExportReader
         '1.0' => 'http://wordpress.org/export/1.0/',
     ];
 
-    /** @return array{items: list<ExportItem>, skippedTypes: array<string, int>} */
+    /** @return array{items:list<ExportItem>,skippedTypes:array<string,int>,attachments:list<Attachment>,terms:list<Term>} */
     public function read(string $path): array
     {
         if (str_contains($path, '://') || str_contains($path, "\0") || !is_file($path)) {
@@ -60,10 +63,25 @@ final class WordPressExportReader
 
         $namespace = $this->wordpressNamespace($channel);
         $items = [];
+        $attachments = [];
+        $terms = [];
+        $itemTerms = [];
+        $withheld = [];
         $skippedTypes = [];
         $seen = [];
         $count = 0;
         foreach ($channel->childNodes as $node) {
+            if ($node instanceof DOMElement && $node->namespaceURI === $namespace && in_array($node->localName, ['category', 'tag'], true)) {
+                $category = $node->localName === 'category';
+                $term = [
+                    'taxonomy' => $category ? 'category' : 'post_tag',
+                    'slug' => trim($this->text($node, $category ? 'category_nicename' : 'tag_slug', $namespace)),
+                    'name' => trim($this->text($node, $category ? 'cat_name' : 'tag_name', $namespace)),
+                    'parent' => $category ? trim($this->text($node, 'category_parent', $namespace)) : '',
+                ];
+                $terms[] = $term;
+                continue;
+            }
             if (!$node instanceof DOMElement || 'item' !== $node->localName || null !== $node->namespaceURI) {
                 continue;
             }
@@ -78,27 +96,102 @@ final class WordPressExportReader
             $seen[$id] = true;
 
             $type = trim($this->text($node, 'post_type', $namespace));
+            if ($type === 'attachment') {
+                $attachments[] = $this->attachment($node, $namespace, $id);
+                continue;
+            }
             if (!in_array($type, ['page', 'post'], true)) {
                 $type = 1 === preg_match('/\A[a-z_-][a-z0-9_-]{0,19}\z/', $type) ? $type : '(unknown)';
                 $skippedTypes[$type] = ($skippedTypes[$type] ?? 0) + 1;
                 continue;
             }
 
+            $status = trim($this->text($node, 'status', $namespace));
+            $protected = $this->text($node, 'post_password', $namespace) !== '';
+            if ($protected || in_array($status, ['private', 'trash'], true)) {
+                $withheld[$id] = true;
+            }
             $items[] = [
                 'id' => $id,
                 'type' => $type,
-                'status' => trim($this->text($node, 'status', $namespace)),
+                'status' => $status,
                 'title' => trim($this->text($node, 'title')),
                 'slug' => trim($this->text($node, 'post_name', $namespace)),
                 'html' => $this->text($node, 'encoded', self::CONTENT_NAMESPACE),
                 'link' => trim($this->text($node, 'link')),
-                'passwordProtected' => '' !== $this->text($node, 'post_password', $namespace),
+                'passwordProtected' => $protected,
+                'terms' => $type === 'post' && !$protected && in_array($status, ['publish', 'draft', 'pending', 'future'], true)
+                    ? $this->postTerms($node, $itemTerms)
+                    : [],
             ];
         }
 
         ksort($skippedTypes);
 
-        return ['items' => $items, 'skippedTypes' => $skippedTypes];
+        foreach ($terms as $term) {
+            unset($itemTerms[$term['taxonomy'].':'.$term['slug']]);
+        }
+
+        $media = [];
+        foreach ($attachments as $attachment) {
+            $attachment['eligible'] = $attachment['eligible'] && !isset($withheld[$attachment['parentId']]);
+            unset($attachment['parentId']);
+            $media[] = $attachment;
+        }
+
+        return ['items' => $items, 'skippedTypes' => $skippedTypes, 'attachments' => $media, 'terms' => [...$terms, ...array_values($itemTerms)]];
+    }
+
+    /** @return array{id:string,path:string,url:string,alt:string,eligible:bool,parentId:string} */
+    private function attachment(DOMElement $item, string $namespace, string $id): array
+    {
+        $metadata = [];
+        foreach ($item->childNodes as $node) {
+            if (!$node instanceof DOMElement || $node->namespaceURI !== $namespace || $node->localName !== 'postmeta') {
+                continue;
+            }
+            $key = $this->text($node, 'meta_key', $namespace);
+            if (in_array($key, ['_wp_attached_file', '_wp_attachment_image_alt'], true) && !isset($metadata[$key])) {
+                $metadata[$key] = trim($this->text($node, 'meta_value', $namespace));
+            }
+        }
+
+        return [
+            'id' => $id,
+            'path' => $metadata['_wp_attached_file'] ?? '',
+            'url' => trim($this->text($item, 'attachment_url', $namespace)),
+            'alt' => $metadata['_wp_attachment_image_alt'] ?? '',
+            'parentId' => trim($this->text($item, 'post_parent', $namespace)),
+            'eligible' => in_array(trim($this->text($item, 'status', $namespace)), ['inherit', 'publish'], true)
+                && $this->text($item, 'post_password', $namespace) === '',
+        ];
+    }
+
+    /**
+     * @param array<string,Term> $definitions
+     * @return list<TermReference>
+     */
+    private function postTerms(DOMElement $item, array &$definitions): array
+    {
+        $references = [];
+        foreach ($item->childNodes as $node) {
+            if (!$node instanceof DOMElement || $node->namespaceURI !== null || $node->localName !== 'category') {
+                continue;
+            }
+            $taxonomy = $node->getAttribute('domain');
+            $slug = trim($node->getAttribute('nicename'));
+            if (!in_array($taxonomy, ['category', 'post_tag'], true) || $slug === '') {
+                continue;
+            }
+            $key = $taxonomy.':'.$slug;
+            $references[$key] = ['taxonomy' => $taxonomy, 'slug' => $slug];
+            $name = trim($node->textContent);
+            if ($name !== '') {
+                $definitions[$key] ??= ['taxonomy' => $taxonomy, 'slug' => $slug, 'name' => $name, 'parent' => ''];
+            }
+        }
+
+        return array_values($references);
     }
 
     private function wordpressNamespace(DOMElement $channel): string

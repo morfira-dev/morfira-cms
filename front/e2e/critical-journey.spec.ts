@@ -150,6 +150,7 @@ test('owner creates, edits and publishes a page through the production surface',
   await page.getByRole('button', { name: 'Сохранить', exact: true }).click()
   await expect(page.getByText('Черновик версии 2 сохранён.')).toBeVisible()
   await page.getByRole('button', { name: 'Опубликовать', exact: true }).click()
+  await expect(page.getByText('Версия 2 опубликована.')).toBeVisible()
 
   const relatedEntryApi = await request.get('/api/v1/content/entries/articles/rich-article')
   const relatedEntry = await relatedEntryApi.json()

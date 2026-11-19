@@ -5,6 +5,7 @@ project_name=${1:?Run with CMS_TEST_WORDPRESS_IMPORT=1 ./scripts/test-e2e.sh}
 test "$project_name" = morfira-e2e
 fixture=back/tests/Content/Fixtures/wordpress-import.xml
 container_fixture=/tmp/morfira-wordpress-import.xml
+uploads=/tmp/morfira-wordpress-uploads
 
 compose() {
     docker compose -p "$project_name" -f compose.prod.yaml -f compose.e2e.yaml "$@"
@@ -13,7 +14,7 @@ compose() {
 import() {
     import_source=$1
     shift
-    compose exec -T app php bin/cms cms:import:wordpress "$container_fixture" --source="$import_source" "$@"
+    compose exec -T app php bin/cms cms:import:wordpress "$container_fixture" --source="$import_source" --media-dir="$uploads" "$@"
 }
 
 db_query() {
@@ -26,31 +27,53 @@ page_query="SELECT COUNT(*) FROM content_pages WHERE slug IN ('wp-import-about',
 schema_query="SELECT COUNT(*) FROM schema_content_types WHERE api_name = 'wordpress-posts'"
 entry_query="SELECT COUNT(*) FROM content_entries WHERE slug IN ('wp-import-news', 'wp-import-edited-news')"
 ledger_query="SELECT COUNT(*) FROM content_wordpress_import_items WHERE source_key = 'wordpress-e2e'"
+media_query="SELECT COUNT(*) FROM media_assets WHERE original_name IN ('sample.png', 'sample-two.png')"
+taxonomy_query="SELECT COUNT(*) FROM taxonomy_vocabularies WHERE slug IN ('wordpress-categories', 'wordpress-tags')"
 
 compose cp "$fixture" "app:$container_fixture"
+compose exec -T app php -r '
+    mkdir($argv[1]."/2026/11", 0700, true);
+    $image = imagecreatetruecolor(64, 48);
+    if (!imagepng($image, $argv[1]."/2026/11/sample.png") || !imagepng($image, $argv[1]."/2026/11/sample-two.png")) exit(1);
+' "$uploads"
+media_before=$(compose exec -T app sh -c 'find public/media -type f | wc -l')
 report=$(import wordpress-e2e)
 printf '%s\n' "$report" | jq -e '
     (.items | length) == 2 and
-    ([.items[] | select(.state == "planned") | .targetPath] | sort) == ["/content/wordpress-posts/wp-import-news", "/wp-import-about"]
+    ([.items[] | select(.state == "planned") | .targetPath] | sort) == ["/content/wordpress-posts/wp-import-news", "/wp-import-about"] and
+    ([.media[] | .state] | sort) == ["invalid", "planned", "planned"] and
+    ([.taxonomy.terms[] | select(.state == "planned")] | length) == 3 and
+    ([.taxonomy.assignments[] | select(.state == "planned")] | length) == 2
 ' >/dev/null
 test "$(db_query "$page_query")" = 0
 test "$(db_query "$schema_query")" = 0
 test "$(db_query "$entry_query")" = 0
 test "$(db_query "$ledger_query")" = 0
+test "$(db_query "$media_query")" = 0
+test "$(db_query "$taxonomy_query")" = 0
+test "$(compose exec -T app sh -c 'find public/media -type f | wc -l')" = "$media_before"
 
 report=$(import wordpress-e2e --apply)
 printf '%s\n' "$report" | jq -e '
     (.items | length) == 2 and
-    ([.items[] | select(.state == "imported") | .type] | sort) == ["page", "post"]
+    ([.items[] | select(.state == "imported") | .type] | sort) == ["page", "post"] and
+    ([.media[] | .state] | sort) == ["imported", "imported", "invalid"]
 ' >/dev/null
 test "$(db_query "$page_query")" = 1
 test "$(db_query "$schema_query")" = 1
 test "$(db_query "$entry_query")" = 1
-test "$(db_query "$ledger_query")" = 2
+test "$(db_query "$ledger_query")" = 4
+test "$(db_query "$media_query")" = 2
+test "$(db_query "$taxonomy_query")" = 2
+test "$(db_query "SELECT COUNT(*) FROM media_assets WHERE original_name = 'sample.png' AND default_alt = 'Sample alt'")" = 1
+test "$(db_query "SELECT COUNT(*) FROM taxonomy_terms AS child JOIN taxonomy_terms AS parent ON child.parent_id = parent.id WHERE child.slug = 'updates' AND parent.slug = 'news'")" = 1
+test "$(db_query "SELECT COUNT(*) FROM taxonomy_entry_terms AS assignment JOIN content_entries AS entry ON assignment.entry_id = entry.id JOIN taxonomy_terms AS term ON assignment.term_id = term.id WHERE entry.slug = 'wp-import-news' AND term.slug IN ('updates', 'release')")" = 2
+media_after=$(compose exec -T app sh -c 'find public/media -type f | wc -l')
+test "$media_after" -gt "$media_before"
 test "$(db_query "SELECT COUNT(*) FROM content_pages WHERE slug = 'wp-import-about' AND title = 'Imported About' AND status = 'draft' AND blocks LIKE '%Page body%' AND blocks NOT LIKE '%<script%'")" = 1
 test "$(db_query "SELECT COUNT(*) FROM content_entries AS entry JOIN schema_content_types AS schema_type ON schema_type.id = entry.content_type_id WHERE entry.slug = 'wp-import-news' AND entry.title = 'Imported News' AND schema_type.api_name = 'wordpress-posts' AND JSON_UNQUOTE(JSON_EXTRACT(entry.values_json, '$.body')) LIKE '%Post body%' AND entry.values_json NOT LIKE '%<script%'")" = 1
 
-report=$(import wordpress-e2e-collision --apply)
+report=$(import wordpress-e2e-collision)
 printf '%s\n' "$report" | jq -e '
     (.items | length) == 2 and all(.items[]; .state == "invalid" and .reason == "Draft slug already exists.")
 ' >/dev/null
@@ -67,7 +90,8 @@ printf '%s\n' "$report" | jq -e '
 test "$(db_query "$page_query")" = 1
 test "$(db_query "$schema_query")" = 1
 test "$(db_query "$entry_query")" = 1
-test "$(db_query "$ledger_query")" = 2
+test "$(db_query "$ledger_query")" = 4
+test "$(db_query "$media_query")" = 2
 test "$(db_query "SELECT COUNT(*) FROM content_page_revisions AS revision JOIN content_pages AS page ON page.id = revision.page_id WHERE page.slug = 'wp-import-about' AND page.title = 'Imported About'")" = 2
 test "$(db_query "SELECT COUNT(*) FROM content_entry_revisions AS revision JOIN content_entries AS entry ON entry.id = revision.entry_id WHERE entry.slug = 'wp-import-news' AND entry.title = 'Imported News'")" = 1
 
@@ -90,6 +114,23 @@ fi
 test "$(db_query "$page_query")" = 1
 test "$(db_query "$entry_query")" = 1
 test "$(db_query "SELECT COUNT(*) FROM content_wordpress_import_items WHERE source_key = 'wordpress-e2e-rollback'")" = 0
+
+compose cp "$fixture" "app:$container_fixture"
+db_query "DELIMITER //
+CREATE TRIGGER wordpress_e2e_reject_media BEFORE INSERT ON media_assets FOR EACH ROW
+BEGIN
+    IF NEW.original_name = 'sample-two.png' THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Synthetic media import write failure';
+    END IF;
+END//
+DELIMITER ;"
+if import wordpress-e2e-media-rollback --apply >/dev/null 2>&1; then
+    printf '%s\n' 'WordPress import unexpectedly succeeded after an injected media write failure.' >&2
+    exit 1
+fi
+test "$(db_query "$media_query")" = 2
+test "$(db_query "SELECT COUNT(*) FROM content_wordpress_import_items WHERE source_key = 'wordpress-e2e-media-rollback'")" = 0
+test "$(compose exec -T app sh -c 'find public/media -type f | wc -l')" = "$media_after"
 
 for route in /wp-import-about /api/v1/content/pages/wp-import-about /content/wordpress-posts/wp-import-news /api/v1/content/entries/wordpress-posts/wp-import-news; do
     test "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' "$CMS_PUBLIC_SITE_URL$route")" = 404

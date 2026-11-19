@@ -29,6 +29,7 @@ final class ImportWordPressCommand extends Command
     {
         $this->addArgument('file', InputArgument::REQUIRED, 'Path to the local WXR export.')
             ->addOption('source', null, InputOption::VALUE_REQUIRED, 'Stable key for the WordPress installation.')
+            ->addOption('media-dir', null, InputOption::VALUE_REQUIRED, 'Local directory containing the WordPress uploads tree.')
             ->addOption('apply', null, InputOption::VALUE_NONE, 'Create drafts. Omit to inspect the plan.');
     }
 
@@ -36,8 +37,9 @@ final class ImportWordPressCommand extends Command
     {
         $path = $input->getArgument('file');
         $source = $input->getOption('source');
+        $mediaDirectory = $input->getOption('media-dir');
         $apply = $input->getOption('apply') === true;
-        if (!is_string($path) || !is_string($source)) {
+        if (!is_string($path) || !is_string($source) || ($mediaDirectory !== null && !is_string($mediaDirectory))) {
             return $this->fail($output, 'A local export path and --source are required.', Command::INVALID);
         }
 
@@ -48,7 +50,7 @@ final class ImportWordPressCommand extends Command
         }
 
         try {
-            $items = ($this->import)($source, $export['items'], $apply);
+            $report = ($this->import)($source, $export['items'], $apply, $export['terms'], $export['attachments'], $mediaDirectory);
         } catch (WordPressImportClaimConflict) {
             return $this->fail($output, 'Another import claimed an item. Apply was rolled back. Run the plan again.', Command::FAILURE);
         } catch (\InvalidArgumentException) {
@@ -57,13 +59,15 @@ final class ImportWordPressCommand extends Command
             return $this->fail($output, 'Import failed. Check migrations and database connectivity, then run the plan again.', Command::FAILURE);
         }
 
-        $counts = array_count_values(array_column($items, 'state'));
+        $counts = array_count_values(array_column($report['items'], 'state'));
         $output->writeln(json_encode([
             'mode' => $apply ? 'apply' : 'dry-run',
             'source' => $source,
             'counts' => (object) $counts,
             'skippedTypes' => (object) $export['skippedTypes'],
-            'items' => $items,
+            'items' => $report['items'],
+            'media' => $report['media'],
+            'taxonomy' => $report['taxonomy'],
         ], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES), OutputInterface::OUTPUT_RAW);
 
         return Command::SUCCESS;

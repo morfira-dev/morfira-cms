@@ -145,7 +145,9 @@ docker compose exec -T app php bin/cms cms:import:wordpress /tmp/wordpress-expor
 docker compose exec -T app php bin/cms cms:import:wordpress /tmp/wordpress-export.xml --source=legacy-site --apply
 ```
 
-For production, use `docker compose -f compose.prod.yaml` with the installation environment. The import without `--apply` produces a JSON report without writes. With `--apply`, eligible pages and posts are created as drafts. Keep the same source key for every export from that WordPress installation. Review the report and drafts before publishing. Media, taxonomy, authors and redirects require separate migration. See the [import specification](docs/specs/wordpress-wxr-import.md).
+For production, use `docker compose -f compose.prod.yaml` with the installation environment. The import without `--apply` produces a JSON report without writes. With `--apply`, eligible pages and posts are created as drafts, and built-in categories and tags are assigned to newly imported posts. Keep the same source key for every export from that WordPress installation.
+
+For attachments, copy or mount a trusted read-only copy of the WordPress uploads tree into the application container and pass `--media-dir=/path/to/uploads` to both commands. Supported JPEG, PNG and WebP attachments are added to the media library as WebP variants. Review the report and drafts before publishing. Inline image placement, featured images, authors and redirects require separate migration. Earlier imports are not automatically matched to existing destinations for taxonomy assignment. See the [draft import specification](docs/specs/wordpress-wxr-import.md) and the [media and taxonomy specification](docs/specs/wordpress-wxr-media-taxonomy.md).
 
 ## Architecture
 
