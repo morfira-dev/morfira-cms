@@ -8,7 +8,8 @@ use Cms\Content\Domain\PageId;
 
 /**
  * @phpstan-import-type Segment from SegmentWordPressImages
- * @phpstan-type Field array{id:string,key:string,label:string,type:string,required:bool}
+ * @phpstan-import-type AuthorReference from ImportWordPressAuthors
+ * @phpstan-type Field array{id:string,key:string,label:string,type:string,required:bool,targetContentTypeId?:?string,multiple?:bool}
  */
 final class WordPressPostImages
 {
@@ -17,9 +18,10 @@ final class WordPressPostImages
     /**
      * @param list<Segment> $segments
      * @param list<Field> $fields
+     * @param ?AuthorReference $author
      * @return array{fields:list<Field>,values:array<string,string>}
      */
-    public static function plan(array $segments, ?string $featured, array $fields): array
+    public static function plan(array $segments, ?string $featured, array $fields, ?array $author = null): array
     {
         if ($fields === []) {
             $fields[] = self::field('body', 'Body', 'richText');
@@ -29,6 +31,12 @@ final class WordPressPostImages
         if ($featured !== null) {
             self::requireField($indexed, 'wordpressFeaturedImage', 'Featured image', 'media');
             $values['wordpressFeaturedImage'] = $featured;
+        }
+        if ($author !== null) {
+            self::requireField($indexed, 'wordpressAuthorName', 'Author', 'text');
+            self::requireField($indexed, 'wordpressAuthor', 'Author profile', 'relation', $author['typeId']);
+            $values['wordpressAuthorName'] = $author['name'];
+            $values['wordpressAuthor'] = $author['id'];
         }
         $imageNumber = 0;
         foreach ($segments as $segment) {
@@ -46,7 +54,7 @@ final class WordPressPostImages
             $values[$key] = ($values[$key] ?? '').$segment['html'];
         }
         if (count($indexed) > 50) {
-            throw new \InvalidArgumentException('The WordPress posts schema has no room for the image and text fields.');
+            throw new \InvalidArgumentException('The WordPress posts schema has no room for the imported fields.');
         }
         if (count($indexed) === count($fields)) {
             return ['fields' => $fields, 'values' => $values];
@@ -88,11 +96,16 @@ final class WordPressPostImages
     }
 
     /** @param array<string,Field> $fields */
-    private static function requireField(array &$fields, string $key, string $label, string $type): void
+    private static function requireField(array &$fields, string $key, string $label, string $type, ?string $target = null): void
     {
-        $fields[$key] ??= self::field($key, $label, $type);
-        if ($fields[$key]['type'] !== $type || $fields[$key]['required']) {
-            throw new \InvalidArgumentException('An existing WordPress image or text field has an incompatible definition.');
+        if (!isset($fields[$key])) {
+            $fields[$key] = self::field($key, $label, $type);
+            if ($target !== null) {
+                $fields[$key]['targetContentTypeId'] = $target;
+            }
+        }
+        if ($fields[$key]['type'] !== $type || $fields[$key]['required'] || ($fields[$key]['targetContentTypeId'] ?? null) !== $target || ($fields[$key]['multiple'] ?? false)) {
+            throw new \InvalidArgumentException('An existing WordPress field has an incompatible definition.');
         }
     }
 

@@ -21,6 +21,10 @@ interface WordPressImportLedger
 
     public function recordMediaAsset(string $source, string $externalId, string $assetId): void;
 
+    public function authorEntryId(string $source, string $loginHash): ?string;
+
+    public function recordAuthor(string $source, string $loginHash, string $entryId): void;
+
     /**
      * @template T
      * @param \Closure(): T $operation

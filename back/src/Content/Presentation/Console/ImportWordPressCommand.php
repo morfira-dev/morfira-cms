@@ -50,7 +50,7 @@ final class ImportWordPressCommand extends Command
         }
 
         try {
-            $report = ($this->import)($source, $export['items'], $apply, $export['terms'], $export['attachments'], $mediaDirectory);
+            $report = ($this->import)($source, $export['items'], $apply, $export['terms'], $export['attachments'], $mediaDirectory, $export['authors'], $export['sourceUrl']);
         } catch (WordPressImportClaimConflict) {
             return $this->fail($output, 'Another import claimed an item. Apply was rolled back. Run the plan again.', Command::FAILURE);
         } catch (\InvalidArgumentException) {
@@ -68,6 +68,7 @@ final class ImportWordPressCommand extends Command
             'items' => $report['items'],
             'media' => $report['media'],
             'taxonomy' => $report['taxonomy'],
+            'authors' => $report['authors'],
         ], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES), OutputInterface::OUTPUT_RAW);
 
         return Command::SUCCESS;

@@ -149,7 +149,9 @@ For production, use `docker compose -f compose.prod.yaml` with the installation 
 
 For attachments, copy or mount a trusted read-only copy of the WordPress uploads tree into the application container and pass `--media-dir=/path/to/uploads` to both commands. Supported JPEG, PNG and WebP attachments are added to the media library as WebP variants. Imported drafts receive inline image references in content order. Featured images appear in page Open Graph settings or the dedicated post media field. Review unresolved links in the JSON report before publishing.
 
-The importer keeps existing drafts unchanged on replay. Attachment mappings created before image binding support have no target UUID and cannot be reused automatically. Authors and redirects require separate migration. See the [draft import](docs/specs/wordpress-wxr-import.md), [media and taxonomy](docs/specs/wordpress-wxr-media-taxonomy.md) and [image binding](docs/specs/wordpress-wxr-image-bindings.md) specifications.
+WordPress authors become content profiles and new posts retain author attribution and a profile relation. For published WordPress items, supported old URLs are staged as permanent redirects and become active when the new drafts are published in Morfira.
+
+The importer keeps existing drafts unchanged on replay. Attachment mappings created before image binding support have no target UUID and cannot be reused automatically. See the [draft import](docs/specs/wordpress-wxr-import.md), [media and taxonomy](docs/specs/wordpress-wxr-media-taxonomy.md), [image binding](docs/specs/wordpress-wxr-image-bindings.md) and [authors and redirects](docs/specs/wordpress-wxr-authors-redirects.md) specifications.
 
 ## Architecture
 

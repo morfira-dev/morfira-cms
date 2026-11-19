@@ -16,7 +16,7 @@ Operators need a repeatable way to bring WordPress content into Morfira and revi
 
 ## Non-goals
 
-Remote fetches, author accounts, nested page URLs, automatic redirects, block conversion, and automatic publishing are outside this slice. The JSON report is a mapping for manual review. Embedded media and unsupported markup may be dropped by the shared rich-text sanitizer. Attachment and taxonomy migration are covered by [the media and taxonomy specification](wordpress-wxr-media-taxonomy.md).
+Remote fetches, author accounts, nested destination URLs, block conversion, and automatic publishing are outside this slice. Embedded media and unsupported markup may be dropped by the shared rich-text sanitizer. Attachment and taxonomy migration are covered by [the media and taxonomy specification](wordpress-wxr-media-taxonomy.md). Author profiles and legacy permalink redirects are covered by [the authors and redirects specification](wordpress-wxr-authors-redirects.md).
 
 ## Actors and permissions
 

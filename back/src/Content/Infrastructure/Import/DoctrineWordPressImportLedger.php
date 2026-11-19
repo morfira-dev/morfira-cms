@@ -57,4 +57,27 @@ final readonly class DoctrineWordPressImportLedger implements WordPressImportLed
             'external_id' => $externalId,
         ]);
     }
+
+    public function authorEntryId(string $source, string $loginHash): ?string
+    {
+        $id = $this->connection->fetchOne(
+            'SELECT entry_id FROM content_wordpress_import_authors WHERE source_key = ? AND login_hash = ?',
+            [$source, $loginHash],
+        );
+
+        return is_string($id) ? $id : null;
+    }
+
+    public function recordAuthor(string $source, string $loginHash, string $entryId): void
+    {
+        try {
+            $this->connection->insert('content_wordpress_import_authors', [
+                'source_key' => $source,
+                'login_hash' => $loginHash,
+                'entry_id' => $entryId,
+            ]);
+        } catch (UniqueConstraintViolationException $exception) {
+            throw new WordPressImportClaimConflict($exception);
+        }
+    }
 }

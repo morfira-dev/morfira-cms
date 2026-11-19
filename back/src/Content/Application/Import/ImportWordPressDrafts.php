@@ -14,6 +14,7 @@ use Cms\Content\Domain\PageRepository;
 use Cms\Content\Domain\PageSeo;
 use Cms\Content\Domain\PageTitle;
 use Cms\Media\Application\MediaAssetView;
+use Cms\Publishing\Application\RegisterImportedRedirect;
 use Cms\Schema\Application\ContentTypeDefinition;
 use Cms\Schema\Application\CreateContentType;
 use Cms\Schema\Application\GetContentTypeDefinition;
@@ -27,12 +28,15 @@ use Cms\Taxonomy\Application\ImportWordPressTaxonomies;
  * @phpstan-import-type MediaOutcome from ImportWordPressMedia
  * @phpstan-import-type Field from WordPressPostImages
  * @phpstan-import-type Segment from SegmentWordPressImages
+ * @phpstan-import-type Author from ImportWordPressAuthors
+ * @phpstan-import-type AuthorReference from ImportWordPressAuthors
+ * @phpstan-import-type AuthorOutcome from ImportWordPressAuthors
  * @phpstan-type TermReference array{taxonomy:string,slug:string}
  * @phpstan-type Term array{taxonomy:string,slug:string,name:string,parent:string}
- * @phpstan-type SourceItem array{id:string,type:string,status:string,title:string,slug:string,html:string,link:string,passwordProtected:bool,terms:list<TermReference>,thumbnailId:?string}
- * @phpstan-type ReportItem array{id:string,type:string,status:string,sourcePath:?string,targetPath:?string,state:string,reason?:string,images?:array{inline:int,missingInline:int,featured:string}}
+ * @phpstan-type SourceItem array{id:string,type:string,status:string,title:string,slug:string,html:string,link:string,passwordProtected:bool,terms:list<TermReference>,thumbnailId:?string,authorLogin:?string}
+ * @phpstan-type ReportItem array{id:string,type:string,status:string,sourcePath:?string,targetPath:?string,state:string,reason?:string,images?:array{inline:int,missingInline:int,featured:string},author?:string,redirect?:string}
  * @phpstan-type TaxonomyOutcomes array{terms:list<array{taxonomy:string,slug:string,state:string}>,assignments:list<array{entryId:string,taxonomy:string,slug:string,state:string}>}
- * @phpstan-type ImportReport array{items:list<ReportItem>,media:list<MediaOutcome>,taxonomy:TaxonomyOutcomes}
+ * @phpstan-type ImportReport array{items:list<ReportItem>,media:list<MediaOutcome>,taxonomy:TaxonomyOutcomes,authors:list<AuthorOutcome>}
  */
 final readonly class ImportWordPressDrafts
 {
@@ -52,6 +56,8 @@ final readonly class ImportWordPressDrafts
         private ImportWordPressTaxonomies $taxonomies,
         private ImportWordPressMedia $media,
         private UpdateContentType $updateContentType,
+        private ImportWordPressAuthors $authors,
+        private RegisterImportedRedirect $registerRedirect,
     ) {
     }
 
@@ -59,9 +65,10 @@ final readonly class ImportWordPressDrafts
      * @param list<SourceItem> $items
      * @param list<Term> $terms
      * @param list<Attachment> $attachments
+     * @param list<Author> $authors
      * @return ImportReport
      */
-    public function __invoke(string $source, array $items, bool $apply, array $terms, array $attachments, ?string $mediaDirectory): array
+    public function __invoke(string $source, array $items, bool $apply, array $terms, array $attachments, ?string $mediaDirectory, array $authors, ?string $sourceUrl): array
     {
         if (preg_match('/\A[a-z0-9]+(?:-[a-z0-9]+)*\z/', $source) !== 1 || strlen($source) > 80) {
             throw new \InvalidArgumentException('Source must be a lowercase identifier of at most 80 characters.');
@@ -69,17 +76,25 @@ final readonly class ImportWordPressDrafts
 
         /** @var \ArrayObject<int,MediaAssetView> $created */
         $created = new \ArrayObject();
-        $run = function () use ($source, $items, $apply, $terms, $attachments, $mediaDirectory, $created): array {
+        $run = function () use ($source, $items, $apply, $terms, $attachments, $mediaDirectory, $created, $authors, $sourceUrl): array {
             $media = ($this->media)($source, $attachments, $mediaDirectory, $apply, $created);
+            $logins = [];
+            foreach ($items as $item) {
+                if ($item['type'] === 'post' && $item['authorLogin'] !== null) {
+                    $logins[] = $item['authorLogin'];
+                }
+            }
+            $importedAuthors = ($this->authors)($source, $authors, $logins, $apply);
             $assignments = [];
             $images = new WordPressImageIndex($attachments, $media, fn (string $id): ?array => $this->media->reusableImage($source, $id));
-            $report = $this->process($source, $items, $apply, $assignments, $images);
+            $report = $this->process($source, $items, $apply, $assignments, $images, $importedAuthors['profiles'], $sourceUrl);
             $taxonomy = ($this->taxonomies)($terms, $assignments, $apply);
 
             return [
                 'items' => $report,
                 'taxonomy' => $taxonomy,
                 'media' => $media,
+                'authors' => $importedAuthors['outcomes'],
             ];
         };
 
@@ -94,9 +109,10 @@ final readonly class ImportWordPressDrafts
     /**
      * @param list<SourceItem> $items
      * @param array<string,list<TermReference>> $assignments
+     * @param array<string,AuthorReference> $authors
      * @return list<ReportItem>
      */
-    private function process(string $source, array $items, bool $apply, array &$assignments, WordPressImageIndex $images): array
+    private function process(string $source, array $items, bool $apply, array &$assignments, WordPressImageIndex $images, array $authors, ?string $sourceUrl): array
     {
         $locale = ($this->settings)()->defaultLocale;
         $postSchema = $this->findPostSchema();
@@ -117,11 +133,15 @@ final readonly class ImportWordPressDrafts
 
         $report = [];
         foreach ($items as $item) {
-            $entryId = null;
-            $row = $this->processItem($item, $source, $locale, $apply, $occupied, $postSchema, $postFields, $compatibleSchema, $entryId, $images);
+            $targetId = null;
+            $author = $item['type'] === 'post' && $item['authorLogin'] !== null ? ($authors[ImportWordPressAuthors::key($item['authorLogin'])] ?? null) : null;
+            $row = $this->processItem($item, $source, $locale, $apply, $occupied, $postSchema, $postFields, $compatibleSchema, $targetId, $images, $author);
+            if (in_array($row['state'], ['planned', 'imported'], true)) {
+                $row['redirect'] = $this->redirect($item, $sourceUrl, $row['targetPath'], $targetId);
+            }
             $report[] = $row;
             if ($item['type'] === 'post' && $item['terms'] !== []) {
-                $assignmentKey = $apply ? $entryId : ($row['state'] === 'planned' ? 'wp-'.$item['id'] : null);
+                $assignmentKey = $apply ? $targetId : ($row['state'] === 'planned' ? 'wp-'.$item['id'] : null);
                 if ($assignmentKey !== null) {
                     $assignments[$assignmentKey] = $item['terms'];
                 }
@@ -135,9 +155,10 @@ final readonly class ImportWordPressDrafts
      * @param SourceItem $item
      * @param array<string,bool> $occupied
      * @param list<Field> $postFields
+     * @param ?AuthorReference $author
      * @return ReportItem
      */
-    private function processItem(array $item, string $source, string $locale, bool $apply, array &$occupied, ?ContentTypeDefinition &$postSchema, array &$postFields, bool $compatibleSchema, ?string &$entryId, WordPressImageIndex $images): array
+    private function processItem(array $item, string $source, string $locale, bool $apply, array &$occupied, ?ContentTypeDefinition &$postSchema, array &$postFields, bool $compatibleSchema, ?string &$targetId, WordPressImageIndex $images, ?array $author): array
     {
         $path = parse_url($item['link'], PHP_URL_PATH);
         $row = [
@@ -177,7 +198,7 @@ final readonly class ImportWordPressDrafts
                     throw new \InvalidArgumentException('A sanitized text segment exceeds the 20,000 character limit.');
                 }
             }
-            $post = $isPage ? null : WordPressPostImages::plan($segments, $featured, $postFields);
+            $post = $isPage ? null : WordPressPostImages::plan($segments, $featured, $postFields, $author);
         } catch (\InvalidArgumentException $error) {
             return $row + ['state' => 'invalid', 'reason' => $error->getMessage()];
         }
@@ -187,6 +208,9 @@ final readonly class ImportWordPressDrafts
             'missingInline' => $segmented['missingImages'],
             'featured' => $featured !== null ? 'linked' : ($item['thumbnailId'] !== null ? 'missing' : 'none'),
         ];
+        if (!$isPage) {
+            $row['author'] = $author !== null ? 'linked' : ($item['authorLogin'] === null ? 'none' : 'missing');
+        }
         $occupied[$row['targetPath']] = true;
         if (!$apply) {
             if ($post !== null) {
@@ -198,16 +222,36 @@ final readonly class ImportWordPressDrafts
         $this->ledger->claim($source, $item['id']);
         if ($post === null) {
             $page = ($this->createPage)($title, $slug, $locale);
+            $targetId = $page->id;
             if ($segments !== [] || $featured !== null) {
                 ($this->updatePage)($page->id, $title, $slug, $this->pageBlocks($segments), new PageSeo('', '', false, $featured), $page->version);
             }
         } else {
             $postSchema = $this->savePostSchema($postSchema, $post['fields']);
             $postFields = $postSchema->fields;
-            $entryId = ($this->createEntry)($postSchema->id, $title, $slug, $post['values'])->id;
+            $targetId = ($this->createEntry)($postSchema->id, $title, $slug, $post['values'])->id;
         }
 
         return $row + ['state' => 'imported'];
+    }
+
+    /** @param SourceItem $item */
+    private function redirect(array $item, ?string $sourceUrl, ?string $targetPath, ?string $targetId): string
+    {
+        if ($item['status'] !== 'publish' || $item['link'] === '') {
+            return 'none';
+        }
+        $source = $sourceUrl === null ? false : parse_url($sourceUrl);
+        $link = parse_url($item['link']);
+        if (!is_array($source) || !is_array($link) || !isset($source['host'], $link['host'])
+            || strcasecmp($source['host'], $link['host']) !== 0 || ($source['port'] ?? null) !== ($link['port'] ?? null)) {
+            return 'unsupported';
+        }
+        if (($link['path'] ?? '/') === $targetPath && !isset($link['query'])) {
+            return 'same_route';
+        }
+
+        return ($this->registerRedirect)($item['link'], $item['type'] === 'page' ? 'page' : 'entry', $targetId);
     }
 
     /** @param list<Field> $fields */

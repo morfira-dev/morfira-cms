@@ -6,6 +6,8 @@ use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigura
 use Cms\Content\Domain\PageRepository;
 use Cms\Content\Infrastructure\Persistence\DoctrinePageRepository;
 use Cms\Publishing\Domain\PublishedPageRepository;
+use Cms\Publishing\Domain\ImportedRedirectRepository;
+use Cms\Publishing\Infrastructure\Persistence\DoctrineImportedRedirectRepository;
 use Cms\Publishing\Infrastructure\Persistence\DoctrinePublishedPageRepository;
 use Cms\Identity\Application\PasswordHasher;
 use Cms\Identity\Domain\UserRepository;
@@ -69,6 +71,7 @@ return static function (ContainerConfigurator $container): void {
 
     $services->alias(PageRepository::class, DoctrinePageRepository::class);
     $services->alias(PublishedPageRepository::class, DoctrinePublishedPageRepository::class);
+    $services->alias(ImportedRedirectRepository::class, DoctrineImportedRedirectRepository::class);
     $services->alias(UserRepository::class, DoctrineUserRepository::class);
     $services->alias(PasswordHasher::class, SymfonyPasswordHasher::class);
     $services->alias(MediaAssetRepository::class, DoctrineMediaAssetRepository::class);

@@ -29,6 +29,9 @@ entry_query="SELECT COUNT(*) FROM content_entries WHERE slug IN ('wp-import-news
 ledger_query="SELECT COUNT(*) FROM content_wordpress_import_items WHERE source_key = 'wordpress-e2e'"
 media_query="SELECT COUNT(*) FROM media_assets WHERE original_name IN ('sample.png', 'sample-two.png')"
 taxonomy_query="SELECT COUNT(*) FROM taxonomy_vocabularies WHERE slug IN ('wordpress-categories', 'wordpress-tags')"
+author_query="SELECT COUNT(*) FROM content_wordpress_import_authors WHERE source_key = 'wordpress-e2e'"
+redirect_query="SELECT COUNT(*) FROM published_import_redirects"
+identity_before=$(db_query "SELECT COUNT(*) FROM identity_users")
 
 compose cp "$fixture" "app:$container_fixture"
 compose exec -T app php -r '
@@ -44,6 +47,8 @@ printf '%s\n' "$report" | jq -e '
     ([.media[] | .state] | sort) == ["invalid", "planned", "planned"] and
     (.items[0].images == {"inline": 1, "missingInline": 1, "featured": "linked"}) and
     (.items[1].images == {"inline": 1, "missingInline": 0, "featured": "linked"}) and
+    ([.items[].redirect] == ["planned", "planned"]) and .items[1].author == "linked" and
+    (.authors == [{"state": "planned"}]) and
     ([.taxonomy.terms[] | select(.state == "planned")] | length) == 3 and
     ([.taxonomy.assignments[] | select(.state == "planned")] | length) == 2
 ' >/dev/null
@@ -53,13 +58,16 @@ test "$(db_query "$entry_query")" = 0
 test "$(db_query "$ledger_query")" = 0
 test "$(db_query "$media_query")" = 0
 test "$(db_query "$taxonomy_query")" = 0
+test "$(db_query "$author_query")" = 0
+test "$(db_query "$redirect_query")" = 0
 test "$(compose exec -T app sh -c 'find public/media -type f | wc -l')" = "$media_before"
 
 report=$(import wordpress-e2e --apply)
 printf '%s\n' "$report" | jq -e '
     (.items | length) == 2 and
     ([.items[] | select(.state == "imported") | .type] | sort) == ["page", "post"] and
-    ([.media[] | .state] | sort) == ["imported", "imported", "invalid"]
+    ([.media[] | .state] | sort) == ["imported", "imported", "invalid"] and
+    ([.items[].redirect] == ["registered", "registered"]) and .authors[0].state == "imported"
 ' >/dev/null
 test "$(db_query "$page_query")" = 1
 test "$(db_query "$schema_query")" = 1
@@ -67,6 +75,15 @@ test "$(db_query "$entry_query")" = 1
 test "$(db_query "$ledger_query")" = 4
 test "$(db_query "$media_query")" = 2
 test "$(db_query "$taxonomy_query")" = 2
+test "$(db_query "$author_query")" = 1
+test "$(db_query "$redirect_query")" = 2
+test "$(db_query "SELECT COUNT(*) FROM identity_users")" = "$identity_before"
+test "$(db_query "SELECT COUNT(*) FROM content_entries AS post
+    JOIN content_entries AS author ON author.id = JSON_UNQUOTE(JSON_EXTRACT(post.values_json, '\$.wordpressAuthor'))
+    JOIN schema_content_types AS schema_type ON schema_type.id = author.content_type_id
+    WHERE post.slug = 'wp-import-news' AND schema_type.api_name = 'wordpress-authors'
+    AND author.title = 'Migration Writer'
+    AND JSON_UNQUOTE(JSON_EXTRACT(post.values_json, '\$.wordpressAuthorName')) = 'Migration Writer'")" = 1
 test "$(db_query "SELECT COUNT(*) FROM media_assets WHERE original_name = 'sample.png' AND default_alt = 'Sample alt'")" = 1
 test "$(db_query "SELECT COUNT(*) FROM content_pages AS page
     JOIN media_assets AS inline_asset ON inline_asset.id = JSON_UNQUOTE(JSON_EXTRACT(page.blocks, '\$[1].data.assetId'))
@@ -110,6 +127,8 @@ test "$(db_query "$schema_query")" = 1
 test "$(db_query "$entry_query")" = 1
 test "$(db_query "$ledger_query")" = 4
 test "$(db_query "$media_query")" = 2
+test "$(db_query "$author_query")" = 1
+test "$(db_query "$redirect_query")" = 2
 test "$(db_query "SELECT COUNT(*) FROM content_page_revisions AS revision JOIN content_pages AS page ON page.id = revision.page_id WHERE page.slug = 'wp-import-about' AND page.title = 'Imported About'")" = 2
 test "$(db_query "SELECT COUNT(*) FROM content_entry_revisions AS revision JOIN content_entries AS entry ON entry.id = revision.entry_id WHERE entry.slug = 'wp-import-news' AND entry.title = 'Imported News'")" = 1
 
@@ -153,6 +172,36 @@ test "$(compose exec -T app sh -c 'find public/media -type f | wc -l')" = "$medi
 for route in /wp-import-about /api/v1/content/pages/wp-import-about /content/wordpress-posts/wp-import-news /api/v1/content/entries/wordpress-posts/wp-import-news; do
     test "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' "$CMS_PUBLIC_SITE_URL$route")" = 404
 done
+for route in '/?page_id=451' /2026/11/wp-import-news/; do
+    test "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' "$CMS_PUBLIC_SITE_URL$route")" = 404
+done
+
+session_cookie=$(mktemp "${TMPDIR:-/tmp}/morfira-import-e2e.XXXXXX")
+trap 'rm -f -- "$session_cookie"' EXIT
+request() {
+    curl --fail --silent --show-error -b "$session_cookie" -c "$session_cookie" "$@"
+}
+csrf=$(request "$CMS_PUBLIC_SITE_URL/api/v1/auth/csrf" | jq -er .token)
+request -H "X-CSRF-Token: $csrf" -H 'Content-Type: application/json' \
+    --data '{"email":"owner@morfira.test","password":"Morfira-beta-2026!"}' "$CMS_PUBLIC_SITE_URL/api/v1/auth/login" >/dev/null
+csrf=$(request "$CMS_PUBLIC_SITE_URL/api/v1/auth/csrf" | jq -er .token)
+page_id=$(db_query "SELECT id FROM content_pages WHERE slug = 'wp-import-about'")
+post_id=$(db_query "SELECT id FROM content_entries WHERE slug = 'wp-import-news'")
+request -H "X-CSRF-Token: $csrf" -H 'Content-Type: application/json' --data '{"version":2}' \
+    "$CMS_PUBLIC_SITE_URL/api/v1/admin/pages/$page_id/publish" >/dev/null
+request -H "X-CSRF-Token: $csrf" -H 'Content-Type: application/json' --data '{"version":1}' \
+    "$CMS_PUBLIC_SITE_URL/api/v1/admin/entries/$post_id/publish" >/dev/null
+redirect() {
+    curl --silent --show-error --output /dev/null --write-out '%{http_code} %{redirect_url}' "$CMS_PUBLIC_SITE_URL$1"
+}
+test "$(redirect '/?page_id=451')" = "301 $CMS_PUBLIC_SITE_URL/wp-import-about"
+test "$(redirect /2026/11/wp-import-news/)" = "301 $CMS_PUBLIC_SITE_URL/content/wordpress-posts/wp-import-news"
+curl --fail --silent --show-error "$CMS_PUBLIC_SITE_URL/api/v1/content/entries/wordpress-posts/wp-import-news" | jq -e \
+    '.values.wordpressAuthorName == "Migration Writer" and (.values.wordpressAuthor | type) == "string"' >/dev/null
+request -X DELETE -H "X-CSRF-Token: $csrf" "$CMS_PUBLIC_SITE_URL/api/v1/admin/pages/$page_id/publish" >/dev/null
+request -X DELETE -H "X-CSRF-Token: $csrf" "$CMS_PUBLIC_SITE_URL/api/v1/admin/entries/$post_id/publish" >/dev/null
+test "$(redirect '/?page_id=451')" = '404 '
+test "$(redirect /2026/11/wp-import-news/)" = '404 '
 
 compose exec -T app php -r 'if (file_put_contents($argv[1], stream_get_contents(STDIN)) === false) exit(1);' "$container_fixture" <<'XML'
 <rss xmlns:wp="http://wordpress.org/export/1.2/" xmlns:content="http://purl.org/rss/1.0/modules/content/">

@@ -8,6 +8,7 @@ use Cms\Content\Infrastructure\Import\WordPressExportReader;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
+/** @phpstan-import-type Export from WordPressExportReader */
 final class WordPressExportReaderTest extends TestCase
 {
     public function testReadsDirectItemsAndCountsUnsupportedTypes(): void
@@ -50,6 +51,7 @@ final class WordPressExportReaderTest extends TestCase
                     'passwordProtected' => true,
                     'terms' => [],
                     'thumbnailId' => null,
+                    'authorLogin' => null,
                 ],
                 [
                     'id' => '10',
@@ -62,11 +64,14 @@ final class WordPressExportReaderTest extends TestCase
                     'passwordProtected' => false,
                     'terms' => [],
                     'thumbnailId' => null,
+                    'authorLogin' => null,
                 ],
             ],
             'skippedTypes' => ['nav_menu_item' => 2],
             'attachments' => [],
             'terms' => [],
+            'authors' => [],
+            'sourceUrl' => null,
         ], $export);
     }
 
@@ -179,8 +184,61 @@ final class WordPressExportReaderTest extends TestCase
         self::assertSame([null, null, null], array_column($export['items'], 'thumbnailId'));
     }
 
+    public function testReadsPublicAuthorMetadataAndCreatorWithoutContactDetails(): void
+    {
+        $export = $this->readXml(<<<'XML'
+            <rss xmlns:wp="http://wordpress.org/export/1.2/" xmlns:d="http://purl.org/dc/elements/1.1/"><channel>
+              <wp:wxr_version>1.2</wp:wxr_version>
+              <link>https://network.example/</link>
+              <wp:base_blog_url><![CDATA[https://Legacy.example/blog?private=hidden#anchor]]></wp:base_blog_url>
+              <wp:author>
+                <wp:author_login><![CDATA[writer_1]]></wp:author_login>
+                <wp:author_email>hidden@example.test</wp:author_email>
+                <wp:author_display_name><![CDATA[Мария & Lee]]></wp:author_display_name>
+                <wp:author_first_name>Mary</wp:author_first_name>
+              </wp:author>
+              <wp:author>
+                <wp:author_login>writer-2</wp:author_login>
+                <wp:author_display_name>another@example.test</wp:author_display_name>
+                <wp:author_first_name>Jo</wp:author_first_name>
+                <wp:author_last_name>Doe</wp:author_last_name>
+              </wp:author>
+              <wp:author><wp:author_login>fallback</wp:author_login></wp:author>
+              <wp:author><wp:author_login>hidden@example.test</wp:author_login></wp:author>
+              <item><wp:post_id>1</wp:post_id><wp:post_type>post</wp:post_type><wp:status>publish</wp:status><d:creator>writer_1</d:creator></item>
+              <item><wp:post_id>2</wp:post_id><wp:post_type>post</wp:post_type><wp:status>private</wp:status><d:creator>writer-2</d:creator></item>
+              <item><wp:post_id>3</wp:post_id><wp:post_type>post</wp:post_type><wp:status>draft</wp:status><d:creator>hidden@example.test</d:creator></item>
+            </channel></rss>
+            XML);
+
+        self::assertSame([
+            ['login' => 'writer_1', 'name' => 'Мария & Lee'],
+            ['login' => 'writer-2', 'name' => 'Jo Doe'],
+            ['login' => 'fallback', 'name' => 'fallback'],
+        ], $export['authors']);
+        self::assertSame(['writer_1', null, null], array_column($export['items'], 'authorLogin'));
+        self::assertSame('https://legacy.example/blog', $export['sourceUrl']);
+    }
+
+    public function testFallsBackToChannelLinkForAnUnsafeBlogUrlAndToleratesAmbiguousAuthorMetadata(): void
+    {
+        $export = $this->readXml(<<<'XML'
+            <rss xmlns:wp="http://wordpress.org/export/1.2/" xmlns:dc="http://purl.org/dc/elements/1.1/"><channel>
+              <wp:wxr_version>1.2</wp:wxr_version>
+              <link>https://legacy.example:8443/blog/</link>
+              <wp:base_blog_url>https://example.test@invalid.example/</wp:base_blog_url>
+              <wp:author><wp:author_login>first</wp:author_login><wp:author_login>second</wp:author_login></wp:author>
+              <item><wp:post_id>1</wp:post_id><wp:post_type>post</wp:post_type><wp:status>publish</wp:status><dc:creator>first</dc:creator><dc:creator>second</dc:creator></item>
+            </channel></rss>
+            XML);
+
+        self::assertSame([], $export['authors']);
+        self::assertNull($export['items'][0]['authorLogin']);
+        self::assertSame('https://legacy.example:8443/blog/', $export['sourceUrl']);
+    }
+
     /**
-     * @return array{items:list<array<string,mixed>>,skippedTypes:array<string,int>,attachments:list<array<string,mixed>>,terms:list<array<string,mixed>>}
+     * @phpstan-return Export
      */
     private function readXml(string $xml): array
     {

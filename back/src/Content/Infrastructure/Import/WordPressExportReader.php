@@ -11,7 +11,9 @@ use DOMElement;
  * @phpstan-type Term array{taxonomy:string,slug:string,name:string,parent:string}
  * @phpstan-type TermReference array{taxonomy:string,slug:string}
  * @phpstan-type Attachment array{id:string,path:string,url:string,alt:string,eligible:bool}
- * @phpstan-type ExportItem array{id: string, type: string, status: string, title: string, slug: string, html: string, link: string, passwordProtected: bool, terms:list<TermReference>, thumbnailId:?string}
+ * @phpstan-type Author array{login:string,name:string}
+ * @phpstan-type ExportItem array{id: string, type: string, status: string, title: string, slug: string, html: string, link: string, passwordProtected: bool, terms:list<TermReference>, thumbnailId:?string, authorLogin:?string}
+ * @phpstan-type Export array{items:list<ExportItem>,skippedTypes:array<string,int>,attachments:list<Attachment>,terms:list<Term>,authors:list<Author>,sourceUrl:?string}
  */
 final class WordPressExportReader
 {
@@ -19,13 +21,14 @@ final class WordPressExportReader
     private const MAX_ELEMENTS = 100_000;
     private const MAX_ITEMS = 5_000;
     private const CONTENT_NAMESPACE = 'http://purl.org/rss/1.0/modules/content/';
+    private const CREATOR_NAMESPACE = 'http://purl.org/dc/elements/1.1/';
     private const WORDPRESS_NAMESPACES = [
         '1.2' => 'http://wordpress.org/export/1.2/',
         '1.1' => 'http://wordpress.org/export/1.1/',
         '1.0' => 'http://wordpress.org/export/1.0/',
     ];
 
-    /** @return array{items:list<ExportItem>,skippedTypes:array<string,int>,attachments:list<Attachment>,terms:list<Term>} */
+    /** @return Export */
     public function read(string $path): array
     {
         if (str_contains($path, '://') || str_contains($path, "\0") || !is_file($path)) {
@@ -65,12 +68,20 @@ final class WordPressExportReader
         $items = [];
         $attachments = [];
         $terms = [];
+        $authors = [];
         $itemTerms = [];
         $withheld = [];
         $skippedTypes = [];
         $seen = [];
         $count = 0;
         foreach ($channel->childNodes as $node) {
+            if ($node instanceof DOMElement && $node->namespaceURI === $namespace && $node->localName === 'author') {
+                $author = $this->author($node, $namespace);
+                if ($author !== null) {
+                    $authors['author:'.$author['login']] ??= $author;
+                }
+                continue;
+            }
             if ($node instanceof DOMElement && $node->namespaceURI === $namespace && in_array($node->localName, ['category', 'tag'], true)) {
                 $category = $node->localName === 'category';
                 $term = [
@@ -125,6 +136,7 @@ final class WordPressExportReader
                     ? $this->postTerms($node, $itemTerms)
                     : [],
                 'thumbnailId' => $eligible ? $this->thumbnailId($node, $namespace) : null,
+                'authorLogin' => $eligible ? $this->login($this->optionalText($node, 'creator', self::CREATOR_NAMESPACE)) : null,
             ];
         }
 
@@ -141,7 +153,70 @@ final class WordPressExportReader
             $media[] = $attachment;
         }
 
-        return ['items' => $items, 'skippedTypes' => $skippedTypes, 'attachments' => $media, 'terms' => [...$terms, ...array_values($itemTerms)]];
+        return [
+            'items' => $items,
+            'skippedTypes' => $skippedTypes,
+            'attachments' => $media,
+            'terms' => [...$terms, ...array_values($itemTerms)],
+            'authors' => array_values($authors),
+            'sourceUrl' => $this->sourceUrl($this->optionalText($channel, 'base_blog_url', $namespace))
+                ?? $this->sourceUrl($this->optionalText($channel, 'link')),
+        ];
+    }
+
+    /** @return Author|null */
+    private function author(DOMElement $element, string $namespace): ?array
+    {
+        $login = $this->login($this->optionalText($element, 'author_login', $namespace));
+        if ($login === null) {
+            return null;
+        }
+
+        $display = $this->optionalText($element, 'author_display_name', $namespace);
+        $parts = $this->optionalText($element, 'author_first_name', $namespace).' '.$this->optionalText($element, 'author_last_name', $namespace);
+        foreach ([$display, $parts] as $candidate) {
+            $name = trim(preg_replace('/\s+/u', ' ', strip_tags($candidate)) ?? '');
+            if ($name !== '' && !str_contains($name, '@') && preg_match('/[\x00-\x1f\x7f]/', $name) !== 1) {
+                return ['login' => $login, 'name' => mb_substr($name, 0, 200)];
+            }
+        }
+
+        return ['login' => $login, 'name' => $login];
+    }
+
+    private function login(string $value): ?string
+    {
+        $login = trim($value);
+
+        return preg_match('/\A[A-Za-z0-9_. -]{1,60}\z/', $login) === 1 ? $login : null;
+    }
+
+    private function sourceUrl(string $value): ?string
+    {
+        $url = trim($value);
+        if (strlen($url) > 2_048 || filter_var($url, FILTER_VALIDATE_URL) === false) {
+            return null;
+        }
+        $parts = parse_url($url);
+        if (!is_array($parts) || !isset($parts['scheme'], $parts['host']) || isset($parts['user']) || isset($parts['pass'])) {
+            return null;
+        }
+        $scheme = strtolower($parts['scheme']);
+        if (!in_array($scheme, ['http', 'https'], true)) {
+            return null;
+        }
+
+        return $scheme.'://'.strtolower($parts['host'])
+            .(isset($parts['port']) ? ':'.$parts['port'] : '').($parts['path'] ?? '');
+    }
+
+    private function optionalText(DOMElement $element, string $name, ?string $namespace = null): string
+    {
+        try {
+            return $this->text($element, $name, $namespace);
+        } catch (\InvalidArgumentException) {
+            return '';
+        }
     }
 
     /** @return array{id:string,path:string,url:string,alt:string,eligible:bool,parentId:string} */
