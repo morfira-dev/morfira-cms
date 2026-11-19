@@ -10,7 +10,7 @@ Import supported WordPress images through the REST command without preparing a l
 
 ## Actors and flow
 
-An operator provides the public HTTPS WordPress REST namespace and a stable source key. The reader collects metadata as before. Without `--media-dir`, apply downloads previously unclaimed eligible attachments from that site's HTTPS host. An explicit `--media-dir` continues to select the local-copy workflow. WXR retains its local media behavior.
+An operator provides the public HTTPS WordPress REST namespace and a stable source key. The reader collects metadata as before. Without `--media-dir`, apply downloads previously unclaimed eligible attachments from that site's HTTPS host and any [explicitly allowed CDN hosts](wordpress-rest-cdn-media.md). An explicit `--media-dir` selects the local-copy workflow. WXR retains its local media behavior.
 
 ## Contracts
 
@@ -22,7 +22,7 @@ The shared source key and attachment ID ledger is checked before a download. Cla
 
 ## Failure modes and security
 
-Only same-host HTTPS attachment links on the default port are supported. Public DNS addresses are validated and pinned. Credentials, arbitrary hosts, unsafe paths, redirects and proxies are excluded. Each download has a 20-second transfer timeout and the existing 10 MiB limit. Invalid URLs, oversize files and invalid image bytes produce item skips. Fetch and temporary-storage failures abort apply and allow a clean retry. No original bytes become public.
+HTTPS attachment links on the default port are supported for the configured source and explicitly allowed hosts. Public DNS addresses are validated and pinned. Credentials, arbitrary hosts, unsafe paths, redirects and proxies are excluded. Each download has a 20-second transfer timeout and the existing 10 MiB limit. Invalid URLs, oversize files and invalid image bytes produce item skips. Fetch and temporary-storage failures abort apply and allow a clean retry. No original bytes become public.
 
 ## Acceptance criteria
 

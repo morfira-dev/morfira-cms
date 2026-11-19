@@ -34,7 +34,13 @@ final readonly class WordPressRestEndpoint
     /** Resolve and validate every address before pinning the HTTPS connection. */
     public function resolvePins(): string
     {
-        $records = @dns_get_record($this->host.'.', DNS_A | DNS_AAAA);
+        return self::resolveHostPins($this->host);
+    }
+
+    /** Build cURL pins for an already validated HTTPS hostname. */
+    public static function resolveHostPins(string $host): string
+    {
+        $records = @dns_get_record($host.'.', DNS_A | DNS_AAAA);
         $addresses = [];
         if ($records !== false) {
             foreach ($records as $record) {
@@ -47,7 +53,7 @@ final readonly class WordPressRestEndpoint
         $addresses = self::publicAddresses(array_values(array_unique($addresses)));
         $pins = array_map(static fn (string $ip): string => str_contains($ip, ':') ? '['.$ip.']' : $ip, $addresses);
 
-        return $this->host.':443:'.implode(',', $pins);
+        return $host.':443:'.implode(',', $pins);
     }
 
     /**

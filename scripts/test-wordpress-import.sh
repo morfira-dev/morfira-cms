@@ -231,6 +231,17 @@ rest_ledger_query="SELECT COUNT(*) FROM content_wordpress_import_items WHERE sou
 rest_author_query="SELECT COUNT(*) FROM content_wordpress_import_authors WHERE source_key = 'wordpress-rest-e2e'"
 rest_media_query="SELECT COUNT(*) FROM media_assets WHERE original_name = 'rest-fixture.png'"
 
+if failure=$(rest_import '--media-host=*.wordpress.example' 2>&1); then
+    printf '%s\n' 'REST import unexpectedly accepted a wildcard media hostname.' >&2
+    exit 1
+fi
+printf '%s\n' "$failure" | grep -F 'WordPress media hosts must be exact public DNS hostnames.' >/dev/null
+if failure=$(rest_import --media-host=cdn.wordpress.example --media-dir="$uploads" 2>&1); then
+    printf '%s\n' 'REST import unexpectedly combined a media hostname and local uploads.' >&2
+    exit 1
+fi
+printf '%s\n' "$failure" | grep -F -- '--media-host requires --api-url without --media-dir.' >/dev/null
+
 if failure=$(CMS_REST_FIXTURE_MEDIA=transient-failure rest_import --apply 2>&1); then
     printf '%s\n' 'REST import unexpectedly succeeded after an injected media download failure.' >&2
     exit 1
@@ -241,7 +252,17 @@ test "$(db_query "$rest_post_query")" = 0
 test "$(db_query "$rest_media_query")" = 0
 test "$(compose exec -T app sh -c 'find public/media -type f | wc -l')" = "$media_after"
 
-report=$(CMS_REST_FIXTURE_MEDIA=reject-download rest_import)
+report=$(CMS_REST_FIXTURE_MEDIA=reject-download rest_import --media-host=other.wordpress.example)
+printf '%s\n' "$report" | jq -e '
+    .input == "rest" and .mode == "dry-run" and .items[0].state == "planned" and
+    .items[0].images == {"inline": 0, "missingInline": 1, "featured": "missing"} and
+    (.media | length) == 1 and .media[0].state == "invalid"
+' >/dev/null
+
+rest_import_with_cdn() {
+    rest_import --media-host=cdn.wordpress.example --media-host=other.wordpress.example "$@"
+}
+report=$(CMS_REST_FIXTURE_MEDIA=reject-download rest_import_with_cdn)
 printf '%s\n' "$report" | jq -e '
     .input == "rest" and .mode == "dry-run" and .items[0].state == "planned" and
     .items[0].author == "linked" and .items[0].redirect == "planned" and
@@ -254,7 +275,7 @@ test "$(db_query "$rest_author_query")" = 0
 test "$(db_query "$rest_media_query")" = 0
 test "$(compose exec -T app sh -c 'find public/media -type f | wc -l')" = "$media_after"
 
-report=$(rest_import --apply)
+report=$(rest_import_with_cdn --apply)
 printf '%s\n' "$report" | jq -e '
     .items[0].state == "imported" and .authors[0].state == "imported" and
     .items[0].images == {"inline": 1, "missingInline": 0, "featured": "linked"} and
@@ -272,7 +293,7 @@ test "$(db_query "SELECT COUNT(*) FROM content_entries WHERE slug = 'imported-re
 rest_media_after=$(compose exec -T app sh -c 'find public/media -type f | wc -l')
 test "$rest_media_after" -gt "$media_after"
 
-report=$(CMS_REST_FIXTURE_EDITED=1 CMS_REST_FIXTURE_MEDIA=reject-download rest_import --apply)
+report=$(CMS_REST_FIXTURE_EDITED=1 CMS_REST_FIXTURE_MEDIA=reject-download rest_import_with_cdn --apply)
 printf '%s\n' "$report" | jq -e --arg asset "$rest_asset_id" '
     .items[0].state == "already_imported" and .authors[0].state == "already_imported" and
     .media[0].state == "already_imported" and .media[0].assetId == $asset

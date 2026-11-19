@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cms\Content\Infrastructure\Import;
 
+use Cms\Content\Application\Import\WordPressMediaHosts;
 use Cms\Content\Application\Import\WordPressRemoteMedia;
 use Cms\Content\Application\Import\WordPressRemoteMediaFailure;
 use Cms\Media\Application\UploadImage\UploadImage;
@@ -12,20 +13,20 @@ final class WordPressRemoteMediaDownloader implements WordPressRemoteMedia
 {
     private const int MAX_HEADER_BYTES = 32 * 1024;
 
-    public function assertUrl(string $apiUrl, string $attachmentUrl): void
+    public function assertUrl(string $apiUrl, string $attachmentUrl, array $allowedHosts = []): void
     {
-        $this->attachment($apiUrl, $attachmentUrl);
+        $this->attachment($apiUrl, $attachmentUrl, $allowedHosts);
     }
 
-    public function download(string $apiUrl, string $attachmentUrl, \Closure $consume): mixed
+    public function download(string $apiUrl, string $attachmentUrl, \Closure $consume, array $allowedHosts = []): mixed
     {
-        [$endpoint, $url, $name] = $this->attachment($apiUrl, $attachmentUrl);
+        [$host, $url, $name] = $this->attachment($apiUrl, $attachmentUrl, $allowedHosts);
         if (!extension_loaded('curl')) {
             throw new WordPressRemoteMediaFailure('WordPress media download requires PHP cURL.');
         }
 
         try {
-            $pins = $endpoint->resolvePins();
+            $pins = WordPressRestEndpoint::resolveHostPins($host);
         } catch (\RuntimeException $exception) {
             throw new WordPressRemoteMediaFailure($exception->getMessage(), previous: $exception);
         }
@@ -113,15 +114,22 @@ final class WordPressRemoteMediaDownloader implements WordPressRemoteMedia
         }
     }
 
-    /** @return array{WordPressRestEndpoint,string,string} */
-    private function attachment(string $apiUrl, string $attachmentUrl): array
+    /**
+     * @param list<string> $allowedHosts
+     * @return array{string,string,string}
+     */
+    private function attachment(string $apiUrl, string $attachmentUrl, array $allowedHosts): array
     {
         $endpoint = WordPressRestEndpoint::fromUrl($apiUrl);
+        $allowedHosts = WordPressMediaHosts::normalize($allowedHosts);
         $parts = strlen($attachmentUrl) <= 4096 && preg_match('/[\x00-\x20\x7f\\\\]/', $attachmentUrl) === 0 ? parse_url($attachmentUrl) : false;
         if ($parts === false || strtolower($parts['scheme'] ?? '') !== 'https' || ($parts['port'] ?? 443) !== 443
-            || strtolower($parts['host'] ?? '') !== $endpoint->host
             || isset($parts['user']) || isset($parts['pass']) || isset($parts['fragment'])) {
-            throw new \InvalidArgumentException('WordPress attachments must use HTTPS on the configured REST host.');
+            throw new \InvalidArgumentException('WordPress attachments must use HTTPS on the default port.');
+        }
+        $host = strtolower($parts['host'] ?? '');
+        if ($host !== $endpoint->host && !in_array($host, $allowedHosts, true)) {
+            throw new \InvalidArgumentException('The WordPress attachment host is not allowed.');
         }
 
         $path = $parts['path'] ?? '';
@@ -135,8 +143,8 @@ final class WordPressRemoteMediaDownloader implements WordPressRemoteMedia
             throw new \InvalidArgumentException('The WordPress attachment has an invalid file path.');
         }
 
-        $url = 'https://'.$endpoint->host.$path.(isset($parts['query']) ? '?'.$parts['query'] : '');
+        $url = 'https://'.$host.$path.(isset($parts['query']) ? '?'.$parts['query'] : '');
 
-        return [$endpoint, $url, $name];
+        return [$host, $url, $name];
     }
 }

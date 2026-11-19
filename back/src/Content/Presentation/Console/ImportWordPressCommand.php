@@ -6,6 +6,7 @@ namespace Cms\Content\Presentation\Console;
 
 use Cms\Content\Application\Import\ImportWordPressDrafts;
 use Cms\Content\Application\Import\WordPressImportClaimConflict;
+use Cms\Content\Application\Import\WordPressMediaHosts;
 use Cms\Content\Application\Import\WordPressRemoteMediaFailure;
 use Cms\Content\Infrastructure\Import\WordPressExportReader;
 use Cms\Content\Infrastructure\Import\WordPressRestReader;
@@ -34,6 +35,7 @@ final class ImportWordPressCommand extends Command
             ->addOption('api-url', null, InputOption::VALUE_REQUIRED, 'Public HTTPS WordPress REST namespace ending in /wp-json/wp/v2.')
             ->addOption('source', null, InputOption::VALUE_REQUIRED, 'Stable key for the WordPress installation.')
             ->addOption('media-dir', null, InputOption::VALUE_REQUIRED, 'Local WordPress uploads tree. REST downloads eligible images when omitted.')
+            ->addOption('media-host', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Additional HTTPS attachment hostname for REST downloads. Repeat for each CDN host.')
             ->addOption('apply', null, InputOption::VALUE_NONE, 'Create drafts. Omit to inspect the plan.');
     }
 
@@ -43,6 +45,7 @@ final class ImportWordPressCommand extends Command
         $apiUrl = $input->getOption('api-url');
         $source = $input->getOption('source');
         $mediaDirectory = $input->getOption('media-dir');
+        $mediaHosts = $input->getOption('media-host');
         $apply = $input->getOption('apply') === true;
         if (!is_string($source) || !ImportWordPressDrafts::validSourceKey($source) || ($mediaDirectory !== null && !is_string($mediaDirectory))) {
             return $this->fail($output, 'A stable lowercase --source key is required.', Command::INVALID);
@@ -50,8 +53,16 @@ final class ImportWordPressCommand extends Command
         if (($path === null) === ($apiUrl === null) || ($apiUrl !== null && !is_string($apiUrl)) || ($path !== null && !is_string($path))) {
             return $this->fail($output, 'Provide either a local export file or --api-url.', Command::INVALID);
         }
+        $hostNames = is_array($mediaHosts) ? array_values(array_filter($mediaHosts, is_string(...))) : [];
+        if (!is_array($mediaHosts) || count($hostNames) !== count($mediaHosts)) {
+            return $this->fail($output, 'Provide a DNS hostname for each --media-host option.', Command::INVALID);
+        }
+        if ($mediaHosts !== [] && ($apiUrl === null || $mediaDirectory !== null)) {
+            return $this->fail($output, '--media-host requires --api-url without --media-dir.', Command::INVALID);
+        }
 
         try {
+            $allowedMediaHosts = WordPressMediaHosts::normalize($hostNames);
             $export = $apiUrl === null ? $this->reader->read((string) $path) : $this->restReader->read($apiUrl);
         } catch (\InvalidArgumentException $error) {
             return $this->fail($output, $error->getMessage(), Command::INVALID);
@@ -60,7 +71,10 @@ final class ImportWordPressCommand extends Command
         }
 
         try {
-            $report = ($this->import)($source, $export['items'], $apply, $export['terms'], $export['attachments'], $mediaDirectory, $export['authors'], $export['sourceUrl'], $apiUrl);
+            $report = ($this->import)(
+                $source, $export['items'], $apply, $export['terms'], $export['attachments'],
+                $mediaDirectory, $export['authors'], $export['sourceUrl'], $apiUrl, $allowedMediaHosts,
+            );
         } catch (WordPressImportClaimConflict) {
             return $this->fail($output, 'Another import claimed an item. Apply was rolled back. Run the plan again.', Command::FAILURE);
         } catch (\InvalidArgumentException) {

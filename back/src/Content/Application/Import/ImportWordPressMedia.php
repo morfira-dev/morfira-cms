@@ -27,13 +27,14 @@ final readonly class ImportWordPressMedia
     /**
      * @param list<Attachment> $attachments
      * @param \ArrayObject<int,MediaAssetView> $created
+     * @param list<string> $allowedHosts
      * @return list<MediaOutcome>
      */
-    public function __invoke(string $source, array $attachments, ?string $directory, bool $apply, \ArrayObject $created, ?string $apiUrl = null): array
+    public function __invoke(string $source, array $attachments, ?string $directory, bool $apply, \ArrayObject $created, ?string $apiUrl = null, array $allowedHosts = []): array
     {
         $report = [];
         foreach ($attachments as $attachment) {
-            $report[] = $this->importAttachment($source, $attachment, $directory, $apply, $created, $apiUrl);
+            $report[] = $this->importAttachment($source, $attachment, $directory, $apply, $created, $apiUrl, $allowedHosts);
         }
 
         return $report;
@@ -59,9 +60,10 @@ final readonly class ImportWordPressMedia
     /**
      * @param Attachment $attachment
      * @param \ArrayObject<int,MediaAssetView> $created
+     * @param list<string> $allowedHosts
      * @return MediaOutcome
      */
-    private function importAttachment(string $source, array $attachment, ?string $directory, bool $apply, \ArrayObject $created, ?string $apiUrl): array
+    private function importAttachment(string $source, array $attachment, ?string $directory, bool $apply, \ArrayObject $created, ?string $apiUrl, array $allowedHosts): array
     {
         $id = $attachment['id'];
         if (!$attachment['eligible']) {
@@ -92,11 +94,12 @@ final readonly class ImportWordPressMedia
                 if (mb_strlen(trim($attachment['alt'])) > 500) {
                     throw new \InvalidArgumentException('Default alternative text must not exceed 500 characters.');
                 }
-                $this->remote->assertUrl($apiUrl, $attachment['url']);
+                $this->remote->assertUrl($apiUrl, $attachment['url'], $allowedHosts);
                 $load = fn (): MediaAssetView => $this->remote->download(
                     $apiUrl,
                     $attachment['url'],
                     fn (string $path, string $fileName): MediaAssetView => ($this->upload)($path, $fileName, $attachment['alt']),
+                    $allowedHosts,
                 );
             }
             if (!$apply) {
