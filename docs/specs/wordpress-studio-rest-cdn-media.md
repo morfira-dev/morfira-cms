@@ -10,7 +10,7 @@ Owners importing public WordPress content from Studio can explicitly allow the C
 
 ## Actors and flow
 
-An owner enables public image downloads and optionally enters up to eight exact CDN hostnames, one per line. Changes to the list invalidate the current preview and material selection. The preview checks attachment URL policy against the supplied list without fetching files. Apply uses the allowlist for that request. The WordPress REST hostname remains implicitly allowed.
+An owner enables public image downloads and optionally enters up to eight exact CDN hostnames, one per line. Changes to the list invalidate the current preview and material selection. The preview checks attachment URL policy against the supplied list without fetching files. The attachment report explains an unlisted host in the Studio language and points owners to the allowlist field. Apply uses the allowlist for that request. The WordPress REST hostname remains implicitly allowed.
 
 ## Contracts
 

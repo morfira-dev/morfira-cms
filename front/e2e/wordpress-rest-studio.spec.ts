@@ -36,6 +36,7 @@ test('previews, selects and reopens a public WordPress REST import', async ({ pa
         items: plannedItems, media: [{
           id: '143',
           state: body.downloadMedia ? (body.allowedMediaHosts?.includes(cdnHost) ? 'planned' : 'invalid') : 'media_directory_required',
+          reason: body.downloadMedia && !body.allowedMediaHosts?.includes(cdnHost) ? 'The WordPress attachment host is not allowed.' : undefined,
         }],
         taxonomy: { terms: [], assignments: [] }, authors: [],
       }
@@ -85,6 +86,8 @@ test('previews, selects and reopens a public WordPress REST import', async ({ pa
   await previewButton.click()
   await expect(includeBulletin).toBeChecked()
   await expect(media.getByText('Некорректные данные')).toBeVisible()
+  await expect(media.getByText('Хост вложения WordPress не разрешён.', { exact: true })).toBeVisible()
+  await expect(media.getByText(/укажите его точное имя в поле «Разрешённые хосты CDN»/)).toBeVisible()
   await includeBulletin.uncheck()
   await allowedHosts.fill('https://cdn.example.test')
   await expect(previewButton).toBeDisabled()
@@ -94,6 +97,7 @@ test('previews, selects and reopens a public WordPress REST import', async ({ pa
   await previewButton.click()
   await expect(includeBulletin).toBeChecked()
   await expect(media.getByText('Готово к импорту')).toBeVisible()
+  await expect(media.getByText('Хост вложения WordPress не разрешён.', { exact: true })).toHaveCount(0)
   await url.fill('https://changed.example.test/wp-json/wp/v2')
   await expect(report).toHaveCount(0)
   await expect(applyButton).toHaveCount(0)

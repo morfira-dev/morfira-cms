@@ -26,3 +26,17 @@ const statusKeys: ReadonlyMap<string, MessageKey> = new Map([
 export function importStatusKey(state: string): MessageKey | undefined {
   return statusKeys.get(state)
 }
+
+const attachmentReasonKeys = [
+  'The WordPress attachment host is not allowed.',
+  'WordPress attachments must use HTTPS on the default port.',
+  'The WordPress attachment has an invalid file path.',
+  'The WordPress attachment exceeds the image size limit.',
+  'The WordPress attachment is empty.',
+  'Default alternative text must not exceed 500 characters.',
+  'No reusable media asset mapping is available.',
+] as const satisfies readonly MessageKey[]
+
+export function attachmentReasonKey(reason: string): MessageKey | undefined {
+  return attachmentReasonKeys.find((key) => key === reason)
+}

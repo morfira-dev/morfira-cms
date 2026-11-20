@@ -6,7 +6,7 @@ import {
   TableHead, TablePagination, TableRow, TextField, Typography,
 } from '../../ui'
 import type { WordPressImportReport } from './api'
-import { IMPORT_REPORT_PAGE_SIZE, importPaginationLabels, importStatusKey } from './reportPresentation'
+import { attachmentReasonKey, IMPORT_REPORT_PAGE_SIZE, importPaginationLabels, importStatusKey } from './reportPresentation'
 
 type DetailRow = {
   identifier: string
@@ -82,13 +82,23 @@ export function WordPressImportDetails({ report }: { report: WordPressImportRepo
           <TableBody>
             {group.rows.slice(offset, offset + IMPORT_REPORT_PAGE_SIZE).map(({ identifier, reference, state, reason }, index) => {
               const key = state === 'imported' ? 'Import item completed' : importStatusKey(state)
+              const reasonKey = reason && attachmentReasonKey(reason)
               return (
                 <TableRow key={offset + index}>
                   <TableCell sx={{ overflowWrap: 'anywhere' }}>{identifier}</TableCell>
                   <TableCell sx={{ overflowWrap: 'anywhere' }}>{reference ?? '—'}</TableCell>
                   <TableCell>
                     <Typography variant="body2">{key ? t(key) : state}</Typography>
-                    {reason && <Typography variant="caption" color="text.secondary">{reason}</Typography>}
+                    {reason && (
+                      <Typography variant="caption" color="text.secondary" component="p">
+                        {reasonKey ? t(reasonKey) : reason}
+                      </Typography>
+                    )}
+                    {reasonKey === 'The WordPress attachment host is not allowed.' && (
+                      <Typography variant="caption" color="text.secondary" component="p">
+                        {t('If you trust the source CDN, enter its exact hostname in Allowed CDN hosts and preview again.')}
+                      </Typography>
+                    )}
                   </TableCell>
                 </TableRow>
               )
