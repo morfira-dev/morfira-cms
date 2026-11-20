@@ -85,6 +85,13 @@ export function WordPressImportItems({ items, input, selection }: {
   const [state, setState] = useState('')
   const [page, setPage] = useState(0)
 
+  function clearFilters() {
+    setSearch('')
+    setType('')
+    setState('')
+    setPage(0)
+  }
+
   if (items.length === 0) {
     return <Alert severity="info">{t(input === 'rest'
       ? 'The REST source contains no pages or posts to display.'
@@ -141,6 +148,11 @@ export function WordPressImportItems({ items, input, selection }: {
             return <MenuItem key={value} value={value}>{key ? t(key) : value}</MenuItem>
           })}
         </TextField>
+        {(search || type || state) && (
+          <Button size="small" onClick={clearFilters} sx={{ alignSelf: { xs: 'flex-start', md: 'center' }, flexShrink: 0 }}>
+            {t('Clear filters')}
+          </Button>
+        )}
       </Stack>
       {selection && (
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>

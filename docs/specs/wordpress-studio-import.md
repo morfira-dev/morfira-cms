@@ -14,7 +14,7 @@ Site owners need to import WordPress pages and posts without shell access. Admin
 2. Studio submits the file in dry-run mode and displays the result.
 3. The owner confirms apply. Changing the file or key clears the displayed plan and requires a new preview in Studio.
 4. Successful apply reports created and skipped items. Existing drafts are preserved on replay.
-5. Owners can search material titles, IDs and routes, filter by type and outcome, and inspect detailed diagnostics before or after apply.
+5. Owners can search material titles, IDs and routes, filter by type and outcome, and inspect detailed diagnostics before or after apply. Clearing the search and filters returns the material table to its first page and preserves the import selection.
 6. Owners can download the complete current report as JSON, including rows outside the active filters.
 7. Planned rows are selected by default. Owners can change the selection row by row or across the current filter results and apply a subset. Changing filters preserves the selection.
 8. Owners can preview the source again with the same key and continue with materials that remain eligible.
