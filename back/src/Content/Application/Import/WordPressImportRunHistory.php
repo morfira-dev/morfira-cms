@@ -6,7 +6,7 @@ namespace Cms\Content\Application\Import;
 
 /**
  * @phpstan-import-type Report from ImportWordPressExport
- * @phpstan-type RunSummary array{id:string,source:string,scope:'all'|'selection',completedAt:string,counts:\stdClass}
+ * @phpstan-type RunSummary array{id:string,source:string,input:'wxr'|'rest',scope:'all'|'selection',completedAt:string,counts:\stdClass}
  */
 interface WordPressImportRunHistory
 {
@@ -17,8 +17,12 @@ interface WordPressImportRunHistory
      */
     public function record(array $report): void;
 
-    /** @return list<RunSummary> */
-    public function latest(int $offset, int $limit): array;
+    /**
+     * @param 'wxr'|'rest'|null $input
+     * @param 'all'|'selection'|null $scope
+     * @return list<RunSummary>
+     */
+    public function latest(int $offset, int $limit, ?string $source = null, ?string $input = null, ?string $scope = null): array;
 
     public function report(string $id): ?\stdClass;
 }

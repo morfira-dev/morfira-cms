@@ -376,7 +376,7 @@ export interface paths {
         };
         /**
          * List completed Studio WordPress imports
-         * @description Requires an owner session. Returns up to 20 runs per page, newest first.
+         * @description Requires an owner session. Filters are combined before pagination. Returns up to 20 matching runs per page, newest first.
          */
         get: operations["listWordPressImportRuns"];
         put?: never;
@@ -1125,6 +1125,8 @@ export interface components {
                 /** Format: uuid */
                 id: string;
                 source: string;
+                /** @enum {string} */
+                input: "wxr" | "rest";
                 /** @enum {string} */
                 scope: "all" | "selection";
                 /** Format: date-time */
@@ -3034,6 +3036,10 @@ export interface operations {
         parameters: {
             query?: {
                 page?: number;
+                /** @description Exact import source key. */
+                source?: string;
+                input?: "wxr" | "rest";
+                scope?: "all" | "selection";
             };
             header?: never;
             path?: never;
@@ -3068,7 +3074,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Invalid page */
+            /** @description Invalid page or filter */
             422: {
                 headers: {
                     [name: string]: unknown;

@@ -452,6 +452,7 @@ final class WordPressImportControllerTest extends WebTestCase
         $summary = [
             'id' => self::RUN_ID,
             'source' => 'legacy-site',
+            'input' => 'wxr',
             'scope' => 'selection',
             'completedAt' => '2026-11-20T12:13:14.000+00:00',
             'counts' => (object) ['imported' => 1],
@@ -460,9 +461,10 @@ final class WordPressImportControllerTest extends WebTestCase
         $report = json_decode($reportJson, flags: JSON_THROW_ON_ERROR);
         self::assertInstanceOf(\stdClass::class, $report);
         $history = $this->createMock(WordPressImportRunHistory::class);
-        $history->expects(self::exactly(2))->method('latest')->willReturnCallback(static function (int $offset, int $limit) use ($summary): array {
+        $history->expects(self::exactly(2))->method('latest')->willReturnCallback(static function (int $offset, int $limit, ?string $source, ?string $input, ?string $scope) use ($summary): array {
             self::assertSame(21, $limit);
             self::assertContains($offset, [0, 20]);
+            self::assertSame([null, null, null], [$source, $input, $scope]);
 
             return $offset === 0 ? array_fill(0, 21, $summary) : [$summary];
         });
@@ -491,7 +493,36 @@ final class WordPressImportControllerTest extends WebTestCase
         self::assertSame($reportJson, $client->getResponse()->getContent());
     }
 
-    public function testHistoryRejectsInvalidPageAndUnknownRun(): void
+    public function testHistoryAppliesFiltersBeforePagination(): void
+    {
+        $client = $this->authenticatedClient();
+        $summary = [
+            'id' => self::RUN_ID,
+            'source' => 'legacy-site',
+            'input' => 'rest',
+            'scope' => 'selection',
+            'completedAt' => '2026-11-20T12:13:14.000+00:00',
+            'counts' => (object) ['imported' => 1],
+        ];
+        $history = $this->createMock(WordPressImportRunHistory::class);
+        $history->expects(self::once())
+            ->method('latest')
+            ->with(20, 21, 'legacy-site', 'rest', 'selection')
+            ->willReturn([$summary]);
+        self::getContainer()->set(DoctrineWordPressImportRunHistory::class, $history);
+
+        $client->request('GET', self::ENDPOINT.'/runs?page=2&source=legacy-site&input=rest&scope=selection');
+        self::assertResponseIsSuccessful();
+        self::assertTrue($client->getResponse()->headers->hasCacheControlDirective('private'));
+        self::assertTrue($client->getResponse()->headers->hasCacheControlDirective('no-store'));
+        self::assertJsonStringEqualsJsonString(json_encode([
+            'items' => [$summary],
+            'page' => 2,
+            'hasMore' => false,
+        ], JSON_THROW_ON_ERROR), (string) $client->getResponse()->getContent());
+    }
+
+    public function testHistoryRejectsInvalidFiltersAndUnknownRun(): void
     {
         $client = $this->authenticatedClient();
         $history = $this->createMock(WordPressImportRunHistory::class);
@@ -499,7 +530,11 @@ final class WordPressImportControllerTest extends WebTestCase
         $history->expects(self::once())->method('report')->with(self::RUN_ID)->willReturn(null);
         self::getContainer()->set(DoctrineWordPressImportRunHistory::class, $history);
 
-        foreach (['page=0', 'page=1000001', 'page=1.5', 'page[]=-1'] as $query) {
+        foreach ([
+            'page=0', 'page=1000001', 'page=1.5', 'page[]=-1',
+            'source=', 'source=Legacy-site', 'source=legacy--site', 'source[]=legacy-site', 'source='.str_repeat('a', 81),
+            'input=', 'input=json', 'input[]=rest', 'scope=', 'scope=partial', 'scope[]=selection',
+        ] as $query) {
             $client->request('GET', self::ENDPOINT.'/runs?'.$query);
             self::assertResponseStatusCodeSame(422);
             self::assertTrue($client->getResponse()->headers->hasCacheControlDirective('no-store'));

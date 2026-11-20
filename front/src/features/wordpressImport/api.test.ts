@@ -110,7 +110,7 @@ describe('importWordPressRest', () => {
 describe('WordPress import history', () => {
   it('reads the requested history page and run without a CSRF request', async () => {
     const collection: WordPressImportRunCollection = {
-      items: [{ id: '0199b348-1d8f-7e2f-8672-9b8356792e42', source: 'old-site', scope: 'selection', completedAt: '2026-11-20T08:00:00Z', counts: { imported: 1 } }],
+      items: [{ id: '0199b348-1d8f-7e2f-8672-9b8356792e42', source: 'old-site', input: 'wxr', scope: 'selection', completedAt: '2026-11-20T08:00:00Z', counts: { imported: 1 } }],
       page: 2,
       hasMore: true,
     }
@@ -133,7 +133,7 @@ describe('WordPress import history', () => {
     const { signal } = new AbortController()
     const run = collection.items[0]
 
-    await expect(listWordPressImportRuns(2, signal)).resolves.toEqual(collection)
+    await expect(listWordPressImportRuns({ page: 2 }, signal)).resolves.toEqual(collection)
     await expect(getWordPressImportRun(run.id, signal)).resolves.toEqual(report)
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
       '/api/v1/admin/imports/wordpress/runs?page=2',
@@ -144,6 +144,21 @@ describe('WordPress import history', () => {
       expect(init?.credentials).toBe('same-origin')
       expect(new Headers(init?.headers).has('X-CSRF-Token')).toBe(false)
     }
+  })
+
+  it('sends only the applied history filters with the page', async () => {
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockImplementation(async () => Response.json({ items: [], page: 1, hasMore: false }))
+    vi.stubGlobal('fetch', fetchMock)
+    const { signal } = new AbortController()
+
+    await listWordPressImportRuns({ page: 1, source: 'old-site', input: 'rest', scope: 'selection' }, signal)
+    await listWordPressImportRuns({ page: 1, scope: 'all' }, signal)
+
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      '/api/v1/admin/imports/wordpress/runs?page=1&source=old-site&input=rest&scope=selection',
+      '/api/v1/admin/imports/wordpress/runs?page=1&scope=all',
+    ])
   })
 
   it('exposes a missing run error', async () => {

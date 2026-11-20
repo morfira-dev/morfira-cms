@@ -5,6 +5,7 @@ export type WordPressImportReport = components['schemas']['WordPressImportReport
 export type WordPressImportMode = WordPressImportReport['mode']
 export type WordPressImportRunCollection = components['schemas']['WordPressImportRunCollection']
 export type WordPressImportRun = WordPressImportRunCollection['items'][number]
+export type WordPressImportRunQuery = NonNullable<operations['listWordPressImportRuns']['parameters']['query']> & { page: number }
 type WordPressRestImportRequest = operations['importWordPressRest']['requestBody']['content']['application/json']
 
 const importPath = '/api/v1/admin/imports/wordpress'
@@ -59,8 +60,12 @@ export async function importWordPressRest(
   return readImportResponse<WordPressImportReport>(response)
 }
 
-export async function listWordPressImportRuns(page: number, signal: AbortSignal) {
-  const response = await apiFetch(`${importPath}/runs?page=${page}`, { signal })
+export async function listWordPressImportRuns({ page, source, input, scope }: WordPressImportRunQuery, signal: AbortSignal) {
+  const params = new URLSearchParams({ page: String(page) })
+  if (source !== undefined) params.set('source', source)
+  if (input !== undefined) params.set('input', input)
+  if (scope !== undefined) params.set('scope', scope)
+  const response = await apiFetch(`${importPath}/runs?${params}`, { signal })
   return readImportResponse<WordPressImportRunCollection>(response)
 }
 

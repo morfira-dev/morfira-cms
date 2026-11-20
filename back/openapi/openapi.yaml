@@ -806,19 +806,29 @@ paths:
       operationId: listWordPressImportRuns
       tags: [Admin Content]
       summary: List completed Studio WordPress imports
-      description: Requires an owner session. Returns up to 20 runs per page, newest first.
+      description: Requires an owner session. Filters are combined before pagination. Returns up to 20 matching runs per page, newest first.
       security: [{ sessionCookie: [] }]
       parameters:
         - name: page
           in: query
           schema: { type: integer, minimum: 1, maximum: 1000000, default: 1 }
+        - name: source
+          in: query
+          description: Exact import source key.
+          schema: { type: string, minLength: 1, maxLength: 80, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' }
+        - name: input
+          in: query
+          schema: { type: string, enum: [wxr, rest] }
+        - name: scope
+          in: query
+          schema: { type: string, enum: [all, selection] }
       responses:
         '200':
           description: A page of completed imports.
           content: { application/json: { schema: { $ref: '#/components/schemas/WordPressImportRunCollection' } } }
         '401': { description: Authentication required, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
         '403': { description: Owner permission is required, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
-        '422': { description: Invalid page, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '422': { description: Invalid page or filter, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
   /api/v1/admin/imports/wordpress/runs/{id}:
     get:
       operationId: getWordPressImportRunReport
@@ -2572,10 +2582,11 @@ components:
           maxItems: 20
           items:
             type: object
-            required: [id, source, scope, completedAt, counts]
+            required: [id, source, input, scope, completedAt, counts]
             properties:
               id: { type: string, format: uuid }
               source: { type: string }
+              input: { type: string, enum: [wxr, rest] }
               scope: { type: string, enum: [all, selection] }
               completedAt: { type: string, format: date-time }
               counts:

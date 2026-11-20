@@ -1,25 +1,28 @@
-import { useEffect, useState } from 'react'
+import { type FormEvent, useEffect, useState } from 'react'
 import { useAdminLocale } from '../../i18n/AdminLocaleProvider'
 import {
-  Alert, Button, Card, CardContent, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography,
+  Alert, Button, Card, CardContent, MenuItem, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography,
 } from '../../ui'
-import { getWordPressImportRun, listWordPressImportRuns, type WordPressImportRun } from './api'
+import { scheduleAbortableLoad } from '../../utils/scheduleAbortableLoad'
+import { getWordPressImportRun, listWordPressImportRuns, type WordPressImportRun, type WordPressImportRunQuery } from './api'
+import { isWordPressSourceKey, MAX_SOURCE_KEY_LENGTH } from './sourceKey'
 import { WordPressImportOutcomeChips, WordPressImportReportContent } from './WordPressImportReportContent'
 
 type HistoryResult<T> = { data: T } | { error: unknown }
+type RunFilters = Omit<WordPressImportRunQuery, 'page'>
+
+const inputLabels = { wxr: 'WXR file', rest: 'WordPress REST API' } as const
 
 function useHistoryResult<Input, Result>(load: (input: Input, signal: AbortSignal) => Promise<Result>, input: Input) {
   const [result, setResult] = useState<HistoryResult<Result> | null>(null)
   const [attempt, setAttempt] = useState(0)
 
-  useEffect(() => {
-    const controller = new AbortController()
-    load(input, controller.signal).then(
-      (data) => { if (!controller.signal.aborted) setResult({ data }) },
-      (error: unknown) => { if (!controller.signal.aborted) setResult({ error }) },
+  useEffect(() => scheduleAbortableLoad((signal) => {
+    load(input, signal).then(
+      (data) => { if (!signal.aborted) setResult({ data }) },
+      (error: unknown) => { if (!signal.aborted) setResult({ error }) },
     )
-    return () => controller.abort()
-  }, [attempt, input, load])
+  }), [attempt, input, load])
 
   function retry() {
     setResult(null)
@@ -29,13 +32,75 @@ function useHistoryResult<Input, Result>(load: (input: Input, signal: AbortSigna
   return { result, retry }
 }
 
-function ImportRunsPage({ page, onPage, onOpen }: {
-  page: number
+function ImportRunFilters({ applied, onApply }: {
+  applied: RunFilters
+  onApply: (filters: RunFilters) => void
+}) {
+  const { t } = useAdminLocale()
+  const [draft, setDraft] = useState<RunFilters>({ source: applied.source, input: applied.input, scope: applied.scope })
+  const invalidSource = draft.source !== undefined && !isWordPressSourceKey(draft.source)
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!invalidSource) onApply(draft)
+  }
+
+  return (
+    <Stack component="form" spacing={1.5} onSubmit={submit}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ '& > *': { flex: 1 } }}>
+        <TextField
+          label={t('Source key')}
+          size="small"
+          value={draft.source ?? ''}
+          error={invalidSource}
+          helperText={invalidSource && t('Use lowercase letters, numbers and hyphens.')}
+          slotProps={{ htmlInput: { maxLength: MAX_SOURCE_KEY_LENGTH } }}
+          onChange={(event) => setDraft({ ...draft, source: event.target.value || undefined })}
+        />
+        <TextField
+          select
+          label={t('Import format')}
+          size="small"
+          value={draft.input ?? 'any'}
+          onChange={(event) => {
+            const input = event.target.value
+            setDraft({ ...draft, input: input === 'wxr' || input === 'rest' ? input : undefined })
+          }}
+        >
+          <MenuItem value="any">{t('All formats')}</MenuItem>
+          <MenuItem value="wxr">{t(inputLabels.wxr)}</MenuItem>
+          <MenuItem value="rest">{t(inputLabels.rest)}</MenuItem>
+        </TextField>
+        <TextField
+          select
+          label={t('Import scope')}
+          size="small"
+          value={draft.scope ?? 'any'}
+          onChange={(event) => {
+            const scope = event.target.value
+            setDraft({ ...draft, scope: scope === 'all' || scope === 'selection' ? scope : undefined })
+          }}
+        >
+          <MenuItem value="any">{t('All scopes')}</MenuItem>
+          <MenuItem value="all">{t('Full source')}</MenuItem>
+          <MenuItem value="selection">{t('Selected items')}</MenuItem>
+        </TextField>
+      </Stack>
+      <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+        <Button type="submit" variant="contained" disabled={invalidSource}>{t('Apply filters')}</Button>
+        <Button onClick={() => { setDraft({}); onApply({}) }}>{t('Clear filters')}</Button>
+      </Stack>
+    </Stack>
+  )
+}
+
+function ImportRunsPage({ query, onPage, onOpen }: {
+  query: WordPressImportRunQuery
   onPage: (page: number) => void
   onOpen: (run: WordPressImportRun) => void
 }) {
   const { t, errorMessage, formatDateTime } = useAdminLocale()
-  const { result, retry } = useHistoryResult(listWordPressImportRuns, page)
+  const { result, retry } = useHistoryResult(listWordPressImportRuns, query)
 
   if (!result) return <Typography role="status" color="text.secondary">{t('Loading import history…')}</Typography>
   if ('error' in result) {
@@ -46,11 +111,14 @@ function ImportRunsPage({ page, onPage, onOpen }: {
     )
   }
   const { items, hasMore } = result.data
+  const { page, source, input, scope } = query
 
   return (
     <>
       {items.length === 0 ? (
-        <Alert severity="info">{t('No completed imports yet.')}</Alert>
+        <Alert severity="info">
+          {t(source || input || scope ? 'No completed imports match the selected filters.' : 'No completed imports yet.')}
+        </Alert>
       ) : (
         <TableContainer>
           <Table size="small" aria-label={t('Import history')}>
@@ -58,6 +126,7 @@ function ImportRunsPage({ page, onPage, onOpen }: {
               <TableRow>
                 <TableCell>{t('Completed at')}</TableCell>
                 <TableCell>{t('Source key')}</TableCell>
+                <TableCell>{t('Import format')}</TableCell>
                 <TableCell>{t('Import scope')}</TableCell>
                 <TableCell>{t('Import outcomes')}</TableCell>
                 <TableCell aria-label={t('View report')} />
@@ -68,6 +137,7 @@ function ImportRunsPage({ page, onPage, onOpen }: {
                 <TableRow key={run.id}>
                   <TableCell><time dateTime={run.completedAt}>{formatDateTime(run.completedAt)}</time></TableCell>
                   <TableCell component="th" scope="row" sx={{ overflowWrap: 'anywhere' }}>{run.source}</TableCell>
+                  <TableCell>{t(inputLabels[run.input])}</TableCell>
                   <TableCell>{t(run.scope === 'selection' ? 'Selected items' : 'Full source')}</TableCell>
                   <TableCell>
                     {Object.keys(run.counts).length === 0 ? '—' : (
@@ -105,7 +175,7 @@ function ImportRunReport({ run, onBack }: { run: WordPressImportRun; onBack: () 
         <Button onClick={onBack}>{t('Back to history')}</Button>
       </Stack>
       <Typography color="text.secondary">
-        {run.source} · <time dateTime={run.completedAt}>{formatDateTime(run.completedAt)}</time> · {t(run.scope === 'selection' ? 'Selected items' : 'Full source')}
+        {run.source} · <time dateTime={run.completedAt}>{formatDateTime(run.completedAt)}</time> · {t(inputLabels[run.input])} · {t(run.scope === 'selection' ? 'Selected items' : 'Full source')}
       </Typography>
       {!result && <Typography role="status" color="text.secondary">{t('Loading import report…')}</Typography>}
       {result && 'error' in result && (
@@ -120,8 +190,16 @@ function ImportRunReport({ run, onBack }: { run: WordPressImportRun; onBack: () 
 
 export function WordPressImportHistory() {
   const { t } = useAdminLocale()
-  const [page, setPage] = useState(1)
+  const [query, setQuery] = useState<WordPressImportRunQuery>({ page: 1 })
   const [run, setRun] = useState<WordPressImportRun | null>(null)
+
+  function applyFilters({ source, input, scope }: RunFilters) {
+    setQuery((current) =>
+      current.page === 1 && current.source === source && current.input === input && current.scope === scope
+        ? current
+        : { page: 1, source, input, scope },
+    )
+  }
 
   return (
     <Card variant="outlined">
@@ -130,7 +208,17 @@ export function WordPressImportHistory() {
           <Typography component="h2" variant="h6">{t('Import history')}</Typography>
           {run
             ? <ImportRunReport key={run.id} run={run} onBack={() => setRun(null)} />
-            : <ImportRunsPage key={page} page={page} onPage={setPage} onOpen={setRun} />}
+            : (
+              <>
+                <ImportRunFilters applied={query} onApply={applyFilters} />
+                <ImportRunsPage
+                  key={JSON.stringify(query)}
+                  query={query}
+                  onPage={(page) => setQuery((current) => ({ ...current, page }))}
+                  onOpen={setRun}
+                />
+              </>
+            )}
         </Stack>
       </CardContent>
     </Card>

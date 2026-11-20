@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cms\Content\Presentation\Http;
 
+use Cms\Content\Application\Import\ImportWordPressDrafts;
 use Cms\Content\Application\Import\ImportWordPressExport;
 use Cms\Content\Application\Import\WordPressExportSource;
 use Cms\Content\Application\Import\WordPressImportClaimConflict;
@@ -145,12 +146,25 @@ final readonly class WordPressImportController
         if (!$this->security->isGranted('ROLE_OWNER')) {
             return self::json(['error' => 'Owner access required.'], 403);
         }
-        $page = $request->query->all()['page'] ?? '1';
+        $query = $request->query->all();
+        $page = $query['page'] ?? '1';
         if (!is_string($page) || preg_match('/\A(?:[1-9][0-9]{0,5}|1000000)\z/', $page) !== 1) {
             return self::json(['error' => 'Page must be an integer between 1 and 1000000.'], 422);
         }
+        $source = $query['source'] ?? null;
+        $input = $query['input'] ?? null;
+        $scope = $query['scope'] ?? null;
+        if ($source !== null && (!is_string($source) || !ImportWordPressDrafts::validSourceKey($source))) {
+            return self::json(['error' => 'Source must be a lowercase identifier of at most 80 characters.'], 422);
+        }
+        if (!in_array($input, [null, 'wxr', 'rest'], true)) {
+            return self::json(['error' => 'Input must be wxr or rest.'], 422);
+        }
+        if (!in_array($scope, [null, 'all', 'selection'], true)) {
+            return self::json(['error' => 'Scope must be all or selection.'], 422);
+        }
         $page = (int) $page;
-        $runs = $this->history->latest(($page - 1) * self::RUNS_PAGE_SIZE, self::RUNS_PAGE_SIZE + 1);
+        $runs = $this->history->latest(($page - 1) * self::RUNS_PAGE_SIZE, self::RUNS_PAGE_SIZE + 1, $source, $input, $scope);
 
         return self::json([
             'items' => array_slice($runs, 0, self::RUNS_PAGE_SIZE),

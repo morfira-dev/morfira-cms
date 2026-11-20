@@ -16,13 +16,13 @@ An owner can list completed runs and retrieve their reports. Both reads use the 
 
 1. The owner previews a WordPress source and applies the whole source or a selection.
 2. A successful apply records its result and makes the run available in history.
-3. The owner browses runs by date and scope, opens a saved report and can download its JSON.
+3. The owner browses runs newest first, filters by source key, input format or scope, opens a saved report and can download its JSON.
 4. The owner can return to the current import without losing its preview or selection.
 5. The owner can open a newly created page or entry from the live or saved report in a separate tab. The editor opens the referenced draft on direct entry or reload.
 
 ## Contracts
 
-`GET /api/v1/admin/imports/wordpress/runs?page=1` returns `items`, `page` and `hasMore`. Each summary includes a run UUID, source key, completion timestamp, scope and material outcome counts. Page size is 20.
+`GET /api/v1/admin/imports/wordpress/runs?page=1` returns `items`, `page` and `hasMore`. Each summary includes a run UUID, source key, input format, completion timestamp, scope and material outcome counts. Page size is 20. See the [history filter specification](wordpress-studio-history-filters.md).
 
 `GET /api/v1/admin/imports/wordpress/runs/{id}` returns the saved `WordPressImportReport`. Report reads have the same shape as the apply response.
 

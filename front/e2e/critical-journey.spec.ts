@@ -473,6 +473,7 @@ test('owner creates, edits and publishes a page through the production surface',
   const runRows = historyTable.getByRole('row').filter({ hasText: 'studio-e2e' })
   await expect(runRows).toHaveCount(2)
   await expect(runRows.first()).toContainText('Весь источник')
+  await expect(runRows.getByRole('cell', { name: 'Файл WXR', exact: true })).toHaveCount(2)
   const selectiveRun = runRows.filter({ hasText: 'Выбранные материалы' })
   await expect(selectiveRun).toContainText('Импортировано как черновик')
   await selectiveRun.getByRole('button', { name: 'Открыть отчёт', exact: true }).click()
