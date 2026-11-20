@@ -6,7 +6,7 @@ import {
   TableHead, TablePagination, TableRow, TextField, Typography,
 } from '../../ui'
 import type { WordPressImportReport } from './api'
-import { attachmentReasonKey, IMPORT_REPORT_PAGE_SIZE, importPaginationLabels, importStatusKey } from './reportPresentation'
+import { IMPORT_REPORT_PAGE_SIZE, importPaginationLabels, importReasonKey, importStatusKey } from './reportPresentation'
 
 type DetailRow = {
   identifier: string
@@ -82,7 +82,7 @@ export function WordPressImportDetails({ report }: { report: WordPressImportRepo
           <TableBody>
             {group.rows.slice(offset, offset + IMPORT_REPORT_PAGE_SIZE).map(({ identifier, reference, state, reason }, index) => {
               const key = state === 'imported' ? 'Import item completed' : importStatusKey(state)
-              const reasonKey = reason && attachmentReasonKey(reason)
+              const reasonKey = reason && importReasonKey(reason)
               return (
                 <TableRow key={offset + index}>
                   <TableCell sx={{ overflowWrap: 'anywhere' }}>{identifier}</TableCell>

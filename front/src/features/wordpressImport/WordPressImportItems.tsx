@@ -7,7 +7,7 @@ import {
 } from '../../ui'
 import { filterImportItems, type WordPressImportItem } from './filterImportItems'
 import type { WordPressImportReport } from './api'
-import { IMPORT_REPORT_PAGE_SIZE, importPaginationLabels, importStatusKey } from './reportPresentation'
+import { IMPORT_REPORT_PAGE_SIZE, importPaginationLabels, importReasonKey, importStatusKey } from './reportPresentation'
 
 const typeLabels = {
   page: 'WordPress pages',
@@ -25,11 +25,12 @@ const redirectLabels = new Map<string, MessageKey>([
 function ItemStatus({ item }: { item: WordPressImportItem }) {
   const { t } = useAdminLocale()
   const status = importStatusKey(item.state)
+  const reasonKey = item.reason && importReasonKey(item.reason)
   const redirect = item.redirect ? redirectLabels.get(item.redirect) : undefined
   return (
     <Stack spacing={0.25}>
       <Typography variant="body2">{status ? t(status) : item.state}</Typography>
-      {item.reason && <Typography variant="caption" color="text.secondary">{item.reason}</Typography>}
+      {item.reason && <Typography variant="caption" color="text.secondary">{reasonKey ? t(reasonKey) : item.reason}</Typography>}
       {item.images && item.images.missingInline > 0 && (
         <Typography variant="caption" color="warning.dark">{t('Missing inline images: {{count}}', { count: item.images.missingInline })}</Typography>
       )}

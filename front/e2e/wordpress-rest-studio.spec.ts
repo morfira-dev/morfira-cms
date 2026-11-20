@@ -11,9 +11,10 @@ const runId = '4131137b-3f18-4bb0-a2bd-1d08b26cbaa9'
 const draftId = '2d1661fc-54a6-4a66-a123-3c8f006ee3db'
 const assetId = '099027af-2b3e-4fd2-88c1-25154789a0b3'
 const cdnHost = 'cdn.example.test'
-const plannedItems: Report['items'] = [
+const previewItems: Report['items'] = [
   { id: '141', type: 'page', title: 'REST welcome', status: 'publish', state: 'planned', sourcePath: '/welcome', targetPath: '/rest-welcome' },
   { id: '142', type: 'post', title: 'REST bulletin', status: 'publish', state: 'planned', sourcePath: '/news', targetPath: '/content/wordpress-posts/rest-news' },
+  { id: '145', type: 'page', title: 'REST duplicate', status: 'publish', state: 'invalid', reason: 'Draft slug already exists.', sourcePath: '/duplicate', targetPath: '/duplicate' },
 ]
 
 test('previews, selects and reopens a public WordPress REST import', async ({ page }) => {
@@ -32,8 +33,8 @@ test('previews, selects and reopens a public WordPress REST import', async ({ pa
       const body: ImportRequest = request.postDataJSON()
       calls.push(body)
       const preview: Report = {
-        source: body.source, input: 'rest', mode: 'dry-run', counts: { planned: 2 }, skippedTypes: {},
-        items: plannedItems, media: [{
+        source: body.source, input: 'rest', mode: 'dry-run', counts: { planned: 2, invalid: 1 }, skippedTypes: {},
+        items: previewItems, media: [{
           id: '143',
           state: body.downloadMedia ? (body.allowedMediaHosts?.includes(cdnHost) ? 'planned' : 'invalid') : 'media_directory_required',
           reason: body.downloadMedia && !body.allowedMediaHosts?.includes(cdnHost) ? 'The WordPress attachment host is not allowed.' : undefined,
@@ -44,7 +45,7 @@ test('previews, selects and reopens a public WordPress REST import', async ({ pa
       else {
         savedReport = {
           ...preview, mode: 'apply', scope: 'selection', counts: { imported: 1 },
-          items: [{ ...plannedItems[0], state: 'imported', draft: { kind: 'page', id: draftId } }],
+          items: [{ ...previewItems[0], state: 'imported', draft: { kind: 'page', id: draftId } }],
           media: [{ id: '143', state: 'imported', assetId }],
         }
         await route.fulfill({ json: savedReport })
@@ -78,6 +79,8 @@ test('previews, selects and reopens a public WordPress REST import', async ({ pa
   await expect(downloadImages).toHaveAccessibleDescription(/до восьми новых изображений/)
   await previewButton.click()
   await expect(report.getByText('REST welcome')).toBeVisible()
+  await expect(report.getByRole('row', { name: /REST duplicate/ }))
+    .toContainText('Черновик с таким URL-адресом уже существует.')
   await expect(media.getByText('Нужны файлы вложений')).toBeVisible()
   const missingFilesHint = page.getByText('Чтобы перенести недостающие файлы вложений (1), включите «Скачать общедоступные изображения» и повторите предпросмотр.', { exact: true })
   await expect(missingFilesHint).toBeVisible()

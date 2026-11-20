@@ -27,7 +27,11 @@ export function importStatusKey(state: string): MessageKey | undefined {
   return statusKeys.get(state)
 }
 
-const attachmentReasonKeys = [
+const reasonKeys = [
+  'Source status or password protection is outside the import policy.',
+  'Draft slug already exists.',
+  'Existing wordpress-posts schema cannot accept the import body.',
+  'Page slug is reserved.',
   'The WordPress attachment host is not allowed.',
   'WordPress attachments must use HTTPS on the default port.',
   'The WordPress attachment has an invalid file path.',
@@ -37,6 +41,6 @@ const attachmentReasonKeys = [
   'No reusable media asset mapping is available.',
 ] as const satisfies readonly MessageKey[]
 
-export function attachmentReasonKey(reason: string): MessageKey | undefined {
-  return attachmentReasonKeys.find((key) => key === reason)
+export function importReasonKey(reason: string): MessageKey | undefined {
+  return reasonKeys.find((key) => key === reason)
 }
