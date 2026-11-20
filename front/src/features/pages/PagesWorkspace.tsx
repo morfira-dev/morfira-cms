@@ -90,6 +90,10 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
   const [draggedBlockId, setDraggedBlockId] = useState<string | null>(null)
   const [builderViewport, setBuilderViewport] = useState<'desktop' | 'tablet' | 'mobile'>('desktop')
 
+  function mediaLabel(asset: MediaAsset): string {
+    return asset.isPrivate ? t('{{name}} (private)', { name: asset.originalName }) : asset.originalName
+  }
+
   useEffect(() => {
     const controller = new AbortController()
 
@@ -276,7 +280,7 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
   function addBlock(type: 'hero' | 'richText' | 'image') {
     if (!editing) return
 
-    const firstAsset = mediaAssets[0]
+    const firstAsset = mediaAssets.find((asset) => !asset.isPrivate) ?? mediaAssets[0]
     if (type === 'image' && !firstAsset) {
       setError(t('Upload an image to the media library before adding an Image block.'))
       return
@@ -659,6 +663,9 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
                     select
                     label={t('Social sharing image')}
                     value={editing.seo.openGraphImageAssetId ?? ''}
+                    helperText={mediaAssets.some((asset) => asset.id === editing.seo.openGraphImageAssetId && asset.isPrivate)
+                      ? t('Replace or remove private images before publishing.')
+                      : undefined}
                     onChange={(event) => {
                       setEditing({
                         ...editing,
@@ -670,7 +677,7 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
                   >
                     <MenuItem value="">{t('No image')}</MenuItem>
                     {mediaAssets.map((asset) => (
-                      <MenuItem key={asset.id} value={asset.id}>{asset.originalName}</MenuItem>
+                      <MenuItem key={asset.id} value={asset.id}>{mediaLabel(asset)}</MenuItem>
                     ))}
                   </TextField>
                 </Stack>
@@ -839,12 +846,15 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
                             select
                             label={t('Media asset')}
                             value={block.data.assetId}
+                            helperText={mediaAssets.some((asset) => asset.id === block.data.assetId && asset.isPrivate)
+                              ? t('Replace or remove private images before publishing.')
+                              : undefined}
                             onChange={(event) => updateBlock(block.id, 'assetId', event.target.value)}
                             required
                           >
                             {mediaAssets.map((asset) => (
                               <MenuItem key={asset.id} value={asset.id}>
-                                {asset.originalName} ({asset.width} × {asset.height})
+                                {mediaLabel(asset)} ({asset.width} × {asset.height})
                               </MenuItem>
                             ))}
                           </TextField>

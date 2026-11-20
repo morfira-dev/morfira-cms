@@ -278,7 +278,28 @@ export function EntriesWorkspace({ contentTypes, mediaAssets, taxonomies }: Entr
 function EntryField({ field, value, mediaAssets, contentTypes, onChange }: { field: ContentField; value: EntryValue; mediaAssets: MediaAsset[]; contentTypes: ContentType[]; onChange: (value: EntryValue) => void }) {
   const { t } = useAdminLocale()
   if (field.type === 'boolean') return <FormControlLabel control={<Switch checked={value === true} onChange={(event) => onChange(event.target.checked)} />} label={`${field.label}${field.required ? ' *' : ''}`} />
-  if (field.type === 'media') return <TextField select label={field.label} value={typeof value === 'string' ? value : ''} onChange={(event) => onChange(event.target.value || null)} required={field.required} helperText={t('Choose an image from the media library')}><MenuItem value="">{t('None')}</MenuItem>{mediaAssets.map((asset) => <MenuItem key={asset.id} value={asset.id}>{asset.originalName}</MenuItem>)}</TextField>
+  if (field.type === 'media') {
+    const assetId = typeof value === 'string' ? value : ''
+    const isPrivate = mediaAssets.some((asset) => asset.id === assetId && asset.isPrivate)
+
+    return (
+      <TextField
+        select
+        label={field.label}
+        value={assetId}
+        onChange={(event) => onChange(event.target.value || null)}
+        required={field.required}
+        helperText={isPrivate ? t('Replace or remove private images before publishing.') : t('Choose an image from the media library')}
+      >
+        <MenuItem value="">{t('None')}</MenuItem>
+        {mediaAssets.map((asset) => (
+          <MenuItem key={asset.id} value={asset.id}>
+            {asset.isPrivate ? t('{{name}} (private)', { name: asset.originalName }) : asset.originalName}
+          </MenuItem>
+        ))}
+      </TextField>
+    )
+  }
   if (field.type === 'number') return <TextField type="number" label={field.label} value={typeof value === 'number' ? value : ''} onChange={(event) => onChange(event.target.value === '' ? null : Number(event.target.value))} required={field.required} />
   if (field.type === 'richText') return <RichTextEditor value={typeof value === 'string' ? value : ''} onChange={(html) => onChange(html)} label={field.label} required={field.required} />
   if(field.type==='relation') return <RelationField field={field} value={value} contentTypes={contentTypes} onChange={onChange}/>

@@ -79,4 +79,118 @@ final class SegmentWordPressImagesTest extends TestCase
             'missingImages' => 0,
         ], $result);
     }
+
+    public function testNormalizesGutenbergTextWithoutInlineImages(): void
+    {
+        $segment = new SegmentWordPressImages(new SymfonyRichTextSanitizer());
+        $result = $segment(
+            '<h1 class="wp-block-heading">Imported heading</h1>'
+                .'<template><h1 class="wp-block-heading">Discarded heading</h1></template>'
+                .'<p class="wp-block-paragraph">Imported paragraph</p>',
+            static fn (string $source, ?string $wordpressId): never => throw new \LogicException('Text blocks do not resolve images.'),
+        );
+
+        self::assertSame([
+            'segments' => [['type' => 'richText', 'html' => '<h2>Imported heading</h2><p>Imported paragraph</p>']],
+            'missingImages' => 0,
+        ], $result);
+    }
+
+    public function testKeepsGalleryAndMediaWithTextInTheirSourceOrder(): void
+    {
+        $segment = new SegmentWordPressImages(new SymfonyRichTextSanitizer());
+        $result = $segment(
+            '<div class="wp-block-group"><p>Before</p>'
+                .'<figure class="wp-block-gallery"><figure class="wp-block-image"><img src="/gallery.png" alt="Gallery">'
+                .'<figcaption>Gallery caption</figcaption></figure></figure>'
+                .'<div class="wp-block-media-text"><figure class="wp-block-media-text__media"><img src="/media.png" alt="Media"></figure>'
+                .'<div class="wp-block-media-text__content"><p>Alongside media</p></div></div></div>',
+            static fn (string $source, ?string $wordpressId): array => ['assetId' => self::ASSET, 'alt' => 'Attachment'],
+            nativeCaptions: true,
+        );
+
+        self::assertSame([
+            'segments' => [
+                ['type' => 'richText', 'html' => '<p>Before</p>'],
+                ['type' => 'image', 'assetId' => self::ASSET, 'alt' => 'Gallery', 'caption' => 'Gallery caption'],
+                ['type' => 'image', 'assetId' => self::ASSET, 'alt' => 'Media'],
+                ['type' => 'richText', 'html' => '<p>Alongside media</p>'],
+            ],
+            'missingImages' => 0,
+        ], $result);
+    }
+
+    public function testResolvesClassicGalleryIdsWithoutImageMarkupAndLeavesCodeLiteral(): void
+    {
+        $segment = new SegmentWordPressImages(new SymfonyRichTextSanitizer());
+        $requested = [];
+        $result = $segment(
+            '<p>Before</p>[gallery ids="21,22"]<pre><code>[gallery ids="23"]</code></pre>',
+            static function (string $source, ?string $wordpressId) use (&$requested): ?array {
+                $requested[] = [$source, $wordpressId];
+
+                return $wordpressId === '21' ? ['assetId' => self::ASSET, 'alt' => 'Gallery attachment'] : null;
+            },
+        );
+
+        self::assertSame([['', '21'], ['', '22']], $requested);
+        self::assertSame(1, $result['missingImages']);
+        self::assertSame(['richText', 'image', 'richText'], array_column($result['segments'], 'type'));
+        self::assertSame('Gallery attachment', $result['segments'][1]['alt'] ?? null);
+        self::assertStringContainsString('[gallery ids="23"]', html_entity_decode($result['segments'][2]['html'] ?? '', ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+    }
+
+    public function testImportsPlainCaptionsForResolvedPageFigures(): void
+    {
+        $segment = new SegmentWordPressImages(new SymfonyRichTextSanitizer());
+        $result = $segment(
+            '<p>Before</p><figure class="wp-block-image"><img src="/image.png">'
+                .'<figcaption> &nbsp;Подпись &amp; &lt;literal&gt; </figcaption></figure>'
+                .'<figure><a href="https://example.com/image"><img src="/linked.png"></a>'
+                .'<figcaption>'.str_repeat('я', 500).'</figcaption></figure><p>After</p>',
+            static fn (string $source, ?string $wordpressId): array => ['assetId' => self::ASSET, 'alt' => 'Media alt'],
+            nativeCaptions: true,
+        );
+
+        self::assertSame(0, $result['missingImages']);
+        self::assertSame([
+            ['type' => 'richText', 'html' => '<p>Before</p>'],
+            ['type' => 'image', 'assetId' => self::ASSET, 'alt' => 'Media alt', 'caption' => 'Подпись & <literal>'],
+            ['type' => 'image', 'assetId' => self::ASSET, 'alt' => 'Media alt', 'caption' => str_repeat('я', 500)],
+            ['type' => 'richText', 'html' => '<p>After</p>'],
+        ], $result['segments']);
+    }
+
+    public function testRetainsCaptionsInTextForPostsAndIneligiblePageFigures(): void
+    {
+        $segment = new SegmentWordPressImages(new SymfonyRichTextSanitizer());
+        $resolve = static fn (string $source, ?string $wordpressId): ?array => $source === '/image.png'
+            ? ['assetId' => self::ASSET, 'alt' => 'Media alt']
+            : null;
+        $simple = '<figure><img src="/image.png"><figcaption>Plain caption</figcaption></figure>';
+        $oversized = str_repeat('я', 501);
+
+        self::assertSame([
+            ['type' => 'image', 'assetId' => self::ASSET, 'alt' => 'Media alt'],
+            ['type' => 'richText', 'html' => '<p>Plain caption</p>'],
+        ], $segment($simple, $resolve)['segments']);
+
+        $result = $segment(
+            '<figure><img src="/missing.png"><figcaption>Unresolved &amp; visible</figcaption></figure>'
+                .'<figure><img src="/image.png"><figcaption>Styled <em>caption</em><script>hidden</script></figcaption></figure>'
+                .'<figure><img src="/image.png"><figcaption>'.$oversized.'</figcaption></figure>'
+                .'<figure><img src="/image.png"><img src="/image.png"><figcaption>Gallery caption</figcaption></figure>',
+            $resolve,
+            nativeCaptions: true,
+        );
+
+        self::assertSame(1, $result['missingImages']);
+        self::assertSame([], array_column($result['segments'], 'caption'));
+        $html = implode('', array_column($result['segments'], 'html'));
+        self::assertStringContainsString('<p>Unresolved &amp; visible</p>', $html);
+        self::assertStringContainsString('<p>Styled <em>caption</em></p>', $html);
+        self::assertStringContainsString($oversized, $html);
+        self::assertStringContainsString('<p>Gallery caption</p>', $html);
+        self::assertStringNotContainsString('hidden', $html);
+    }
 }

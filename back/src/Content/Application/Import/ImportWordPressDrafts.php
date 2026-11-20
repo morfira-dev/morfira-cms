@@ -35,6 +35,7 @@ use Cms\Taxonomy\Application\ImportWordPressTaxonomies;
  * @phpstan-type Term array{taxonomy:string,slug:string,name:string,parent:string}
  * @phpstan-type SourceItem array{id:string,type:string,status:string,title:string,slug:string,html:string,link:string,passwordProtected:bool,terms:list<TermReference>,thumbnailId:?string,authorLogin:?string,restrictedSource?:bool}
  * @phpstan-type ReportItem array{id:string,type:string,status:string,sourcePath:?string,targetPath:?string,state:string,reason?:string,images?:array{inline:int,missingInline:int,featured:string},author?:string,redirect?:string,restrictedSource?:bool}
+ * @phpstan-type DraftPlan array{title:string,slug:string,segments:list<Segment>,featured:?string,post:?array{fields:list<Field>,values:array<string,string>}}
  * @phpstan-type TaxonomyOutcomes array{terms:list<array{taxonomy:string,slug:string,state:string}>,assignments:list<array{entryId:string,taxonomy:string,slug:string,state:string}>}
  * @phpstan-type ImportReport array{items:list<ReportItem>,media:list<MediaOutcome>,taxonomy:TaxonomyOutcomes,authors:list<AuthorOutcome>}
  */
@@ -139,19 +140,40 @@ final readonly class ImportWordPressDrafts
         }
 
         $report = [];
-        foreach ($items as $item) {
-            $targetId = null;
+        $drafts = [];
+        $permalinks = [];
+        foreach ($items as $index => $item) {
+            $draft = null;
             $author = $item['type'] === 'post' && $item['authorLogin'] !== null ? ($authors[ImportWordPressAuthors::key($item['authorLogin'])] ?? null) : null;
-            $row = $this->processItem($item, $source, $locale, $apply, $occupied, $postSchema, $postFields, $compatibleSchema, $targetId, $images, $author, $includePrivate);
-            if (in_array($row['state'], ['planned', 'imported'], true)) {
-                $row['redirect'] = $this->redirect($item, $sourceUrl, $row['targetPath'], $targetId);
-            }
+            $row = $this->planItem($item, $source, $occupied, $postFields, $compatibleSchema, $draft, $images, $author, $includePrivate);
             $report[] = $row;
+            if ($draft !== null) {
+                $drafts[$index] = $draft;
+            }
+            if ($apply) {
+                $path = $draft !== null && $item['status'] === 'publish' && !$item['passwordProtected'] && !($item['restrictedSource'] ?? false)
+                    ? $row['targetPath']
+                    : null;
+                $permalinks[] = ['url' => $item['link'], 'path' => $path === '/home' ? '/' : $path];
+            }
+        }
+
+        $links = WordPressInternalLinks::index($sourceUrl, $permalinks);
+        foreach ($report as $index => $row) {
+            if (!isset($drafts[$index])) {
+                continue;
+            }
+            $item = $items[$index];
+            $targetId = null;
+            if ($apply) {
+                $this->ledger->claim($source, $item['id']);
+                $targetId = $this->createDraft($drafts[$index], $locale, $postSchema, $links);
+                $row['state'] = 'imported';
+            }
+            $row['redirect'] = $this->redirect($item, $sourceUrl, $row['targetPath'], $targetId);
+            $report[$index] = $row;
             if ($item['type'] === 'post' && $item['terms'] !== []) {
-                $assignmentKey = $apply ? $targetId : ($row['state'] === 'planned' ? 'wp-'.$item['id'] : null);
-                if ($assignmentKey !== null) {
-                    $assignments[$assignmentKey] = $item['terms'];
-                }
+                $assignments[$targetId ?? 'wp-'.$item['id']] = $item['terms'];
             }
         }
 
@@ -162,10 +184,11 @@ final readonly class ImportWordPressDrafts
      * @param SourceItem $item
      * @param array<string,bool> $occupied
      * @param list<Field> $postFields
+     * @param ?DraftPlan $draft
      * @param ?AuthorReference $author
      * @return ReportItem
      */
-    private function processItem(array $item, string $source, string $locale, bool $apply, array &$occupied, ?ContentTypeDefinition &$postSchema, array &$postFields, bool $compatibleSchema, ?string &$targetId, WordPressImageIndex $images, ?array $author, bool $includePrivate): array
+    private function planItem(array $item, string $source, array &$occupied, array &$postFields, bool $compatibleSchema, ?array &$draft, WordPressImageIndex $images, ?array $author, bool $includePrivate): array
     {
         $path = parse_url($item['link'], PHP_URL_PATH);
         $row = [
@@ -204,7 +227,7 @@ final readonly class ImportWordPressDrafts
 
         try {
             $title = (new PageTitle($item['title']))->value;
-            $segmented = ($this->segmentImages)($item['html'], $images->resolve(...));
+            $segmented = ($this->segmentImages)($item['html'], $images->resolve(...), nativeCaptions: $isPage);
             $segments = $segmented['segments'];
             $featured = $images->byId($item['thumbnailId'])['assetId'] ?? null;
             foreach ($segments as $segment) {
@@ -226,27 +249,39 @@ final readonly class ImportWordPressDrafts
             $row['author'] = $author !== null ? 'linked' : ($item['authorLogin'] === null ? 'none' : 'missing');
         }
         $occupied[$row['targetPath']] = true;
-        if (!$apply) {
-            if ($post !== null) {
-                $postFields = $post['fields'];
-            }
-            return $row + ['state' => 'planned'];
+        if ($post !== null) {
+            $postFields = $post['fields'];
         }
+        $draft = ['title' => $title, 'slug' => $slug, 'segments' => $segments, 'featured' => $featured, 'post' => $post];
 
-        $this->ledger->claim($source, $item['id']);
+        return $row + ['state' => 'planned'];
+    }
+
+    /**
+     * @param DraftPlan $draft
+     * @param array<string,string> $links
+     */
+    private function createDraft(array $draft, string $locale, ?ContentTypeDefinition &$postSchema, array $links): string
+    {
+        ['title' => $title, 'slug' => $slug, 'segments' => $segments, 'featured' => $featured, 'post' => $post] = $draft;
         if ($post === null) {
             $page = ($this->createPage)($title, $slug, $locale);
-            $targetId = $page->id;
             if ($segments !== [] || $featured !== null) {
-                ($this->updatePage)($page->id, $title, $slug, $this->pageBlocks($segments), new PageSeo('', '', false, $featured), $page->version);
+                ($this->updatePage)($page->id, $title, $slug, $this->pageBlocks($segments, $links), new PageSeo('', '', false, $featured), $page->version);
             }
-        } else {
-            $postSchema = $this->savePostSchema($postSchema, $post['fields']);
-            $postFields = $postSchema->fields;
-            $targetId = ($this->createEntry)($postSchema->id, $title, $slug, $post['values'])->id;
+
+            return $page->id;
         }
 
-        return $row + ['state' => 'imported'];
+        $postSchema = $this->savePostSchema($postSchema, $post['fields']);
+        $values = $post['values'];
+        foreach ($postSchema->fields as $field) {
+            if ($field['type'] === 'richText' && isset($values[$field['key']])) {
+                $values[$field['key']] = WordPressInternalLinks::rewrite($values[$field['key']], $links);
+            }
+        }
+
+        return ($this->createEntry)($postSchema->id, $title, $slug, $values)->id;
     }
 
     /** @param SourceItem $item */
@@ -284,16 +319,17 @@ final readonly class ImportWordPressDrafts
 
     /**
      * @param list<Segment> $segments
+     * @param array<string,string> $links
      * @return list<array<string,mixed>>
      */
-    private function pageBlocks(array $segments): array
+    private function pageBlocks(array $segments, array $links): array
     {
         return array_map(static fn (array $segment): array => [
             'id' => PageId::new()->value,
             'type' => $segment['type'],
             'data' => $segment['type'] === 'image'
-                ? ['assetId' => $segment['assetId'], 'alt' => $segment['alt']]
-                : ['content' => $segment['html']],
+                ? ['assetId' => $segment['assetId'], 'alt' => $segment['alt']] + (isset($segment['caption']) ? ['caption' => $segment['caption']] : [])
+                : ['content' => WordPressInternalLinks::rewrite($segment['html'], $links)],
         ], $segments);
     }
 

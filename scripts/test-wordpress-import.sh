@@ -90,12 +90,13 @@ test "$(db_query "SELECT COUNT(*) FROM content_pages AS page
     JOIN media_assets AS featured ON featured.id = JSON_UNQUOTE(JSON_EXTRACT(page.seo, '\$.openGraphImageAssetId'))
     WHERE page.slug = 'wp-import-about' AND inline_asset.original_name = 'sample.png' AND featured.original_name = 'sample-two.png'
     AND JSON_UNQUOTE(JSON_EXTRACT(page.blocks, '\$[1].data.alt')) = 'Page image'
-    AND JSON_UNQUOTE(JSON_EXTRACT(page.blocks, '\$[2].data.content')) LIKE '%Page caption%Page tail%'")" = 1
+    AND JSON_UNQUOTE(JSON_EXTRACT(page.blocks, '\$[1].data.caption')) = 'Page caption'
+    AND JSON_UNQUOTE(JSON_EXTRACT(page.blocks, '\$[2].data.content')) = '<p>Page tail</p>'")" = 1
 test "$(db_query "SELECT COUNT(*) FROM content_entries AS entry
     JOIN media_assets AS inline_asset ON inline_asset.id = JSON_UNQUOTE(JSON_EXTRACT(entry.values_json, '\$.wordpressInlineImage1'))
     JOIN media_assets AS featured ON featured.id = JSON_UNQUOTE(JSON_EXTRACT(entry.values_json, '\$.wordpressFeaturedImage'))
     WHERE entry.slug = 'wp-import-news' AND inline_asset.original_name = 'sample-two.png' AND featured.original_name = 'sample.png'
-    AND JSON_UNQUOTE(JSON_EXTRACT(entry.values_json, '\$.wordpressBodyPart2')) LIKE '%Post tail%'")" = 1
+    AND JSON_UNQUOTE(JSON_EXTRACT(entry.values_json, '\$.wordpressBodyPart2')) LIKE '%Post <em>caption</em>%Post tail%'")" = 1
 test "$(db_query "SELECT COUNT(*) FROM schema_content_types WHERE api_name = 'wordpress-posts'
     AND JSON_UNQUOTE(JSON_EXTRACT(fields, '\$[0].key')) = 'wordpressFeaturedImage'
     AND JSON_UNQUOTE(JSON_EXTRACT(fields, '\$[1].key')) = 'body'
@@ -115,7 +116,7 @@ printf '%s\n' "$report" | jq -e '
 test "$(db_query "SELECT COUNT(*) FROM content_wordpress_import_items WHERE source_key = 'wordpress-e2e-collision'")" = 0
 
 compose exec -T app php -r 'if (file_put_contents($argv[1], stream_get_contents(STDIN)) === false) exit(1);' "$container_fixture" <<XML
-$(sed -e 's/wp-import-about/wp-import-edited-about/g' -e 's/wp-import-news/wp-import-edited-news/g' -e 's/Imported About/Edited About/g' -e 's/Imported News/Edited News/g' "$fixture")
+$(sed -e 's/wp-import-about/wp-import-edited-about/g' -e 's/wp-import-news/wp-import-edited-news/g' -e 's/Imported About/Edited About/g' -e 's/Imported News/Edited News/g' -e 's/Migration handbook/Edited migration handbook/g' "$fixture")
 XML
 report=$(import wordpress-e2e --apply)
 printf '%s\n' "$report" | jq -e '
@@ -196,8 +197,33 @@ redirect() {
 }
 test "$(redirect '/?page_id=451')" = "301 $CMS_PUBLIC_SITE_URL/wp-import-about"
 test "$(redirect /2026/11/wp-import-news/)" = "301 $CMS_PUBLIC_SITE_URL/content/wordpress-posts/wp-import-news"
-curl --fail --silent --show-error "$CMS_PUBLIC_SITE_URL/api/v1/content/entries/wordpress-posts/wp-import-news" | jq -e \
-    '.values.wordpressAuthorName == "Migration Writer" and (.values.wordpressAuthor | type) == "string"' >/dev/null
+page_html=$(curl --fail --silent --show-error "$CMS_PUBLIC_SITE_URL/wp-import-about")
+printf '%s\n' "$page_html" | grep -F '<figcaption>Page caption</figcaption>' >/dev/null
+printf '%s\n' "$page_html" | grep -F 'href="/content/wordpress-posts/wp-import-news#section"' >/dev/null
+printf '%s\n' "$page_html" | grep -F '<h2>Migration handbook</h2>' >/dev/null
+printf '%s\n' "$page_html" | grep -F '<li>Standard | Two seats</li>' >/dev/null
+printf '%s\n' "$page_html" | grep -F '>Project updates</a>' >/dev/null
+curl --fail --silent --show-error "$CMS_PUBLIC_SITE_URL/api/v1/content/pages/wp-import-about" | jq -e '
+    ([.blocks[].type] == ["richText", "image", "richText"]) and
+    [.blocks[] | select(.type == "image") | .data.caption] == ["Page caption"] and
+    (.blocks[0].data.content | contains("href=\"/content/wordpress-posts/wp-import-news#section\"") and
+        contains("href=\"https://wordpress.example/old/unimported/\"") and
+        contains("href=\"https://elsewhere.example/2026/11/wp-import-news/#section\"") and
+        contains("<h2>Migration handbook</h2>") and
+        contains("href=\"/content/wordpress-posts/wp-import-news#action\" rel=\"noopener noreferrer\">Read the imported news</a></p>") and
+        contains("href=\"/content/wordpress-posts/wp-import-news#navigation\" rel=\"noopener noreferrer\">News navigation</a>") and
+        contains("href=\"https://social.example/morfira\" rel=\"noopener noreferrer\">Project updates</a>") and
+        (contains("Toggle navigation") | not) and
+        contains("<li>Plan | Capacity</li><li>Standard | Two seats</li>"))
+' >/dev/null
+curl --fail --silent --show-error "$CMS_PUBLIC_SITE_URL/api/v1/content/entries/wordpress-posts/wp-import-news" | jq -e '
+    .values.wordpressAuthorName == "Migration Writer" and (.values.wordpressAuthor | type) == "string" and
+    (.values.body | contains("href=\"/wp-import-about#details\"") and
+        contains("<h2><a href=\"/wp-import-about\" rel=\"noopener noreferrer\">Handbook reference</a></h2>") and
+        contains("<code>First code line<br />Second code line</code>") and
+        contains("<blockquote><p>Keep the reference with the quote.</p>") and
+        contains("<em>Migration Writer</em>") and contains("First verse line<br />Second verse line"))
+' >/dev/null
 request -X DELETE -H "X-CSRF-Token: $csrf" "$CMS_PUBLIC_SITE_URL/api/v1/admin/pages/$page_id/publish" >/dev/null
 request -X DELETE -H "X-CSRF-Token: $csrf" "$CMS_PUBLIC_SITE_URL/api/v1/admin/entries/$post_id/publish" >/dev/null
 test "$(redirect '/?page_id=451')" = '404 '
@@ -209,7 +235,7 @@ compose exec -T app php -r 'if (file_put_contents($argv[1], stream_get_contents(
     <title>Reused asset</title><wp:post_id>456</wp:post_id><wp:post_name>wp-import-reused-asset</wp:post_name>
     <wp:post_type>post</wp:post_type><wp:status>draft</wp:status>
     <wp:postmeta><wp:meta_key>_thumbnail_id</wp:meta_key><wp:meta_value>453</wp:meta_value></wp:postmeta>
-    <content:encoded><![CDATA[<p>Intro</p><img src="https://wordpress.example/wp-content/uploads/2026/11/sample-two.png" class="wp-image-454"><p>Tail</p>]]></content:encoded>
+    <content:encoded><![CDATA[<p>Intro</p>[gallery ids="454"]<p>Tail</p>]]></content:encoded>
   </item></channel>
 </rss>
 XML
@@ -219,6 +245,9 @@ printf '%s\n' "$report" | jq -e '
     .items[0].images == {"inline": 1, "missingInline": 0, "featured": "linked"}
 ' >/dev/null
 test "$(db_query "$media_query")" = 2
+test "$(db_query "SELECT COUNT(*) FROM content_entries AS entry
+    JOIN media_assets AS asset ON asset.id = JSON_UNQUOTE(JSON_EXTRACT(entry.values_json, '\$.wordpressInlineImage1'))
+    WHERE entry.slug = 'wp-import-reused-asset' AND asset.original_name = 'sample-two.png'")" = 1
 test "$(compose exec -T app sh -c 'find public/media -type f | wc -l')" = "$media_after"
 
 rest_import() {
@@ -227,6 +256,7 @@ rest_import() {
         --api-url=https://wordpress.example/wp-json/wp/v2 --source=wordpress-rest-e2e "$@"
 }
 rest_post_query="SELECT COUNT(*) FROM content_entries WHERE slug = 'imported-rest-post'"
+rest_page_query="SELECT COUNT(*) FROM content_pages WHERE slug = 'imported-rest-page'"
 rest_ledger_query="SELECT COUNT(*) FROM content_wordpress_import_items WHERE source_key = 'wordpress-rest-e2e'"
 rest_author_query="SELECT COUNT(*) FROM content_wordpress_import_authors WHERE source_key = 'wordpress-rest-e2e'"
 rest_media_query="SELECT COUNT(*) FROM media_assets WHERE original_name = 'rest-fixture.png'"
@@ -249,6 +279,7 @@ fi
 printf '%s\n' "$failure" | grep -F 'Fixture media download failed. Apply was rolled back.' >/dev/null
 test "$(db_query "$rest_ledger_query")" = 0
 test "$(db_query "$rest_post_query")" = 0
+test "$(db_query "$rest_page_query")" = 0
 test "$(db_query "$rest_media_query")" = 0
 test "$(compose exec -T app sh -c 'find public/media -type f | wc -l')" = "$media_after"
 
@@ -267,9 +298,11 @@ printf '%s\n' "$report" | jq -e '
     .input == "rest" and .mode == "dry-run" and .items[0].state == "planned" and
     .items[0].author == "linked" and .items[0].redirect == "planned" and
     .items[0].images == {"inline": 1, "missingInline": 0, "featured": "linked"} and
+    any(.items[]; .type == "page" and .state == "planned" and .images == {"inline": 1, "missingInline": 0, "featured": "none"}) and
     (.media | length) == 1 and .media[0].state == "planned"
 ' >/dev/null
 test "$(db_query "$rest_post_query")" = 0
+test "$(db_query "$rest_page_query")" = 0
 test "$(db_query "$rest_ledger_query")" = 0
 test "$(db_query "$rest_author_query")" = 0
 test "$(db_query "$rest_media_query")" = 0
@@ -283,7 +316,8 @@ printf '%s\n' "$report" | jq -e '
 ' >/dev/null
 rest_asset_id=$(printf '%s\n' "$report" | jq -er .media[0].assetId)
 test "$(db_query "$rest_post_query")" = 1
-test "$(db_query "$rest_ledger_query")" = 2
+test "$(db_query "$rest_page_query")" = 1
+test "$(db_query "$rest_ledger_query")" = 3
 test "$(db_query "$rest_author_query")" = 1
 test "$(db_query "$rest_media_query")" = 1
 test "$(db_query "SELECT COUNT(*) FROM media_assets WHERE id = '$rest_asset_id' AND mime_type = 'image/webp' AND default_alt = 'REST fixture image'")" = 1
@@ -296,15 +330,47 @@ test "$rest_media_after" -gt "$media_after"
 report=$(CMS_REST_FIXTURE_EDITED=1 CMS_REST_FIXTURE_MEDIA=reject-download rest_import_with_cdn --apply)
 printf '%s\n' "$report" | jq -e --arg asset "$rest_asset_id" '
     .items[0].state == "already_imported" and .authors[0].state == "already_imported" and
+    any(.items[]; .type == "page" and .state == "already_imported") and
     .media[0].state == "already_imported" and .media[0].assetId == $asset
 ' >/dev/null
 test "$(db_query "$rest_post_query")" = 1
 test "$(db_query "SELECT title FROM content_entries WHERE slug = 'imported-rest-post'")" = 'Imported REST post'
-test "$(db_query "$rest_ledger_query")" = 2
+test "$(db_query "$rest_ledger_query")" = 3
 test "$(db_query "$rest_author_query")" = 1
 test "$(db_query "$rest_media_query")" = 1
 test "$(compose exec -T app sh -c 'find public/media -type f | wc -l')" = "$rest_media_after"
 test "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' "$CMS_PUBLIC_SITE_URL/content/wordpress-posts/imported-rest-post")" = 404
+test "$(db_query "SELECT COUNT(*) FROM content_pages WHERE slug = 'imported-rest-page' AND status = 'draft'
+    AND JSON_UNQUOTE(JSON_EXTRACT(blocks, '\$[1].data.assetId')) = '$rest_asset_id'
+    AND JSON_UNQUOTE(JSON_EXTRACT(blocks, '\$[1].data.caption')) = 'REST & caption'
+    AND JSON_UNQUOTE(JSON_EXTRACT(blocks, '\$[2].data.content')) = '<p>REST page tail</p>'")" = 1
+rest_page_id=$(db_query "SELECT id FROM content_pages WHERE slug = 'imported-rest-page'")
+request -H "X-CSRF-Token: $csrf" -H 'Content-Type: application/json' --data '{"version":2}' \
+    "$CMS_PUBLIC_SITE_URL/api/v1/admin/pages/$rest_page_id/publish" >/dev/null
+rest_page_html=$(curl --fail --silent --show-error "$CMS_PUBLIC_SITE_URL/imported-rest-page")
+printf '%s\n' "$rest_page_html" | grep -F '<figcaption>REST &amp; caption</figcaption>' >/dev/null
+printf '%s\n' "$rest_page_html" | grep -F 'href="/content/wordpress-posts/imported-rest-post#section"' >/dev/null
+printf '%s\n' "$rest_page_html" | grep -F '<p><strong>More migration details</strong></p>' >/dev/null
+printf '%s\n' "$rest_page_html" | grep -F 'href="https://media.wordpress.example/migration-clip.mp3"' >/dev/null
+printf '%s\n' "$rest_page_html" | grep -F '>January 2026</a>' >/dev/null
+if printf '%s\n' "$rest_page_html" | grep -Eq '<(audio|video|iframe|object)[[:space:]>]|untrusted-player\.example'; then
+    printf '%s\n' 'Gutenberg media import retained an active player or an iframe source.' >&2
+    exit 1
+fi
+curl --fail --silent --show-error "$CMS_PUBLIC_SITE_URL/api/v1/content/pages/imported-rest-page" | jq -e '
+    ([.blocks[].type] == ["richText", "image", "richText"]) and
+    [.blocks[] | select(.type == "image") | .data.caption] == ["REST & caption"] and
+    (.blocks[0].data.content | contains("href=\"/content/wordpress-posts/imported-rest-post#section\"") and
+        contains("<p><strong>More migration details</strong></p><p>The details are still readable.</p>") and
+        contains("href=\"https://media.wordpress.example/migration-clip.mp3\"") and contains("<p>Migration recording</p>") and
+        contains("href=\"https://media.wordpress.example/migration-demo.mp4\"") and
+        contains("href=\"https://media.wordpress.example/migration-guide.pdf\"") and contains("Read the migration guide") and
+        contains("href=\"https://media.wordpress.example/migration-show\"") and
+        contains("href=\"https://wordpress.example/2026/01/\" rel=\"noopener noreferrer\">January 2026</a>") and
+        contains("href=\"/category/migration/\" rel=\"noopener noreferrer\">Migration category</a>") and
+        (contains("Legacy numeric option") | not) and
+        (test("<(audio|video|iframe|object)[[:space:]>]|untrusted-player\\.example") | not))
+' >/dev/null
 
 printf '%s\n' 'Verifying restricted REST credentials and refusal handling.'
 if failure=$(rest_import --include-private 2>&1); then
@@ -372,6 +438,8 @@ test "$(db_query "$private_post")" = 1
 test "$(db_query "$private_page")" = 1
 test "$(db_query "$private_media")" = 1
 test "$(db_query "SELECT COUNT(*) FROM content_entries WHERE slug = 'restricted-rest-post' AND values_json LIKE '%Restricted fixture post body%'")" = 1
+test "$(db_query "SELECT COUNT(*) FROM content_entries WHERE slug = 'restricted-rest-post'
+    AND JSON_UNQUOTE(JSON_EXTRACT(values_json, '\$.body')) LIKE '%https://wordpress.example/old/protected-page/%'")" = 1
 test "$(db_query "SELECT COUNT(*) FROM content_pages WHERE slug = 'restricted-rest-page' AND status = 'draft' AND blocks LIKE '%Restricted fixture page body%'")" = 1
 test "$(db_query "SELECT COUNT(*) FROM content_entries WHERE slug = 'restricted-rest-post'
     AND JSON_UNQUOTE(JSON_EXTRACT(values_json, '\$.wordpressInlineImage1')) = '$private_asset'")" = 1

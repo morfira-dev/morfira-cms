@@ -5,6 +5,7 @@ import {
   Button,
   Card,
   CardContent,
+  Chip,
   CircularProgress,
   MenuItem,
   Stack,
@@ -33,6 +34,7 @@ export function MediaLibrary({ assets, loading, onChange }: MediaLibraryProps) {
   const [inputKey, setInputKey] = useState(0)
   const [query, setQuery] = useState('')
   const [collectionFilter, setCollectionFilter] = useState('')
+  const [visibilityFilter, setVisibilityFilter] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [metadataAlt, setMetadataAlt] = useState('')
   const [collection, setCollection] = useState('')
@@ -123,6 +125,7 @@ export function MediaLibrary({ assets, loading, onChange }: MediaLibraryProps) {
   const collections = [...new Set(assets.map((asset) => asset.collection).filter((value): value is string => value !== null))].sort()
   const visibleAssets = assets.filter((asset) =>
     (collectionFilter === '' || asset.collection === collectionFilter)
+    && (visibilityFilter === '' || visibilityFilter === (asset.isPrivate ? 'private' : 'public'))
     && (normalizedQuery === '' || [asset.originalName, asset.defaultAlt, asset.collection ?? '', ...asset.tags]
       .some((value) => value.toLowerCase().includes(normalizedQuery))),
   )
@@ -193,6 +196,17 @@ export function MediaLibrary({ assets, loading, onChange }: MediaLibraryProps) {
           <MenuItem value="">{t('All collections')}</MenuItem>
           {collections.map((value) => <MenuItem key={value} value={value}>{value}</MenuItem>)}
         </TextField>
+        <TextField
+          select
+          label={t('Visibility')}
+          value={visibilityFilter}
+          onChange={(event) => setVisibilityFilter(event.target.value)}
+          sx={{ minWidth: 150 }}
+        >
+          <MenuItem value="">{t('All images')}</MenuItem>
+          <MenuItem value="public">{t('Public')}</MenuItem>
+          <MenuItem value="private">{t('Private')}</MenuItem>
+        </TextField>
       </Stack>
 
       {loading ? (
@@ -221,6 +235,7 @@ export function MediaLibrary({ assets, loading, onChange }: MediaLibraryProps) {
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                     {asset.width} × {asset.height} · {formatBytes(asset.size)}
                   </Typography>
+                  {asset.isPrivate && <Chip label={t('Private image')} size="small" variant="outlined" sx={{ mt: 1 }} />}
                   {editingId === asset.id ? (
                     <Stack spacing={1.5} sx={{ mt: 1.5 }}>
                       <TextField label={t('Alternative text')} value={metadataAlt} onChange={(event) => setMetadataAlt(event.target.value)} required />

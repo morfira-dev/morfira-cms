@@ -62,7 +62,29 @@ $container->set(WordPressRestTransport::class, new class implements WordPressRes
             'media' => $this->attachments(),
             'users' => [['id' => 92002, 'slug' => 'fixture-author', 'name' => 'REST Fixture Author']],
             'categories' => [['id' => 92003, 'slug' => 'rest-fixture-category', 'name' => 'REST Fixture Category', 'parent' => 0]],
-            'pages', 'tags' => [],
+            'pages' => [[
+                'id' => 92006,
+                'status' => 'publish',
+                'slug' => 'imported-rest-page',
+                'title' => ['rendered' => 'Imported REST page'],
+                'content' => [
+                    'rendered' => '<p>REST page body <a href="https://wordpress.example/blog/imported-rest-post/#section">REST post</a></p>'
+                        .'<details class="wp-block-details"><summary>More migration details</summary><p>The details are still readable.</p></details>'
+                        .'<div class="wp-block-archives-dropdown"><label>Archive</label><select><option value="">Select month</option><option value="https://wordpress.example/2026/01/">January 2026</option><option value="42">Legacy numeric option</option></select></div>'
+                        .'<div class="wp-block-categories-dropdown"><select><option value="/category/migration/">Migration category</option></select></div>'
+                        .'<figure class="wp-block-audio"><audio src="https://media.wordpress.example/migration-clip.mp3" controls></audio><figcaption>Migration recording</figcaption></figure>'
+                        .'<figure class="wp-block-video"><video controls><source src="https://media.wordpress.example/migration-demo.mp4" type="video/mp4"></video></figure>'
+                        .'<div class="wp-block-file"><object data="https://media.wordpress.example/migration-guide.pdf"></object><a href="https://media.wordpress.example/migration-guide.pdf">Read the migration guide</a></div>'
+                        .'<figure class="wp-block-embed"><div class="wp-block-embed__wrapper">https://media.wordpress.example/migration-show</div></figure>'
+                        .'<figure class="wp-block-embed"><div class="wp-block-embed__wrapper"><iframe src="https://untrusted-player.example/iframe-only"></iframe></div></figure>'
+                        .'<figure class="wp-block-gallery"><figure class="wp-block-image"><a href="/full-image"><img data-id="92004" src="/legacy-rendered-size.png"></a><figcaption>'
+                        .(getenv('CMS_REST_FIXTURE_EDITED') === '1' ? 'Edited REST caption' : 'REST &amp; caption')
+                        .'</figcaption></figure></figure><p>REST page tail</p>',
+                    'protected' => false,
+                ],
+                'link' => 'https://wordpress.example/old/imported-rest-page/',
+            ]],
+            'tags' => [],
             default => throw new RuntimeException('Unknown fixture collection.'),
         };
 
@@ -94,7 +116,7 @@ $container->set(WordPressRestTransport::class, new class implements WordPressRes
             'posts' => [[
                 'id' => 93101, 'status' => 'private', 'slug' => 'restricted-rest-post',
                 'title' => ['raw' => $edited ? 'Edited private draft' : 'Imported private post'],
-                'content' => ['raw' => '<p>Restricted fixture post body</p><img class="wp-image-93103" src="'.restFixtureAttachmentUrl('restricted-image.png').'">', 'protected' => false],
+                'content' => ['raw' => '<p>Restricted fixture post body <a href="https://wordpress.example/old/protected-page/">Protected page</a></p><img class="wp-image-93103" src="'.restFixtureAttachmentUrl('restricted-image.png').'">', 'protected' => false],
                 'link' => 'https://wordpress.example/old/private-post/', 'featured_media' => 93103,
             ]],
             'pages' => [[

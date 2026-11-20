@@ -26,7 +26,16 @@
     <item>
       <title>Imported About</title>
       <link>https://wordpress.example/?page_id=451</link>
-      <content:encoded><![CDATA[<p>Page body</p><figure><img src="https://wordpress.example/wp-content/uploads/2026/11/sample-64x48.png?version=1" alt="Page image"><figcaption>Page caption</figcaption></figure><img src="https://elsewhere.example/missing.png"><p>Page tail</p><script>untrusted()</script>]]></content:encoded>
+      <content:encoded><![CDATA[
+<div class="wp-block-group"><div class="wp-block-columns"><div class="wp-block-column">
+<!-- wp:heading {"level":1} --><h1 class="wp-block-heading">Migration handbook</h1><!-- /wp:heading -->
+<p>Page body <a href="https://wordpress.example/2026/11/wp-import-news/#section">Imported news</a> <a href="https://wordpress.example/old/unimported/">Unimported page</a> <a href="https://elsewhere.example/2026/11/wp-import-news/#section">External news</a></p>
+<div class="wp-block-buttons"><div class="wp-block-button"><a class="wp-block-button__link" href="https://wordpress.example/2026/11/wp-import-news/#action">Read the imported news</a></div></div>
+<nav class="wp-block-navigation"><ul class="wp-block-navigation__container"><li><a href="https://wordpress.example/2026/11/wp-import-news/#navigation" aria-label="News navigation"><svg><path></path></svg></a><button class="wp-block-navigation__submenu-icon">Toggle navigation</button></li></ul></nav>
+<ul class="wp-block-social-links"><li class="wp-block-social-link"><a href="https://social.example/morfira" aria-label="Project updates"><svg><path></path></svg></a></li></ul>
+<figure class="wp-block-table"><table><thead><tr><th>Plan</th><th>Capacity</th></tr></thead><tbody><tr><td>Standard</td><td>Two seats</td></tr></tbody></table></figure>
+<figure class="wp-block-gallery has-nested-images"><figure class="wp-block-image"><img src="https://wordpress.example/wp-content/uploads/2026/11/sample-64x48.png?version=1" alt="Page image"><figcaption>Page caption</figcaption></figure></figure>
+</div></div></div><img src="https://elsewhere.example/missing.png"><p>Page tail</p><script>untrusted()</script>]]></content:encoded>
       <wp:post_id>451</wp:post_id>
       <wp:post_name>wp-import-about</wp:post_name>
       <wp:status>publish</wp:status>
@@ -37,7 +46,13 @@
       <title>Imported News</title>
       <link>https://wordpress.example/2026/11/wp-import-news/</link>
       <dc:creator>migration-writer</dc:creator>
-      <content:encoded><![CDATA[<p>Post body</p><img src="https://wordpress.example/wp-content/uploads/2026/11/sample-two.png" class="wp-image-454"><p>Post tail</p><script>untrusted()</script>]]></content:encoded>
+      <content:encoded><![CDATA[<p>Post body <a href="https://wordpress.example/?page_id=451#details">About</a></p>
+<h1 class="wp-block-post-title"><a href="https://wordpress.example/?page_id=451">Handbook reference</a></h1>
+<pre class="wp-block-code"><code>First code line
+Second code line</code></pre>
+<figure class="wp-block-pullquote"><blockquote><p>Keep the reference with the quote.</p><cite>Migration Writer</cite></blockquote></figure>
+<pre class="wp-block-verse">First verse line
+Second verse line</pre><figure><img src="https://wordpress.example/wp-content/uploads/2026/11/sample-two.png" class="wp-image-454"><figcaption>Post <em>caption</em></figcaption></figure><p>Post tail</p><script>untrusted()</script>]]></content:encoded>
       <wp:post_id>452</wp:post_id>
       <wp:post_name>wp-import-news</wp:post_name>
       <wp:status>publish</wp:status>

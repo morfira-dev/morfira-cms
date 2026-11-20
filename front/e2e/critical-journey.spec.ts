@@ -11,7 +11,11 @@ test('owner creates, edits and publishes a page through the production surface',
   await page.getByLabel('Электронная почта').fill('owner@morfira.test')
   await page.locator('input[type="password"]').first().fill('Morfira-beta-2026!')
   await page.getByLabel('Подтвердите пароль').fill('Morfira-beta-2026!')
-  await page.getByRole('button', { name: 'Создать владельца' }).click()
+  const [loginResponse] = await Promise.all([
+    page.waitForResponse((response) => response.url().endsWith('/api/v1/auth/login') && response.request().method() === 'POST'),
+    page.getByRole('button', { name: 'Создать владельца' }).click(),
+  ])
+  expect(loginResponse.ok()).toBeTruthy()
 
   await expect(page.getByText('owner@morfira.test')).toBeVisible()
   await page.getByRole('button', { name: 'Interface language' }).click()
@@ -59,6 +63,7 @@ test('owner creates, edits and publishes a page through the production surface',
   await page.getByRole('button', { name: 'Сохранить ревизию' }).click()
   await expect(page.getByText('Ревизия черновика 2')).toBeVisible()
   await page.getByRole('button', { name: 'Опубликовать', exact: true }).click()
+  await expect(page.getByText(/Ревизия 2 опубликована/)).toBeVisible()
 
   const localizedPage = await request.get('/ru-RU/russkaya-versiya')
   expect(localizedPage.status()).toBe(200)
@@ -80,6 +85,11 @@ test('owner creates, edits and publishes a page through the production surface',
   await page.getByLabel('Ключ').fill('body')
   await page.getByLabel('Тип').click()
   await page.getByRole('option', { name: 'richText' }).click()
+  await page.getByRole('button', { name: 'Добавить поле' }).click()
+  await page.getByLabel('Подпись').last().fill('Cover image')
+  await page.getByLabel('Ключ').last().fill('coverImage')
+  await page.getByLabel('Тип').last().click()
+  await page.getByRole('option', { name: 'media' }).click()
   await page.getByRole('button', { name: 'Сохранить схему' }).click()
   await expect(page.getByText('Версия схемы 2 сохранена.')).toBeVisible()
 
@@ -174,4 +184,61 @@ test('owner creates, edits and publishes a page through the production surface',
   await expect(page.getByText('Ревизия 2 восстановлена как ревизия 4.')).toBeVisible()
   await expect(page.getByLabel('Заголовок')).toHaveValue('Rich article')
   await expect((await request.get('/api/v1/content/entries/articles/rich-article')).json()).resolves.toMatchObject({ sourceVersion: 2, title: 'Rich article' })
+
+  const media = {
+    mimeType: 'image/webp', size: 1024, width: 640, height: 480, defaultAlt: 'Test image',
+    collection: null, tags: [], variants: [], createdAt: '2026-11-20T00:00:00+00:00',
+  }
+  await page.route('**/api/v1/admin/media', (route) => route.fulfill({ json: { items: [
+    { ...media, id: '0199b348-1d8f-7e2f-8672-9b8356792e43', originalName: 'private.webp', isPrivate: true },
+    { ...media, id: '0199b348-1d8f-7e2f-8672-9b8356792e42', originalName: 'public.webp' },
+  ] } }))
+  await page.goto('/admin/media')
+  const publicFile = page.getByText('public.webp', { exact: true })
+  const privateFile = page.getByText('private.webp', { exact: true })
+  const visibility = page.getByRole('combobox', { name: 'Видимость', exact: true })
+  await expect(publicFile).toBeVisible()
+  await expect(privateFile).toBeVisible()
+  await expect(page.getByText('Закрытое изображение', { exact: true })).toBeVisible()
+  await visibility.click()
+  await page.getByRole('option', { name: 'Закрытые', exact: true }).click()
+  await expect(publicFile).toHaveCount(0)
+  await expect(privateFile).toBeVisible()
+  await visibility.click()
+  await page.getByRole('option', { name: 'Публичные', exact: true }).click()
+  await expect(publicFile).toBeVisible()
+  await expect(privateFile).toHaveCount(0)
+
+  await page.goto('/admin/pages')
+  await page.getByRole('row', { name: /Beta home/ }).getByRole('button', { name: 'Изменить' }).click()
+  const privateImageWarning = 'Замените или уберите закрытые изображения перед публикацией.'
+  const socialImage = page.getByRole('combobox', { name: 'Изображение для соцсетей', exact: true })
+  await socialImage.click()
+  await page.getByRole('option', { name: 'private.webp (закрытое)', exact: true }).click()
+  await expect(socialImage).toHaveAccessibleDescription(privateImageWarning)
+  await socialImage.click()
+  await page.getByRole('option', { name: 'Без изображения', exact: true }).click()
+  await expect(socialImage).not.toHaveAccessibleDescription(privateImageWarning)
+
+  await page.getByRole('button', { name: 'Добавить изображение', exact: true }).click()
+  const imageAsset = page.getByRole('combobox', { name: 'Медиафайл' })
+  await expect(imageAsset).toHaveText('public.webp (640 × 480)')
+  await imageAsset.click()
+  await page.getByRole('option', { name: 'private.webp (закрытое) (640 × 480)', exact: true }).click()
+  await expect(imageAsset).toHaveAccessibleDescription(privateImageWarning)
+  await imageAsset.click()
+  await page.getByRole('option', { name: 'public.webp (640 × 480)', exact: true }).click()
+  await expect(imageAsset).not.toHaveAccessibleDescription(privateImageWarning)
+
+  await page.goto('/admin/entries')
+  await page.getByLabel('Тип контента').click()
+  await page.getByRole('option', { name: 'Articles (articles)' }).click()
+  await page.getByRole('button', { name: /Rich article/ }).click()
+  const entryImage = page.getByRole('combobox', { name: 'Cover image', exact: true })
+  await entryImage.click()
+  await page.getByRole('option', { name: 'private.webp (закрытое)', exact: true }).click()
+  await expect(entryImage).toHaveAccessibleDescription(privateImageWarning)
+  await entryImage.click()
+  await page.getByRole('option', { name: 'public.webp', exact: true }).click()
+  await expect(entryImage).not.toHaveAccessibleDescription(privateImageWarning)
 })

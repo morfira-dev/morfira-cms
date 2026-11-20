@@ -12,7 +12,7 @@ Attach imported WordPress images to the original positions in new page and post 
 
 The operator supplies a WXR and optional local uploads directory as before. The existing dry-run reports the planned inline and featured links per item without writes. Apply resolves attachments first, then creates drafts and taxonomy assignments in the same database transaction.
 
-- Pages receive ordered native Image blocks. Their featured image sets Open Graph metadata.
+- Pages receive ordered native Image blocks. Their featured image sets Open Graph metadata. Eligible figure captions are stored on the image block as described in the [image caption specification](wordpress-image-captions.md).
 - Posts use optional native media fields interleaved with sanitized rich-text fields. Their featured image uses an optional dedicated media field. Existing fields are retained, and missing fields are added only when needed. A post may contain up to 20 resolved inline images, subject to the content schema's field limit.
 - Inline images resolve by WXR attachment identifiers or a unique matching attachment URL. A later export with attachment IDs can reuse mappings recorded by the same source even if it omits the attachment items. Unresolved images are counted and surrounding content is preserved.
 

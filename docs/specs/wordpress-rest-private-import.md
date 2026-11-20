@@ -14,13 +14,13 @@ The operator supplies `--api-url` and `--include-private` and provides `CMS_WORD
 
 ## Contracts and invariants
 
-WordPress Application Passwords are sent as HTTPS Basic authentication only to the configured REST posts and pages collections. Authenticated results retain the WordPress status in the CLI report and use authorized raw content for restricted items. Passwords and restricted source links are excluded from the report. Only public source items qualify for old URL redirects. The existing source key and WordPress item ID prevent duplicates across modes.
+For post and page metadata, WordPress Application Passwords are sent as HTTPS Basic authentication to the configured REST collections. Authenticated results retain the WordPress status in the CLI report and use authorized raw content for restricted items. Passwords and restricted source links are excluded from the report. Only public source items qualify for old URL redirects. The existing source key and WordPress item ID prevent duplicates across modes.
 
 Author and taxonomy metadata still use anonymous requests. Private attachments now follow the [authenticated attachment specification](wordpress-rest-private-media.md). Public attachments continue to use anonymous downloads.
 
 ## Failure modes and security
 
-Missing credentials or using the option with WXR fails before the source read. WordPress HTTP errors and incomplete batches fail without applying. Credentials remain invocation-scoped and are never forwarded to uploads, CDN hosts, redirect targets, or persisted in Morfira. Restricted drafts have no public routes. Publishing a restricted import later is an explicit editorial action that makes it public in Morfira. WordPress access settings and schedules are not replicated.
+Missing credentials or using the option with WXR fails before the source read. WordPress HTTP errors and incomplete batches fail without applying. Credentials remain invocation-scoped and are never forwarded to CDN hosts or redirect targets, or persisted in Morfira. Approved same-host attachment requests follow the [authenticated attachment specification](wordpress-rest-private-media.md). Restricted drafts have no public routes. Publishing a restricted import later is an explicit editorial action that makes it public in Morfira. WordPress access settings and schedules are not replicated.
 
 ## Acceptance criteria
 
