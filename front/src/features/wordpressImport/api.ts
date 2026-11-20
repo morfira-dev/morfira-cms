@@ -1,10 +1,11 @@
 import { apiFetch, readApiError } from '../../api/http'
-import type { components } from '../../api/schema'
+import type { components, operations } from '../../api/schema'
 
 export type WordPressImportReport = components['schemas']['WordPressImportReport']
 export type WordPressImportMode = WordPressImportReport['mode']
 export type WordPressImportRunCollection = components['schemas']['WordPressImportRunCollection']
 export type WordPressImportRun = WordPressImportRunCollection['items'][number]
+type WordPressRestImportRequest = operations['importWordPressRest']['requestBody']['content']['application/json']
 
 const importPath = '/api/v1/admin/imports/wordpress'
 
@@ -28,6 +29,33 @@ export async function importWordPress(
   if (mode === 'apply' && selectedIds !== undefined) body.set('selectedIds', selectedIds.join(','))
 
   const response = await apiFetch(importPath, { method: 'POST', body, signal })
+  return readImportResponse<WordPressImportReport>(response)
+}
+
+export async function importWordPressRest(
+  apiUrl: string,
+  source: string,
+  mode: WordPressImportMode,
+  signal: AbortSignal,
+  { selectedIds, downloadMedia, allowedMediaHosts }: {
+    selectedIds?: readonly string[]
+    downloadMedia?: boolean
+    allowedMediaHosts?: readonly string[]
+  } = {},
+): Promise<WordPressImportReport> {
+  const body: WordPressRestImportRequest = { apiUrl, source, mode }
+  if (mode === 'apply' && selectedIds !== undefined) body.selectedIds = selectedIds.join(',')
+  if (downloadMedia) {
+    body.downloadMedia = true
+    if (allowedMediaHosts?.length) body.allowedMediaHosts = [...allowedMediaHosts]
+  }
+
+  const response = await apiFetch(`${importPath}/rest`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal,
+  })
   return readImportResponse<WordPressImportReport>(response)
 }
 

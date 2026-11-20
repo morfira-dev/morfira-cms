@@ -65,12 +65,14 @@ final readonly class ImportWordPressDrafts
     }
 
     /**
+     * @template Result of array
      * @param list<SourceItem> $items
      * @param list<Term> $terms
      * @param list<Attachment> $attachments
      * @param list<Author> $authors
      * @param list<string> $allowedMediaHosts
-     * @return ImportReport
+     * @param (\Closure(ImportReport): Result)|null $complete
+     * @return ($complete is null ? ImportReport : Result)
      */
     public function __invoke(
         string $source,
@@ -86,6 +88,8 @@ final readonly class ImportWordPressDrafts
         ?WordPressRestCredentials $credentials = null,
         bool $scopeDependencies = false,
         bool $includeDraftReferences = false,
+        ?\Closure $complete = null,
+        ?WordPressStudioMediaBudget $mediaBudget = null,
     ): array {
         if (!self::validSourceKey($source)) {
             throw new \InvalidArgumentException('Source must be a lowercase identifier of at most 80 characters.');
@@ -94,8 +98,8 @@ final readonly class ImportWordPressDrafts
         /** @var \ArrayObject<int,MediaAssetView> $created */
         $created = new \ArrayObject();
         $credentials = $apiUrl === null ? null : $credentials;
-        $run = function () use ($source, $items, $apply, $terms, $attachments, $mediaDirectory, $created, $authors, $sourceUrl, $apiUrl, $allowedMediaHosts, $credentials, $scopeDependencies, $includeDraftReferences): array {
-            $media = ($this->media)($source, $attachments, $mediaDirectory, $apply, $created, $apiUrl, $allowedMediaHosts, $credentials);
+        $run = function () use ($source, $items, $apply, $terms, $attachments, $mediaDirectory, $created, $authors, $sourceUrl, $apiUrl, $allowedMediaHosts, $credentials, $scopeDependencies, $includeDraftReferences, $complete, $mediaBudget): array {
+            $media = ($this->media)($source, $attachments, $mediaDirectory, $apply, $created, $apiUrl, $allowedMediaHosts, $credentials, $mediaBudget);
             $dependencyItems = $scopeDependencies
                 ? array_values(array_filter($items, fn (array $item): bool => !$this->ledger->contains($source, $item['id'])))
                 : $items;
@@ -116,12 +120,14 @@ final readonly class ImportWordPressDrafts
             $report = $this->process($source, $items, $apply, $assignments, $images, $importedAuthors['profiles'], $sourceUrl, $credentials !== null, $includeDraftReferences);
             $taxonomy = ($this->taxonomies)($terms, $assignments, $apply);
 
-            return [
+            $outcomes = [
                 'items' => $report,
                 'taxonomy' => $taxonomy,
                 'media' => $media,
                 'authors' => $importedAuthors['outcomes'],
             ];
+
+            return $complete === null ? $outcomes : $complete($outcomes);
         };
 
         try {

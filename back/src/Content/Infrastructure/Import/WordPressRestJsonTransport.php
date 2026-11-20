@@ -10,7 +10,7 @@ interface WordPressRestJsonTransport
 {
     /**
      * @param array<string,string|int> $query
-     * @return array{body:list<array<string,mixed>>,totalPages:int}
+     * @return array{body:list<array<string,mixed>>,totalPages:int,bodyBytes?:int}
      */
-    public function get(string $baseUrl, string $resource, array $query, ?WordPressRestCredentials $credentials = null): array;
+    public function get(string $baseUrl, string $resource, array $query, ?WordPressRestCredentials $credentials = null, ?int $deadlineNs = null, ?int $maxBodyBytes = null): array;
 }

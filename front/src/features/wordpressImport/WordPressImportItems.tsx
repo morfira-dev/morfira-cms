@@ -6,6 +6,7 @@ import {
   TableHead, TablePagination, TableRow, TextField, Typography,
 } from '../../ui'
 import { filterImportItems, type WordPressImportItem } from './filterImportItems'
+import type { WordPressImportReport } from './api'
 import { IMPORT_REPORT_PAGE_SIZE, importPaginationLabels, importStatusKey } from './reportPresentation'
 
 const typeLabels = {
@@ -72,8 +73,9 @@ export interface ImportItemSelection {
   onChange: (ids: readonly string[], include: boolean) => void
 }
 
-export function WordPressImportItems({ items, selection }: {
+export function WordPressImportItems({ items, input, selection }: {
   items: readonly WordPressImportItem[]
+  input: WordPressImportReport['input']
   selection?: ImportItemSelection
 }) {
   const { t } = useAdminLocale()
@@ -82,7 +84,11 @@ export function WordPressImportItems({ items, selection }: {
   const [state, setState] = useState('')
   const [page, setPage] = useState(0)
 
-  if (items.length === 0) return <Alert severity="info">{t('The export contains no pages or posts to display.')}</Alert>
+  if (items.length === 0) {
+    return <Alert severity="info">{t(input === 'rest'
+      ? 'The REST source contains no pages or posts to display.'
+      : 'The export contains no pages or posts to display.')}</Alert>
+  }
 
   const states = [...new Set(items.map((item) => item.state))]
   const matches = filterImportItems(items, { search, type, state })

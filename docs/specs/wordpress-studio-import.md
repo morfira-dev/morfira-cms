@@ -27,7 +27,7 @@ Material rows may include a bounded plain-text source title for ordinary, unprot
 
 Apply accepts an optional multipart text field `selectedIds` containing 1–5,000 unique, comma-separated WordPress page or post IDs. Each ID is a positive decimal string of at most 20 digits. Omission retains whole-source behavior. Selective apply reports `scope: selection`, selected material outcomes, and related data. Taxonomy planning includes referenced terms and their ancestor declarations. Author planning uses the logins of selected posts. Both operate on materials that remain unclaimed when the transaction begins. Attachment diagnostics still cover the WXR attachment index, whose metadata supports existing image mapping. Selective reports leave the unsupported-type aggregate empty. Links in new drafts can resolve to eligible targets in current and earlier batches through the [internal link policy](wordpress-internal-links.md).
 
-This browser workflow accepts WXR only. REST sources and local uploads directories remain available through CLI. Source files are parsed from PHP's request-scoped upload storage. The importer creates drafts and stages eligible redirects under the existing publishing rules.
+This endpoint accepts WXR uploads. Studio reads public REST sources through its [REST endpoint](wordpress-studio-rest-import.md), and the CLI accepts local uploads directories. Source files are parsed from PHP's request-scoped upload storage. The importer creates drafts and stages eligible redirects under the existing publishing rules.
 
 ## Security and failure handling
 

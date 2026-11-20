@@ -7,6 +7,10 @@ namespace Cms\Tests\Content\Presentation\Http;
 use Cms\Content\Application\Import\WordPressImportClaimConflict;
 use Cms\Content\Application\Import\WordPressImportLedger;
 use Cms\Content\Application\Import\WordPressImportRunHistory;
+use Cms\Content\Application\Import\WordPressRemoteMedia;
+use Cms\Content\Application\Import\WordPressRemoteMediaFailure;
+use Cms\Content\Application\Import\WordPressStudioMediaBudget;
+use Cms\Content\Application\Import\WordPressStudioRestSource;
 use Cms\Content\Domain\EntryId;
 use Cms\Content\Domain\Page;
 use Cms\Content\Domain\PageId;
@@ -14,14 +18,20 @@ use Cms\Content\Domain\PageSlug;
 use Cms\Content\Domain\PageTitle;
 use Cms\Content\Infrastructure\Import\DoctrineWordPressImportLedger;
 use Cms\Content\Infrastructure\Import\DoctrineWordPressImportRunHistory;
+use Cms\Content\Infrastructure\Import\WordPressRemoteMediaDownloader;
+use Cms\Content\Infrastructure\Import\WordPressRestReader;
 use Cms\Content\Infrastructure\Persistence\DoctrineEntryRepository;
 use Cms\Content\Infrastructure\Persistence\DoctrinePageRepository;
 use Cms\Content\Infrastructure\Persistence\DoctrineRelationTargetLookup;
 use Cms\Identity\Infrastructure\Security\SecurityUser;
 use Cms\Identity\Infrastructure\Security\SecurityUserProvider;
+use Cms\Media\Application\ImageProcessor;
+use Cms\Media\Application\MediaAssetView;
+use Cms\Media\Application\ProcessedImage;
 use Cms\Media\Domain\MediaAsset;
 use Cms\Media\Domain\MediaAssetId;
 use Cms\Media\Domain\MediaVariant;
+use Cms\Media\Infrastructure\Image\LocalGdImageProcessor;
 use Cms\Media\Infrastructure\Persistence\DoctrineMediaAssetRepository;
 use Cms\Schema\Application\RelationTargetLookup;
 use Cms\Schema\Infrastructure\Persistence\DoctrineContentTypeRepository;
@@ -38,9 +48,13 @@ use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\Security\Core\User\UserProviderInterface;
 
+/** @phpstan-import-type Attachment from \Cms\Content\Application\Import\ImportWordPressMedia */
 final class WordPressImportControllerTest extends WebTestCase
 {
     private const string ENDPOINT = '/api/v1/admin/imports/wordpress';
+    private const string REST_ENDPOINT = self::ENDPOINT.'/rest';
+    private const string REST_URL = 'https://source.example.test/wp-json/wp/v2';
+    private const string REST_IMAGE_URL = 'https://source.example.test/wp-content/uploads/photo.jpg';
     private const string RUN_ID = 'b0c1db43-027e-4d77-9d81-3804bcec4b25';
     private const string EXPORT = <<<'XML'
         <rss version="2.0" xmlns:wp="http://wordpress.org/export/1.2/">
@@ -72,6 +86,341 @@ final class WordPressImportControllerTest extends WebTestCase
 
         self::assertResponseStatusCodeSame(403);
         self::assertJsonStringEqualsJsonString('{"error":"Owner access required."}', (string) $client->getResponse()->getContent());
+    }
+
+    public function testRestImportRequiresCsrfAndAnOwnerSession(): void
+    {
+        $client = self::createClient();
+        $client->request('POST', self::REST_ENDPOINT, server: $this->restHeaders($client), content: '{}');
+        self::assertResponseStatusCodeSame(401);
+
+        self::ensureKernelShutdown();
+        $client = $this->authenticatedClient(['ROLE_EDITOR']);
+        $client->request('POST', self::REST_ENDPOINT, server: $this->restHeaders($client), content: '{}');
+        self::assertResponseStatusCodeSame(403);
+        self::assertJsonStringEqualsJsonString('{"error":"Owner access required."}', (string) $client->getResponse()->getContent());
+
+        self::ensureKernelShutdown();
+        $client = $this->authenticatedClient();
+        $client->request('POST', self::REST_ENDPOINT, server: ['CONTENT_TYPE' => 'application/json'], content: '{}');
+        self::assertResponseStatusCodeSame(403);
+        self::assertTrue($client->getResponse()->headers->hasCacheControlDirective('no-store'));
+        self::assertJsonStringEqualsJsonString('{"error":"Invalid CSRF token."}', (string) $client->getResponse()->getContent());
+    }
+
+    public function testRestImportRejectsInvalidBodiesBeforeReadingTheSource(): void
+    {
+        $client = $this->authenticatedClient();
+        $headers = $this->restHeaders($client);
+        $rest = $this->createMock(WordPressStudioRestSource::class);
+        $rest->expects(self::never())->method('readPublic');
+        self::getContainer()->set(WordPressRestReader::class, $rest);
+
+        $payload = ['apiUrl' => self::REST_URL, 'source' => 'rest-site', 'mode' => 'dry-run'];
+        foreach ([
+            '{',
+            '[]',
+            json_encode($payload + ['credentials' => 'unsupported'], JSON_THROW_ON_ERROR),
+            json_encode($payload + ['downloadMedia' => 'true'], JSON_THROW_ON_ERROR),
+            json_encode($payload + ['downloadMedia' => null], JSON_THROW_ON_ERROR),
+            json_encode($payload + ['selectedIds' => '12'], JSON_THROW_ON_ERROR),
+            json_encode(['mode' => 'apply', 'selectedIds' => '12,12'] + $payload, JSON_THROW_ON_ERROR),
+            json_encode(['mode' => 'apply', 'selectedIds' => null] + $payload, JSON_THROW_ON_ERROR),
+            json_encode(['source' => 'Invalid key'] + $payload, JSON_THROW_ON_ERROR),
+            json_encode(['apiUrl' => str_repeat('x', 513)] + $payload, JSON_THROW_ON_ERROR),
+        ] as $body) {
+            $client->request('POST', self::REST_ENDPOINT, server: $headers, content: $body);
+            self::assertResponseStatusCodeSame(422);
+        }
+        $client->request('POST', self::REST_ENDPOINT, server: ['CONTENT_TYPE' => 'text/plain'] + $headers, content: json_encode($payload, JSON_THROW_ON_ERROR));
+        self::assertResponseStatusCodeSame(422);
+
+        $client->request('POST', self::REST_ENDPOINT, server: ['CONTENT_LENGTH' => '131073'] + $headers, content: '{}');
+        self::assertResponseStatusCodeSame(413);
+        $client->request('POST', self::REST_ENDPOINT, server: ['CONTENT_LENGTH' => '2'] + $headers, content: str_repeat(' ', 128 * 1024 + 1));
+        self::assertResponseStatusCodeSame(413);
+    }
+
+    public function testRestImportRejectsInvalidMediaHostsBeforeReadingTheSource(): void
+    {
+        $client = $this->authenticatedClient();
+        $headers = $this->restHeaders($client);
+        $rest = $this->createMock(WordPressStudioRestSource::class);
+        $rest->expects(self::never())->method('readPublic');
+        self::getContainer()->set(WordPressRestReader::class, $rest);
+
+        $payload = ['apiUrl' => self::REST_URL, 'source' => 'rest-site', 'mode' => 'dry-run'];
+        foreach ([
+            [false, [], 'Allowed media hosts require public image downloads.'],
+            [false, ['cdn.example.test'], 'Allowed media hosts require public image downloads.'],
+            [true, 'cdn.example.test', 'Provide a list of up to eight WordPress media hostnames.'],
+            [true, null, 'Provide a list of up to eight WordPress media hostnames.'],
+            [true, (object) [], 'Provide a list of up to eight WordPress media hostnames.'],
+            [true, [42], 'Provide a list of up to eight WordPress media hostnames.'],
+            [true, array_fill(0, 9, 'cdn.example.test'), 'Provide a list of up to eight WordPress media hostnames.'],
+            [true, ['https://cdn.example.test'], 'WordPress media hosts must be exact public DNS hostnames.'],
+            [true, ['cdn.example.test:443'], 'WordPress media hosts must be exact public DNS hostnames.'],
+            [true, ['*.example.test'], 'WordPress media hosts must be exact public DNS hostnames.'],
+            [true, ['cdn.internal'], 'WordPress media hosts must be exact public DNS hostnames.'],
+        ] as [$enabled, $hosts, $error]) {
+            $client->request('POST', self::REST_ENDPOINT, server: $headers, content: json_encode($payload + [
+                'downloadMedia' => $enabled,
+                'allowedMediaHosts' => $hosts,
+            ], JSON_THROW_ON_ERROR));
+            self::assertResponseStatusCodeSame(422);
+            self::assertJsonStringEqualsJsonString(json_encode(['error' => $error], JSON_THROW_ON_ERROR), (string) $client->getResponse()->getContent());
+        }
+    }
+
+    public function testRestImportHandlesUnsafeUrlsAndRemoteFailuresWithoutExposingDetails(): void
+    {
+        $client = $this->authenticatedClient();
+        $headers = $this->restHeaders($client);
+        $rest = $this->createMock(WordPressStudioRestSource::class);
+        $rest->expects(self::exactly(2))->method('readPublic')->willReturnCallback(static function (string $url): never {
+            if ($url === self::REST_URL) {
+                throw new \RuntimeException('Private diagnostic from the upstream.');
+            }
+
+            throw new \InvalidArgumentException('Private validation details.');
+        });
+        self::getContainer()->set(WordPressRestReader::class, $rest);
+        $ledger = $this->createMock(WordPressImportLedger::class);
+        $ledger->expects(self::never())->method('transactional');
+        self::getContainer()->set(DoctrineWordPressImportLedger::class, $ledger);
+        $payload = ['source' => 'rest-site', 'mode' => 'apply'];
+        $client->request('POST', self::REST_ENDPOINT, server: $headers, content: json_encode(['apiUrl' => 'http://source.example.test/wp-json/wp/v2'] + $payload, JSON_THROW_ON_ERROR));
+        self::assertResponseStatusCodeSame(422);
+        self::assertJsonStringEqualsJsonString('{"error":"Provide a safe HTTPS WordPress REST API URL."}', (string) $client->getResponse()->getContent());
+        $client->request('POST', self::REST_ENDPOINT, server: $headers, content: json_encode(['apiUrl' => self::REST_URL] + $payload, JSON_THROW_ON_ERROR));
+        self::assertResponseStatusCodeSame(502);
+        self::assertTrue($client->getResponse()->headers->hasCacheControlDirective('no-store'));
+        self::assertJsonStringEqualsJsonString('{"error":"Could not read the public WordPress REST API."}', (string) $client->getResponse()->getContent());
+    }
+
+    public function testRestImportPreviewsAppliesAndReplaysWithSharedHistory(): void
+    {
+        $client = $this->authenticatedClient();
+        $headers = $this->restHeaders($client);
+        $baseItem = [
+            'type' => 'page', 'status' => 'publish', 'html' => '<p>Public material</p>', 'link' => '', 'passwordProtected' => false,
+            'terms' => [], 'thumbnailId' => null, 'authorLogin' => null,
+        ];
+        $rest = $this->createMock(WordPressStudioRestSource::class);
+        $rest->expects(self::exactly(4))->method('readPublic')->with(self::REST_URL)->willReturn([
+            'items' => [
+                ['id' => '12', 'title' => 'Keep this page', 'slug' => 'keep-this-page'] + $baseItem,
+                ['id' => '13', 'title' => 'Omit this page', 'slug' => 'omit-this-page'] + $baseItem,
+            ],
+            'attachments' => [['id' => '20', 'eligible' => true, 'url' => 'https://media.example.test/photo.jpg', 'path' => 'photo.jpg', 'alt' => '']],
+            'terms' => [],
+            'authors' => [],
+            'skippedTypes' => [],
+            'sourceUrl' => 'https://source.example.test',
+        ]);
+        self::getContainer()->set(WordPressRestReader::class, $rest);
+        $pages = new InMemoryPageRepository();
+        self::getContainer()->set(DoctrinePageRepository::class, $pages);
+        self::getContainer()->set(DoctrineContentTypeRepository::class, new InMemoryContentTypeRepository());
+        self::getContainer()->set(DoctrineSiteSettingsRepository::class, new InMemorySiteSettingsRepository());
+        $ledger = $this->createMock(WordPressImportLedger::class);
+        /** @var array<string,true> $claimed */
+        $claimed = [];
+        $ledger->method('contains')->willReturnCallback(static function (string $source, string $id) use (&$claimed): bool {
+            return isset($claimed[$source.':'.$id]);
+        });
+        $ledger->expects(self::once())->method('claim')->with('rest-site', '12')->willReturnCallback(static function (string $source, string $id) use (&$claimed): void {
+            $claimed[$source.':'.$id] = true;
+        });
+        $ledger->expects(self::never())->method('recordMediaAsset');
+        $ledger->expects(self::exactly(2))->method('transactional')->willReturnCallback(static fn (\Closure $operation): mixed => $operation());
+        self::getContainer()->set(DoctrineWordPressImportLedger::class, $ledger);
+        $history = $this->createMock(WordPressImportRunHistory::class);
+        $history->expects(self::exactly(2))->method('record')->willReturnCallback(static function (array $report): void {
+            self::assertSame('rest', $report['input']);
+            self::assertSame('apply', $report['mode']);
+        });
+        self::getContainer()->set(DoctrineWordPressImportRunHistory::class, $history);
+
+        $payload = ['apiUrl' => self::REST_URL, 'source' => 'rest-site'];
+        $client->request('POST', self::REST_ENDPOINT, server: $headers, content: json_encode($payload + ['mode' => 'dry-run'], JSON_THROW_ON_ERROR));
+        self::assertResponseIsSuccessful();
+        self::assertJsonStringEqualsJsonString(<<<'JSON'
+            {"mode":"dry-run","input":"rest","source":"rest-site","counts":{"planned":2},"skippedTypes":{},
+            "items":[
+              {"id":"12","type":"page","status":"publish","title":"Keep this page","sourcePath":null,"targetPath":"/keep-this-page","state":"planned","redirect":"none","images":{"inline":0,"missingInline":0,"featured":"none"}},
+              {"id":"13","type":"page","status":"publish","title":"Omit this page","sourcePath":null,"targetPath":"/omit-this-page","state":"planned","redirect":"none","images":{"inline":0,"missingInline":0,"featured":"none"}}
+            ],"media":[{"id":"20","state":"media_directory_required"}],"taxonomy":{"terms":[],"assignments":[]},"authors":[]}
+            JSON, (string) $client->getResponse()->getContent());
+        self::assertSame([], array_column($pages->all(), 'id'));
+
+        $client->request('POST', self::REST_ENDPOINT, server: $headers, content: json_encode($payload + ['mode' => 'apply', 'selectedIds' => '12,99'], JSON_THROW_ON_ERROR));
+        self::assertResponseStatusCodeSame(422);
+        self::assertSame([], array_column($pages->all(), 'id'));
+
+        foreach (['imported', 'already_imported'] as $state) {
+            $client->request('POST', self::REST_ENDPOINT, server: $headers, content: json_encode($payload + ['mode' => 'apply', 'selectedIds' => '12'], JSON_THROW_ON_ERROR));
+            self::assertResponseIsSuccessful();
+            $report = json_decode((string) $client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
+            self::assertIsArray($report);
+            self::assertSame('rest', $report['input']);
+            self::assertSame('selection', $report['scope']);
+            self::assertSame([$state => 1], $report['counts']);
+            self::assertIsArray($report['items']);
+            self::assertIsArray($report['items'][0]);
+            self::assertCount(1, $pages->all());
+            if ($state === 'imported') {
+                self::assertSame(['kind' => 'page', 'id' => $pages->all()[0]->id->value], $report['items'][0]['draft']);
+            } else {
+                self::assertArrayNotHasKey('draft', $report['items'][0]);
+            }
+        }
+    }
+
+    public function testRestMediaDryRunApplyAndReplay(): void
+    {
+        $this->assertRestMediaDryRunApplyAndReplay(self::REST_IMAGE_URL);
+    }
+
+    public function testRestMediaAllowsExplicitCdnHostsWithoutChangingReplay(): void
+    {
+        $this->assertRestMediaDryRunApplyAndReplay('https://cdn.example.test/wp-content/uploads/photo.jpg', 'cdn.example.test');
+    }
+
+    private function assertRestMediaDryRunApplyAndReplay(string $imageUrl, ?string $cdnHost = null): void
+    {
+        $client = $this->authenticatedClient();
+        $headers = $this->restHeaders($client);
+        $pages = $this->useRestMediaSnapshot(imageUrl: $imageUrl);
+        $ledger = $this->createMock(WordPressImportLedger::class);
+        /** @var array<string,true> $claimed */
+        $claimed = [];
+        $asset = null;
+        $ledger->method('transactional')->willReturnCallback(static fn (\Closure $operation): mixed => $operation());
+        $ledger->method('contains')->willReturnCallback(static function (string $source, string $id) use (&$claimed): bool {
+            return isset($claimed[$id]);
+        });
+        $ledger->expects(self::exactly(2))->method('claim')->willReturnCallback(static function (string $source, string $id) use (&$claimed): void {
+            self::assertSame('rest-media', $source);
+            $claimed[$id] = true;
+        });
+        $ledger->expects(self::once())->method('recordMediaAsset')->willReturnCallback(static function (string $source, string $id, string $assetId) use (&$asset): void {
+            self::assertSame('rest-media', $source);
+            self::assertSame('20', $id);
+            $asset = $assetId;
+        });
+        $ledger->method('mediaAssetId')->willReturnCallback(static function (string $source, string $id) use (&$asset): ?string {
+            return $id === '20' ? $asset : null;
+        });
+        self::getContainer()->set(DoctrineWordPressImportLedger::class, $ledger);
+
+        $history = $this->createMock(WordPressImportRunHistory::class);
+        $history->expects(self::exactly(2))->method('record')->willReturnCallback(static function (array $report): void {
+            self::assertArrayNotHasKey('allowedMediaHosts', $report);
+        });
+        self::getContainer()->set(DoctrineWordPressImportRunHistory::class, $history);
+
+        $allowedHosts = $cdnHost === null ? [] : [$cdnHost];
+        $urlPolicy = new WordPressRemoteMediaDownloader();
+        $remote = $this->createMock(WordPressRemoteMedia::class);
+        $remote->expects(self::exactly($cdnHost === null ? 2 : 3))->method('assertUrl')
+            ->willReturnCallback(static function (string $apiUrl, string $url, array $hosts) use ($imageUrl, $allowedHosts, $urlPolicy): void {
+                self::assertSame(self::REST_URL, $apiUrl);
+                self::assertSame($imageUrl, $url);
+                /** @var list<string> $hosts */
+                $urlPolicy->assertUrl($apiUrl, $url, $hosts);
+                self::assertSame($allowedHosts, $hosts);
+            });
+        $remote->expects(self::once())->method('download')
+            ->with(self::REST_URL, $imageUrl, self::isInstanceOf(\Closure::class), $allowedHosts, null, self::isInstanceOf(WordPressStudioMediaBudget::class))
+            ->willReturnCallback(static fn (string $apiUrl, string $url, \Closure $consume): MediaAssetView => self::consumeRestImage($apiUrl, $url, $consume, $imageUrl));
+        self::getContainer()->set(WordPressRemoteMediaDownloader::class, $remote);
+        $this->useTestImageProcessor(reverted: false);
+
+        $request = ['apiUrl' => self::REST_URL, 'source' => 'rest-media', 'downloadMedia' => true];
+        $defaultRequest = $request;
+        if ($cdnHost !== null) {
+            $client->request('POST', self::REST_ENDPOINT, server: $headers, content: json_encode($request + ['mode' => 'dry-run'], JSON_THROW_ON_ERROR));
+            self::assertResponseIsSuccessful();
+            $unlisted = $this->decodeRestMediaReport($client);
+            self::assertSame(['id' => '20', 'state' => 'invalid', 'reason' => 'The WordPress attachment host is not allowed.'], $unlisted['media'][0]);
+            self::assertSame(['inline' => 0, 'missingInline' => 1, 'featured' => 'missing'], $unlisted['items'][0]['images']);
+            $request['allowedMediaHosts'] = [strtoupper($cdnHost), $cdnHost];
+        }
+        $client->request('POST', self::REST_ENDPOINT, server: $headers, content: json_encode($request + ['mode' => 'dry-run'], JSON_THROW_ON_ERROR));
+        self::assertResponseIsSuccessful();
+        $preview = $this->decodeRestMediaReport($client);
+        self::assertSame(['id' => '20', 'state' => 'planned'], $preview['media'][0]);
+        self::assertSame(['inline' => 1, 'missingInline' => 0, 'featured' => 'linked'], $preview['items'][0]['images']);
+        self::assertSame([], array_column($pages->all(), 'id'));
+
+        foreach (['imported', 'already_imported'] as $state) {
+            $applyRequest = $state === 'imported' ? $request : $defaultRequest;
+            $client->request('POST', self::REST_ENDPOINT, server: $headers, content: json_encode($applyRequest + ['mode' => 'apply', 'selectedIds' => '12'], JSON_THROW_ON_ERROR));
+            self::assertResponseIsSuccessful();
+            $report = $this->decodeRestMediaReport($client);
+            self::assertSame([$state => 1], $report['counts']);
+            self::assertSame($state, $report['media'][0]['state']);
+            self::assertIsString($report['media'][0]['assetId']);
+            self::assertCount(1, $pages->all());
+            $page = $pages->all()[0];
+            self::assertSame($report['media'][0]['assetId'], $page->seo->openGraphImageAssetId);
+            self::assertSame($report['media'][0]['assetId'], $page->blocks[1]->data['assetId']);
+        }
+    }
+
+    public function testRestMediaTransferFailureAndHistoryFailureCompensateStagedImages(): void
+    {
+        foreach ([false, true] as $failOnHistory) {
+            self::ensureKernelShutdown();
+            $client = $this->authenticatedClient();
+            $headers = $this->restHeaders($client);
+            $this->useRestMediaSnapshot($failOnHistory ? [] : [
+                ['id' => '21', 'eligible' => true, 'url' => 'https://source.example.test/other.jpg', 'path' => 'other.jpg', 'alt' => ''],
+            ]);
+            $ledger = $this->createStub(WordPressImportLedger::class);
+            $transactionDepth = 0;
+            $ledger->method('transactional')->willReturnCallback(static function (\Closure $operation) use (&$transactionDepth): mixed {
+                ++$transactionDepth;
+                try {
+                    return $operation();
+                } finally {
+                    --$transactionDepth;
+                }
+            });
+            self::getContainer()->set(DoctrineWordPressImportLedger::class, $ledger);
+
+            $history = $this->createMock(WordPressImportRunHistory::class);
+            $history->expects($failOnHistory ? self::once() : self::never())->method('record')->willReturnCallback(static function () use (&$transactionDepth): never {
+                self::assertSame(1, $transactionDepth);
+                throw new \RuntimeException('Failed to persist report.');
+            });
+            self::getContainer()->set(DoctrineWordPressImportRunHistory::class, $history);
+
+            $remote = $this->createMock(WordPressRemoteMedia::class);
+            $remote->expects($failOnHistory ? self::once() : self::exactly(2))->method('download')->willReturnCallback(
+                static function (string $apiUrl, string $attachmentUrl, \Closure $consume): MediaAssetView {
+                    if ($attachmentUrl !== self::REST_IMAGE_URL) {
+                        throw new WordPressRemoteMediaFailure('Sensitive remote HTTP failure details.');
+                    }
+
+                    return self::consumeRestImage($apiUrl, $attachmentUrl, $consume);
+                },
+            );
+            self::getContainer()->set(WordPressRemoteMediaDownloader::class, $remote);
+            $this->useTestImageProcessor(reverted: true);
+
+            $client->request('POST', self::REST_ENDPOINT, server: $headers, content: json_encode([
+                'apiUrl' => self::REST_URL,
+                'source' => 'rest-media',
+                'mode' => 'apply',
+                'downloadMedia' => true,
+            ], JSON_THROW_ON_ERROR));
+            self::assertResponseStatusCodeSame($failOnHistory ? 500 : 502);
+            if (!$failOnHistory) {
+                self::assertJsonStringEqualsJsonString('{"error":"Could not read the public WordPress REST API."}', (string) $client->getResponse()->getContent());
+            }
+        }
     }
 
     public function testHistoryRequiresOwnerOnBothRoutes(): void
@@ -589,6 +938,82 @@ final class WordPressImportControllerTest extends WebTestCase
         }
     }
 
+    /** @param list<Attachment> $additionalAttachments */
+    private function useRestMediaSnapshot(array $additionalAttachments = [], string $imageUrl = self::REST_IMAGE_URL): InMemoryPageRepository
+    {
+        $rest = $this->createStub(WordPressStudioRestSource::class);
+        $rest->method('readPublic')->willReturn([
+            'items' => [[
+                'id' => '12', 'type' => 'page', 'status' => 'publish', 'title' => 'Page with photo', 'slug' => 'rest-photo',
+                'html' => '<p>Public material</p><img src="'.$imageUrl.'" alt="Sunrise">',
+                'link' => '', 'passwordProtected' => false, 'terms' => [], 'thumbnailId' => '20', 'authorLogin' => null,
+            ]],
+            'attachments' => [
+                ['id' => '20', 'eligible' => true, 'url' => $imageUrl, 'path' => 'photo.jpg', 'alt' => 'Sunrise'],
+                ...$additionalAttachments,
+            ],
+            'terms' => [],
+            'authors' => [],
+            'skippedTypes' => [],
+            'sourceUrl' => 'https://source.example.test',
+        ]);
+        $pages = new InMemoryPageRepository();
+        self::getContainer()->set(WordPressRestReader::class, $rest);
+        self::getContainer()->set(DoctrinePageRepository::class, $pages);
+        self::getContainer()->set(DoctrineContentTypeRepository::class, new InMemoryContentTypeRepository());
+        self::getContainer()->set(DoctrineSiteSettingsRepository::class, new InMemorySiteSettingsRepository());
+        self::getContainer()->set(DoctrineMediaAssetRepository::class, new InMemoryMediaAssetRepository());
+
+        return $pages;
+    }
+
+    /** @param \Closure(string,string):MediaAssetView $consume */
+    private static function consumeRestImage(string $apiUrl, string $attachmentUrl, \Closure $consume, string $expectedUrl = self::REST_IMAGE_URL): MediaAssetView
+    {
+        self::assertSame(self::REST_URL, $apiUrl);
+        self::assertSame($expectedUrl, $attachmentUrl);
+        $file = tmpfile();
+        self::assertIsResource($file);
+        try {
+            self::assertSame(5, fwrite($file, 'image'));
+            $path = stream_get_meta_data($file)['uri'] ?? null;
+            self::assertIsString($path);
+
+            return $consume($path, 'photo.jpg');
+        } finally {
+            fclose($file);
+        }
+    }
+
+    private function useTestImageProcessor(bool $reverted): void
+    {
+        $image = $this->createMock(ImageProcessor::class);
+        $assetId = null;
+        $image->expects(self::once())->method('process')->willReturnCallback(static function (string $file, MediaAssetId $id) use (&$assetId): ProcessedImage {
+            self::assertSame('image', file_get_contents($file));
+            $assetId = $id->value;
+            return new ProcessedImage(480, 240, 10, [new MediaVariant(480, 240, 10, MediaVariant::urlFor($id, 480, false))]);
+        });
+        $image->expects($reverted ? self::once() : self::never())->method('remove')->willReturnCallback(static function (MediaAssetId $id) use (&$assetId): void {
+            self::assertSame($assetId, $id->value);
+        });
+        self::getContainer()->set(LocalGdImageProcessor::class, $image);
+    }
+
+    /** @return array{media:array{0:array<mixed>},items:array{0:array<mixed>},counts:array<mixed>} */
+    private function decodeRestMediaReport(KernelBrowser $client): array
+    {
+        $report = json_decode((string) $client->getResponse()->getContent(), true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($report);
+        self::assertIsArray($report['media']);
+        self::assertIsArray($report['media'][0]);
+        self::assertIsArray($report['items']);
+        self::assertIsArray($report['items'][0]);
+        self::assertIsArray($report['counts']);
+
+        return ['media' => [$report['media'][0]], 'items' => [$report['items'][0]], 'counts' => $report['counts']];
+    }
+
     /** @param resource $file */
     private function upload($file): UploadedFile
     {
@@ -616,12 +1041,23 @@ final class WordPressImportControllerTest extends WebTestCase
     /** @return array{CONTENT_TYPE:string,HTTP_X_CSRF_TOKEN:string} */
     private function multipartHeaders(KernelBrowser $client): array
     {
+        return ['CONTENT_TYPE' => 'multipart/form-data; boundary=wxr', 'HTTP_X_CSRF_TOKEN' => $this->csrfToken($client)];
+    }
+
+    /** @return array{CONTENT_TYPE:string,HTTP_X_CSRF_TOKEN:string} */
+    private function restHeaders(KernelBrowser $client): array
+    {
+        return ['CONTENT_TYPE' => 'application/json', 'HTTP_X_CSRF_TOKEN' => $this->csrfToken($client)];
+    }
+
+    private function csrfToken(KernelBrowser $client): string
+    {
         $client->request('GET', '/api/v1/auth/csrf');
         self::assertResponseIsSuccessful();
         $response = json_decode((string) $client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
         self::assertIsArray($response);
         self::assertIsString($response['token']);
 
-        return ['CONTENT_TYPE' => 'multipart/form-data; boundary=wxr', 'HTTP_X_CSRF_TOKEN' => $response['token']];
+        return $response['token'];
     }
 }

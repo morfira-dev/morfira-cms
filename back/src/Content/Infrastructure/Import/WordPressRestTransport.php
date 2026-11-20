@@ -17,7 +17,7 @@ final class WordPressRestTransport implements WordPressRestJsonTransport
         return WordPressRestEndpoint::fromUrl($url)->url;
     }
 
-    public function get(string $baseUrl, string $resource, array $query, ?WordPressRestCredentials $credentials = null): array
+    public function get(string $baseUrl, string $resource, array $query, ?WordPressRestCredentials $credentials = null, ?int $deadlineNs = null, ?int $maxBodyBytes = null): array
     {
         $endpoint = WordPressRestEndpoint::fromUrl($baseUrl);
         if (!in_array($resource, self::RESOURCES, true)) {
@@ -26,10 +26,16 @@ final class WordPressRestTransport implements WordPressRestJsonTransport
         if ($credentials !== null && (!in_array($resource, ['posts', 'pages', 'media'], true) || ($query['context'] ?? null) !== 'edit')) {
             throw new \InvalidArgumentException('WordPress credentials are only allowed for edit-context posts, pages and media.');
         }
+        $bodyLimit = min(self::MAX_BODY_BYTES, $maxBodyBytes ?? self::MAX_BODY_BYTES);
+        if ($bodyLimit < 2) {
+            throw new \RuntimeException('WordPress REST snapshot exceeds the import limits.');
+        }
+        self::remainingTimeoutMs($deadlineNs);
         if (!extension_loaded('curl')) {
             throw new \RuntimeException('WordPress REST import requires PHP cURL.');
         }
         $pins = $endpoint->resolvePins();
+        $timeoutMs = self::remainingTimeoutMs($deadlineNs);
         $url = $endpoint->url.'/'.$resource.'?'.http_build_query($query, '', '&', PHP_QUERY_RFC3986);
         $handle = curl_init($url);
         if ($handle === false) {
@@ -54,12 +60,12 @@ final class WordPressRestTransport implements WordPressRestJsonTransport
             CURLOPT_SSL_VERIFYPEER => true,
             CURLOPT_SSL_VERIFYHOST => 2,
             CURLOPT_RESOLVE => [$pins],
-            CURLOPT_CONNECTTIMEOUT => 5,
-            CURLOPT_TIMEOUT => 15,
+            CURLOPT_CONNECTTIMEOUT_MS => min(5_000, $timeoutMs),
+            CURLOPT_TIMEOUT_MS => $timeoutMs,
             CURLOPT_HTTPHEADER => ['Accept: application/json'],
             CURLOPT_USERAGENT => 'Morfira CMS WordPress Import',
-            CURLOPT_WRITEFUNCTION => static function (\CurlHandle $handle, string $chunk) use (&$body, &$overflow): int {
-                if (strlen($body) + strlen($chunk) > self::MAX_BODY_BYTES) {
+            CURLOPT_WRITEFUNCTION => static function (\CurlHandle $handle, string $chunk) use (&$body, &$overflow, $bodyLimit): int {
+                if (strlen($body) + strlen($chunk) > $bodyLimit) {
                     $overflow = true;
                     return 0;
                 }
@@ -111,7 +117,17 @@ final class WordPressRestTransport implements WordPressRestJsonTransport
         /** @var list<array<string,mixed>> $items */
         $items = $this->decode($body);
 
-        return ['body' => $items, 'totalPages' => (int) $totalPages];
+        return ['body' => $items, 'totalPages' => (int) $totalPages, 'bodyBytes' => strlen($body)];
+    }
+
+    private static function remainingTimeoutMs(?int $deadlineNs): int
+    {
+        $remainingMs = $deadlineNs === null ? 15_000 : intdiv($deadlineNs - (int) hrtime(true), 1_000_000);
+        if ($remainingMs <= 0) {
+            throw new \RuntimeException('WordPress REST read time limit exceeded.');
+        }
+
+        return min(15_000, $remainingMs);
     }
 
     /** @return list<array<string,mixed>> */

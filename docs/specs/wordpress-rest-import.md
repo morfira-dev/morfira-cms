@@ -12,6 +12,8 @@ An operator can import public WordPress content directly from its standard REST 
 
 An operator runs `cms:import:wordpress --api-url=https://site.example/wp-json/wp/v2 --source=legacy-site`. The complete bounded REST metadata batch is collected before the existing dry-run or apply begins. Add `--apply` to persist eligible drafts, aliases, author profiles, terms and media references.
 
+Admin Studio offers a [public REST import](wordpress-studio-rest-import.md) with a smaller metadata budget for interactive requests.
+
 ## Contracts
 
 The local file argument and `--api-url` are mutually exclusive. The command reports the selected input and retains the existing JSON fields. It reads the standard posts, pages, media, categories, tags and users collections through numbered pagination. Published posts and pages become drafts. Each request reads up to 50 records, and an import is limited to 5,000 records and 16 MiB of normalized collection JSON across all collections.

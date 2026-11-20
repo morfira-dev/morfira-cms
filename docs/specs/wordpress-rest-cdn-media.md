@@ -12,6 +12,8 @@ Import images served on a trusted CDN without copying the WordPress uploads tree
 
 An operator can repeat `--media-host=HOST` with `--api-url` to allow specific HTTPS attachment hosts for one run. The importer still reads REST collections from the configured WordPress API host. Without `--apply`, allowed attachment URLs are planned without downloading bytes. Apply imports allowed attachments and preserves the normal image bindings.
 
+Studio owners can use the [bounded CDN allowlist](wordpress-studio-rest-cdn-media.md) in the REST import form.
+
 ## Contracts and invariants
 
 The list contains exact DNS names and is case-insensitive. The REST API host is always allowed. There is no wildcard or parent-domain expansion. The option is valid only for REST downloads and cannot be combined with the local file or `--media-dir`. Malformed host arguments fail before the REST read. The report format and existing source key and attachment ID ledger are unchanged.

@@ -10,7 +10,7 @@ The Studio report can describe thousands of source records and is tied to the re
 
 ## Decision
 
-Store each successful Studio WXR apply as a run with summary fields and its immutable report. Commit it in the same database transaction as the draft changes. Return summaries from the collection endpoint and load report data by run identity when requested. Use the existing owner authorization boundary.
+Store each successful Studio WordPress apply as a run with summary fields and its immutable report. Commit it in the same database transaction as the draft changes. Return summaries from the collection endpoint and load report data by run identity when requested. Use the existing owner authorization boundary.
 
 ## Alternatives and consequences
 

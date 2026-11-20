@@ -39,7 +39,7 @@ final readonly class CsrfRequestSubscriber implements EventSubscriberInterface
 
         $value = $request->headers->get('X-CSRF-Token', '');
         if (!$this->tokens->isTokenValid(new CsrfToken('cms_admin', $value))) {
-            $event->setResponse(new JsonResponse(['error' => 'Invalid CSRF token.'], 403));
+            $event->setResponse(new JsonResponse(['error' => 'Invalid CSRF token.'], 403, ['Cache-Control' => 'private, no-store']));
         }
     }
 }

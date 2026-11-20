@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resetCsrfToken } from '../../api/http'
-import { getWordPressImportRun, importWordPress, listWordPressImportRuns, type WordPressImportReport, type WordPressImportRunCollection } from './api'
+import { getWordPressImportRun, importWordPress, importWordPressRest, listWordPressImportRuns, type WordPressImportReport, type WordPressImportRunCollection } from './api'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -57,6 +57,53 @@ describe('importWordPress', () => {
 
     await expect(importWordPress(new File([], 'invalid.xml'), 'old-site', 'dry-run', new AbortController().signal))
       .rejects.toThrow('Invalid WXR file.')
+  })
+})
+
+describe('importWordPressRest', () => {
+  it.each([
+    ['dry-run', { selectedIds: ['42'] }, {}],
+    ['apply', {}, {}],
+    ['apply', { selectedIds: ['42', '18446744073709551615'] }, { selectedIds: '42,18446744073709551615' }],
+    ['apply', { selectedIds: [] }, { selectedIds: '' }],
+    ['dry-run', { downloadMedia: false }, {}],
+    ['dry-run', { downloadMedia: true, selectedIds: ['42'] }, { downloadMedia: true }],
+    ['apply', { downloadMedia: true, selectedIds: ['42'] }, { downloadMedia: true, selectedIds: '42' }],
+    ['dry-run', { downloadMedia: false, allowedMediaHosts: ['cdn.example'] }, {}],
+    ['dry-run', { downloadMedia: true, allowedMediaHosts: [] }, { downloadMedia: true }],
+    ['dry-run', { downloadMedia: true, allowedMediaHosts: ['cdn.example'] }, { downloadMedia: true, allowedMediaHosts: ['cdn.example'] }],
+    ['apply', { downloadMedia: true, allowedMediaHosts: ['cdn.example'], selectedIds: ['42'] }, {
+      downloadMedia: true, allowedMediaHosts: ['cdn.example'], selectedIds: '42',
+    }],
+  ] as const)('submits a CSRF-protected JSON request in %s mode with options %j', async (mode, options, optionalFields) => {
+    const report: WordPressImportReport = {
+      mode,
+      input: 'rest',
+      source: 'old-site',
+      counts: {},
+      skippedTypes: {},
+      items: [],
+      media: [],
+      taxonomy: { terms: [], assignments: [] },
+      authors: [],
+    }
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({ token: 'csrf-token' }))
+      .mockResolvedValueOnce(Response.json(report))
+    vi.stubGlobal('fetch', fetchMock)
+    const apiUrl = 'https://old-site.example/blog/wp-json/wp/v2'
+    const { signal } = new AbortController()
+
+    await expect(importWordPressRest(apiUrl, 'old-site', mode, signal, options)).resolves.toEqual(report)
+
+    const [path, init] = fetchMock.mock.calls[1]
+    const headers = new Headers(init?.headers)
+    expect(path).toBe('/api/v1/admin/imports/wordpress/rest')
+    expect(init?.method).toBe('POST')
+    expect(init?.signal).toBe(signal)
+    expect(headers.get('X-CSRF-Token')).toBe('csrf-token')
+    expect(headers.get('Content-Type')).toBe('application/json')
+    expect(JSON.parse(String(init?.body))).toEqual({ apiUrl, source: 'old-site', mode, ...optionalFields })
   })
 })
 

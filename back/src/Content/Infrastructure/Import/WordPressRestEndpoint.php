@@ -67,11 +67,11 @@ final readonly class WordPressRestEndpoint
         }
         foreach ($addresses as $address) {
             if (filter_var($address, FILTER_VALIDATE_IP, FILTER_FLAG_GLOBAL_RANGE) === false) {
-                throw new \RuntimeException('The WordPress host must resolve only to public addresses.');
+                throw new WordPressRestUnsafeAddress('The WordPress host must resolve only to public addresses.');
             }
             $bytes = inet_pton($address);
             if ($bytes === false || !self::isPublicUnicast($bytes)) {
-                throw new \RuntimeException('The WordPress host must resolve only to public addresses.');
+                throw new WordPressRestUnsafeAddress('The WordPress host must resolve only to public addresses.');
             }
         }
 

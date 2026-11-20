@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Cms\Tests\Content\Infrastructure\Import;
 
 use Cms\Content\Application\Import\WordPressMediaHosts;
+use Cms\Content\Application\Import\WordPressRemoteMediaFailure;
 use Cms\Content\Application\Import\WordPressRestCredentials;
+use Cms\Content\Application\Import\WordPressStudioMediaBudget;
 use Cms\Content\Infrastructure\Import\WordPressRemoteMediaDownloader;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -119,5 +121,74 @@ final class WordPressRemoteMediaDownloaderTest extends TestCase
             'https://example.org/uploads/one.jpg',
             static fn (): never => self::fail('The consumer must not be called for an invalid URL.'),
         );
+    }
+
+    /** @param list<string> $allowedHosts */
+    #[DataProvider('disallowedStudioCdnHosts')]
+    public function testStudioDownloadRequiresAnExactCdnHostBeforeSpendingBudget(array $allowedHosts): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('The WordPress attachment host is not allowed.');
+        new WordPressRemoteMediaDownloader()->download(
+            self::API,
+            'https://images.cdn.example.org/uploads/one.jpg',
+            static fn (): never => self::fail('The consumer must not run for an unlisted Studio CDN.'),
+            $allowedHosts,
+            mediaBudget: self::exhaustedStudioBudget(),
+        );
+    }
+
+    /** @return iterable<string,array{list<string>}> */
+    public static function disallowedStudioCdnHosts(): iterable
+    {
+        yield 'empty allowlist' => [[]];
+        yield 'parent host' => [['cdn.example.org']];
+        yield 'subdomain' => [['other.images.cdn.example.org']];
+    }
+
+    public function testStudioDownloadDisallowsCredentialsBeforeConnecting(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Studio attachment downloads must be anonymous.');
+        new WordPressRemoteMediaDownloader()->download(
+            self::API,
+            'https://example.test/uploads/one.jpg',
+            static fn (): never => self::fail('The consumer must not run for an authenticated Studio request.'),
+            credentials: new WordPressRestCredentials('fixture-user', 'syntheticPassword'),
+            mediaBudget: new WordPressStudioMediaBudget(),
+        );
+    }
+
+    /** @param list<string> $allowedHosts */
+    #[DataProvider('allowedStudioAttachmentHosts')]
+    public function testStudioDownloadChecksTheTransferLimitBeforeDns(string $url, array $allowedHosts): void
+    {
+        $this->expectException(WordPressRemoteMediaFailure::class);
+        $this->expectExceptionMessage('attachment transfer limit');
+        new WordPressRemoteMediaDownloader()->download(
+            self::API,
+            $url,
+            static fn (): never => self::fail('The consumer must not run after the Studio transfer limit.'),
+            $allowedHosts,
+            mediaBudget: self::exhaustedStudioBudget(),
+        );
+    }
+
+    /** @return iterable<string,array{string,list<string>}> */
+    public static function allowedStudioAttachmentHosts(): iterable
+    {
+        yield 'REST host' => ['https://example.test/uploads/one.jpg', []];
+        yield 'explicit CDN' => ['https://cdn.example.org/uploads/one.jpg', ['CDN.Example.Org']];
+    }
+
+    private static function exhaustedStudioBudget(): WordPressStudioMediaBudget
+    {
+        $budget = new WordPressStudioMediaBudget();
+        $now = (int) hrtime(true);
+        for ($index = 0; $index < 8; ++$index) {
+            $budget->reserveTransfer($now);
+        }
+
+        return $budget;
     }
 }

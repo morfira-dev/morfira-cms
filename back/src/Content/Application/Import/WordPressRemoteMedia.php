@@ -21,5 +21,5 @@ interface WordPressRemoteMedia
      * @param list<string> $allowedHosts
      * @return T
      */
-    public function download(string $apiUrl, string $attachmentUrl, \Closure $consume, array $allowedHosts = [], ?WordPressRestCredentials $credentials = null): mixed;
+    public function download(string $apiUrl, string $attachmentUrl, \Closure $consume, array $allowedHosts = [], ?WordPressRestCredentials $credentials = null, ?WordPressStudioMediaBudget $mediaBudget = null): mixed;
 }

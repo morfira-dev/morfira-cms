@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Cms\Content\Application\Import\WordPressRemoteMedia;
 use Cms\Content\Application\Import\WordPressRemoteMediaFailure;
+use Cms\Content\Application\Import\WordPressStudioMediaBudget;
 use Cms\Content\Infrastructure\Import\WordPressRemoteMediaDownloader;
 use Cms\Content\Application\Import\WordPressRestCredentials;
 use Cms\Content\Infrastructure\Import\WordPressRestTransport;
@@ -32,7 +33,7 @@ if (!$container instanceof ContainerInterface) {
 }
 $container->set(WordPressRestTransport::class, new class implements WordPressRestJsonTransport {
     /** @param array<string,int|string> $query */
-    public function get(string $baseUrl, string $resource, array $query, ?WordPressRestCredentials $credentials = null): array
+    public function get(string $baseUrl, string $resource, array $query, ?WordPressRestCredentials $credentials = null, ?int $deadlineNs = null, ?int $maxBodyBytes = null): array
     {
         if ($baseUrl !== 'https://wordpress.example/wp-json/wp/v2' || $query['page'] !== 1) {
             throw new RuntimeException('Unexpected fixture request.');
@@ -195,7 +196,7 @@ $container->set(WordPressRemoteMediaDownloader::class, new class implements Word
      * @param list<string> $allowedHosts
      * @return T
      */
-    public function download(string $apiUrl, string $attachmentUrl, Closure $consume, array $allowedHosts = [], ?WordPressRestCredentials $credentials = null): mixed
+    public function download(string $apiUrl, string $attachmentUrl, Closure $consume, array $allowedHosts = [], ?WordPressRestCredentials $credentials = null, ?WordPressStudioMediaBudget $mediaBudget = null): mixed
     {
         $this->assertUrl($apiUrl, $attachmentUrl, $allowedHosts, $credentials);
         $mode = getenv('CMS_REST_FIXTURE_MEDIA');

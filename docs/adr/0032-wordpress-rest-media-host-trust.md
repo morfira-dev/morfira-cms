@@ -10,7 +10,7 @@ WordPress exposes attachment URLs in REST metadata. Some installations serve upl
 
 ## Decision
 
-The operator can add exact DNS hostnames for attachments in one CLI invocation. The API host remains implicitly trusted for this purpose. The extra names do not modify the REST metadata destination. Downloads retain public DNS validation and pinning for the actual destination, TLS verification, and the existing restriction on redirects.
+The operator can add exact DNS hostnames for attachments in one CLI invocation. Studio owners can name up to eight CDN hosts when they enable public image downloads for a REST request. The API host remains implicitly trusted for this purpose. The extra names do not modify the REST metadata destination. Downloads retain public DNS validation and pinning for the actual destination, TLS verification, and the existing restriction on redirects.
 
 ## Alternatives and consequences
 
@@ -18,4 +18,4 @@ Automatically following attachment hosts, wildcard domains, and redirect targets
 
 ## Migration and verification
 
-No schema migration is needed. URL policy and production CLI tests verify opt-in attachment downloads, rejection of unlisted hosts and replay without a transfer.
+No schema migration is needed. URL policy, Studio and production CLI tests verify opt-in attachment downloads, rejection of unlisted hosts and replay without a transfer.

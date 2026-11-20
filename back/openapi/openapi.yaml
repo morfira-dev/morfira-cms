@@ -745,11 +745,67 @@ paths:
         '409': { description: Concurrent import conflict, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
         '413': { description: The upload exceeds the allowed size, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
         '422': { description: Invalid source key, WXR input, or selected item IDs, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/imports/wordpress/rest:
+    post:
+      operationId: importWordPressRest
+      tags: [Admin Content]
+      summary: Preview or apply a public WordPress REST import as drafts
+      description: Requires an owner session. Reads a bounded public HTTPS WordPress REST snapshot and can import public images from the REST host and explicitly allowed CDN hosts.
+      security: [{ sessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/CsrfTokenHeader' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [apiUrl, source, mode]
+              dependentSchemas:
+                allowedMediaHosts:
+                  required: [downloadMedia]
+                  properties:
+                    downloadMedia: { const: true }
+              properties:
+                apiUrl:
+                  type: string
+                  format: uri
+                  maxLength: 512
+                  description: Public HTTPS WordPress REST namespace ending in /wp-json/wp/v2.
+                source: { type: string, maxLength: 80, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' }
+                mode: { type: string, enum: [dry-run, apply] }
+                downloadMedia:
+                  type: boolean
+                  default: false
+                  description: Plan or import public images for the whole source snapshot, including when applying selected pages or posts.
+                allowedMediaHosts:
+                  type: array
+                  maxItems: 8
+                  description: Optional additional exact public DNS hostnames for public attachment URLs. Requires downloadMedia to be true. The WordPress REST host is always allowed. Names are case-insensitive.
+                  items:
+                    type: string
+                    maxLength: 253
+                    pattern: '^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$'
+                selectedIds:
+                  type: string
+                  maxLength: 104999
+                  pattern: '^[1-9][0-9]{0,19}(,[1-9][0-9]{0,19})*$'
+                  description: Optional comma-separated list of unique WordPress page or post IDs for apply.
+      responses:
+        '200':
+          description: Dry-run or apply report. Raw content is omitted.
+          content: { application/json: { schema: { $ref: '#/components/schemas/WordPressImportReport' } } }
+        '401': { description: Authentication required, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '403': { description: Owner permission or a valid CSRF token is required, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '409': { description: Concurrent import conflict, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '413': { description: Request body exceeds 128 KiB, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '422': { description: Invalid JSON fields, source or attachment options, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '502': { description: WordPress REST metadata or images could not be read within the Studio limits, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
   /api/v1/admin/imports/wordpress/runs:
     get:
       operationId: listWordPressImportRuns
       tags: [Admin Content]
-      summary: List completed WordPress WXR imports
+      summary: List completed Studio WordPress imports
       description: Requires an owner session. Returns up to 20 runs per page, newest first.
       security: [{ sessionCookie: [] }]
       parameters:
@@ -767,7 +823,7 @@ paths:
     get:
       operationId: getWordPressImportRunReport
       tags: [Admin Content]
-      summary: Retrieve the report from a completed WordPress WXR import
+      summary: Retrieve the report from a completed Studio WordPress import
       description: Requires an owner session. Returns the report as it was at the end of the import.
       security: [{ sessionCookie: [] }]
       parameters:
@@ -2399,7 +2455,7 @@ components:
       required: [mode, input, source, counts, skippedTypes, items, media, taxonomy, authors]
       properties:
         mode: { type: string, enum: [dry-run, apply] }
-        input: { type: string, const: wxr }
+        input: { type: string, enum: [wxr, rest] }
         scope:
           type: string
           const: selection

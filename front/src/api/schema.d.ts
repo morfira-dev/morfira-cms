@@ -347,6 +347,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/imports/wordpress/rest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview or apply a public WordPress REST import as drafts
+         * @description Requires an owner session. Reads a bounded public HTTPS WordPress REST snapshot and can import public images from the REST host and explicitly allowed CDN hosts.
+         */
+        post: operations["importWordPressRest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/imports/wordpress/runs": {
         parameters: {
             query?: never;
@@ -355,7 +375,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List completed WordPress WXR imports
+         * List completed Studio WordPress imports
          * @description Requires an owner session. Returns up to 20 runs per page, newest first.
          */
         get: operations["listWordPressImportRuns"];
@@ -375,7 +395,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Retrieve the report from a completed WordPress WXR import
+         * Retrieve the report from a completed Studio WordPress import
          * @description Requires an owner session. Returns the report as it was at the end of the import.
          */
         get: operations["getWordPressImportRunReport"];
@@ -1015,8 +1035,8 @@ export interface components {
         WordPressImportReport: {
             /** @enum {string} */
             mode: "dry-run" | "apply";
-            /** @constant */
-            input: "wxr";
+            /** @enum {string} */
+            input: "wxr" | "rest";
             /**
              * @description Present for a selective apply report.
              * @constant
@@ -2902,6 +2922,105 @@ export interface operations {
             };
             /** @description Invalid source key */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    importWordPressRest: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Session-bound token obtained from `/api/v1/auth/csrf`. */
+                "X-CSRF-Token": components["parameters"]["CsrfTokenHeader"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * Format: uri
+                     * @description Public HTTPS WordPress REST namespace ending in /wp-json/wp/v2.
+                     */
+                    apiUrl: string;
+                    source: string;
+                    /** @enum {string} */
+                    mode: "dry-run" | "apply";
+                    /**
+                     * @description Plan or import public images for the whole source snapshot, including when applying selected pages or posts.
+                     * @default false
+                     */
+                    downloadMedia?: boolean;
+                    /** @description Optional additional exact public DNS hostnames for public attachment URLs. Requires downloadMedia to be true. The WordPress REST host is always allowed. Names are case-insensitive. */
+                    allowedMediaHosts?: string[];
+                    /** @description Optional comma-separated list of unique WordPress page or post IDs for apply. */
+                    selectedIds?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Dry-run or apply report. Raw content is omitted. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WordPressImportReport"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Owner permission or a valid CSRF token is required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Concurrent import conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Request body exceeds 128 KiB */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid JSON fields */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description WordPress REST metadata or images could not be read within the Studio limits */
+            502: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -30,11 +30,11 @@ final readonly class ImportWordPressMedia
      * @param list<string> $allowedHosts
      * @return list<MediaOutcome>
      */
-    public function __invoke(string $source, array $attachments, ?string $directory, bool $apply, \ArrayObject $created, ?string $apiUrl = null, array $allowedHosts = [], ?WordPressRestCredentials $credentials = null): array
+    public function __invoke(string $source, array $attachments, ?string $directory, bool $apply, \ArrayObject $created, ?string $apiUrl = null, array $allowedHosts = [], ?WordPressRestCredentials $credentials = null, ?WordPressStudioMediaBudget $mediaBudget = null): array
     {
         $report = [];
         foreach ($attachments as $attachment) {
-            $report[] = $this->importAttachment($source, $attachment, $directory, $apply, $created, $apiUrl, $allowedHosts, $credentials);
+            $report[] = $this->importAttachment($source, $attachment, $directory, $apply, $created, $apiUrl, $allowedHosts, $credentials, $mediaBudget);
         }
 
         return $report;
@@ -63,7 +63,7 @@ final readonly class ImportWordPressMedia
      * @param list<string> $allowedHosts
      * @return MediaOutcome
      */
-    private function importAttachment(string $source, array $attachment, ?string $directory, bool $apply, \ArrayObject $created, ?string $apiUrl, array $allowedHosts, ?WordPressRestCredentials $credentials): array
+    private function importAttachment(string $source, array $attachment, ?string $directory, bool $apply, \ArrayObject $created, ?string $apiUrl, array $allowedHosts, ?WordPressRestCredentials $credentials, ?WordPressStudioMediaBudget $mediaBudget): array
     {
         $id = $attachment['id'];
         $private = $attachment['isPrivate'] ?? false;
@@ -107,6 +107,7 @@ final readonly class ImportWordPressMedia
                     fn (string $path, string $fileName): MediaAssetView => ($this->upload)($path, $fileName, $attachment['alt'], $private),
                     $allowedHosts,
                     $downloadCredentials,
+                    $mediaBudget,
                 );
             }
             if (!$apply) {

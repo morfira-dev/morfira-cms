@@ -6,7 +6,7 @@ Implemented
 
 ## Problem and goals
 
-Owners need to review the result of a migration batch after leaving the importer. Admin Studio lists completed WXR imports and can reopen or download their reports.
+Owners need to review the result of a migration batch after leaving the importer. Admin Studio lists completed WXR and public REST imports and can reopen or download their reports.
 
 ## Actors and permissions
 
@@ -14,7 +14,7 @@ An owner can list completed runs and retrieve their reports. Both reads use the 
 
 ## User and system flows
 
-1. The owner previews a WXR file and applies a whole export or a selection.
+1. The owner previews a WordPress source and applies the whole source or a selection.
 2. A successful apply records its result and makes the run available in history.
 3. The owner browses runs by date and scope, opens a saved report and can download its JSON.
 4. The owner can return to the current import without losing its preview or selection.

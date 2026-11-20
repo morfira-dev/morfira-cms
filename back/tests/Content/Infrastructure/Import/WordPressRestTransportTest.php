@@ -59,6 +59,18 @@ final class WordPressRestTransportTest extends TestCase
         new WordPressRestTransport()->get('https://example.test/wp-json/wp/v2', '../other', []);
     }
 
+    public function testRejectsAnExpiredReadBeforeResolvingTheHost(): void
+    {
+        $this->expectExceptionMessage('WordPress REST read time limit exceeded.');
+        new WordPressRestTransport()->get('https://example.test/wp-json/wp/v2', 'posts', [], deadlineNs: (int) hrtime(true) - 1);
+    }
+
+    public function testRejectsAnExhaustedBodyBudgetBeforeResolvingTheHost(): void
+    {
+        $this->expectExceptionMessage('WordPress REST snapshot exceeds the import limits.');
+        new WordPressRestTransport()->get('https://example.test/wp-json/wp/v2', 'posts', [], maxBodyBytes: 1);
+    }
+
     public function testAuthenticatedTransportStillRejectsUnsafeEndpointsBeforeConnecting(): void
     {
         $this->expectException(\InvalidArgumentException::class);

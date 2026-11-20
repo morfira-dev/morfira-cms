@@ -8,20 +8,26 @@ use Cms\Content\Application\Import\WordPressMediaHosts;
 use Cms\Content\Application\Import\WordPressRemoteMedia;
 use Cms\Content\Application\Import\WordPressRemoteMediaFailure;
 use Cms\Content\Application\Import\WordPressRestCredentials;
+use Cms\Content\Application\Import\WordPressStudioMediaBudget;
 use Cms\Media\Application\UploadImage\UploadImage;
 
 final class WordPressRemoteMediaDownloader implements WordPressRemoteMedia
 {
     private const int MAX_HEADER_BYTES = 32 * 1024;
+    private const int MAX_TRANSFER_MS = 20_000;
 
     public function assertUrl(string $apiUrl, string $attachmentUrl, array $allowedHosts = [], ?WordPressRestCredentials $credentials = null): void
     {
         $this->attachment($apiUrl, $attachmentUrl, $allowedHosts, $credentials !== null);
     }
 
-    public function download(string $apiUrl, string $attachmentUrl, \Closure $consume, array $allowedHosts = [], ?WordPressRestCredentials $credentials = null): mixed
+    public function download(string $apiUrl, string $attachmentUrl, \Closure $consume, array $allowedHosts = [], ?WordPressRestCredentials $credentials = null, ?WordPressStudioMediaBudget $mediaBudget = null): mixed
     {
+        if ($mediaBudget !== null && $credentials !== null) {
+            throw new \InvalidArgumentException('Studio attachment downloads must be anonymous.');
+        }
         [$host, $url, $name] = $this->attachment($apiUrl, $attachmentUrl, $allowedHosts, $credentials !== null);
+        $mediaBudget?->reserveTransfer((int) hrtime(true));
         if (!extension_loaded('curl')) {
             throw new WordPressRemoteMediaFailure('WordPress media download requires PHP cURL.');
         }
@@ -42,7 +48,7 @@ final class WordPressRemoteMediaDownloader implements WordPressRemoteMedia
         }
 
         try {
-            $this->transfer($handle, $pins, $temporary, $credentials);
+            $this->transfer($handle, $pins, $temporary, $credentials, $mediaBudget);
             $path = stream_get_meta_data($temporary)['uri'] ?? null;
             if (!is_string($path) || !fflush($temporary)) {
                 throw new WordPressRemoteMediaFailure('Could not stage the WordPress attachment.');
@@ -55,8 +61,9 @@ final class WordPressRemoteMediaDownloader implements WordPressRemoteMedia
     }
 
     /** @param resource $temporary */
-    private function transfer(\CurlHandle $handle, string $pins, $temporary, ?WordPressRestCredentials $credentials): void
+    private function transfer(\CurlHandle $handle, string $pins, $temporary, ?WordPressRestCredentials $credentials, ?WordPressStudioMediaBudget $mediaBudget): void
     {
+        $timeoutMs = $mediaBudget?->remainingTimeoutMs((int) hrtime(true)) ?? self::MAX_TRANSFER_MS;
         $bytes = $headerBytes = 0;
         $bodyOverflow = $headerOverflow = false;
         $auth = $credentials === null ? [] : [
@@ -72,8 +79,8 @@ final class WordPressRemoteMediaDownloader implements WordPressRemoteMedia
             CURLOPT_SSL_VERIFYPEER => true,
             CURLOPT_SSL_VERIFYHOST => 2,
             CURLOPT_RESOLVE => [$pins],
-            CURLOPT_CONNECTTIMEOUT => 5,
-            CURLOPT_TIMEOUT => 20,
+            CURLOPT_CONNECTTIMEOUT_MS => min(5_000, $timeoutMs),
+            CURLOPT_TIMEOUT_MS => $timeoutMs,
             CURLOPT_USERAGENT => 'Morfira CMS WordPress Import',
             CURLOPT_HEADERFUNCTION => static function (\CurlHandle $handle, string $line) use (&$headerBytes, &$headerOverflow): int {
                 $headerBytes += strlen($line);
@@ -103,6 +110,7 @@ final class WordPressRemoteMediaDownloader implements WordPressRemoteMedia
         }
 
         $result = curl_exec($handle);
+        $mediaBudget?->remainingTimeoutMs((int) hrtime(true));
         $status = curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
         if ($status !== 0 && $status !== 200) {
             throw new WordPressRemoteMediaFailure(sprintf('The WordPress attachment returned HTTP %d.', $status));

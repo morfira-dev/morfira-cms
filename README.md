@@ -137,9 +137,9 @@ Remote theme/extension installation, live-linked sections and advanced editorial
 
 ## Import drafts from WordPress
 
-In Admin Studio, owners can open **WordPress import**, upload a WXR export, enter a stable source key, and preview the import report before creating drafts. Search and filter materials, inspect media, taxonomy, author, and redirect outcomes, and select which drafts to create. Use the same source key to continue with the remaining materials. Download the current report as JSON before or after applying. The Studio workflow accepts WXR content exports. REST sources and local media trees are available from the CLI. See the [Studio import specification](docs/specs/wordpress-studio-import.md).
+In Admin Studio, owners can open **WordPress import**, choose a WXR export or a public WordPress REST API, and preview the report before creating drafts. Search and filter materials, inspect media, taxonomy, author, and redirect outcomes, and select which drafts to create. Use the same source key to continue with the remaining materials. Download the current report as JSON before or after applying. The REST form can import a bounded batch of public images from the source host and [explicitly allowed CDN hosts](docs/specs/wordpress-studio-rest-cdn-media.md). The CLI supports larger REST sources and authenticated WordPress access. See the [WXR specification](docs/specs/wordpress-studio-import.md), [Studio REST specification](docs/specs/wordpress-studio-rest-import.md) and [Studio image import specification](docs/specs/wordpress-studio-rest-media.md).
 
-Studio owners can revisit completed WXR applies in **Import history**, download saved reports and open newly created drafts in a separate tab. See the [import history specification](docs/specs/wordpress-studio-import-history.md).
+Studio owners can revisit completed imports in **Import history**, download saved reports and open newly created drafts in a separate tab. See the [import history specification](docs/specs/wordpress-studio-import-history.md).
 
 Export a WXR file (1.0–1.2, up to 8 MiB and 5,000 items) from WordPress. Start the Morfira stack and apply pending migrations before using the importer. For the development stack, run:
 
