@@ -10,7 +10,7 @@ const composerLockfile = 'back/composer.lock';
 const reviewedContainerImages = new Map([
   ['dunglas/frankenphp:php8.4-bookworm', 'MIT image label; PHP and Debian components retain their own licenses'],
   ['mariadb:11.4', 'GPL-2.0 image label; approved only as a separately operated database service'],
-  ['composer:2', 'Composer is MIT; the image has no license OCI label and contains PHP and OS components'],
+  ['composer:2.11.2@sha256:0c8e663f14c94d07b3c45b175c51f5a14718508f21fe4dd7e54f09488dd0ed71', 'Composer is MIT; PHP and Alpine components retain their own licenses'],
   ['node:22-bookworm-slim', 'Node.js is MIT; the image has no license OCI label and contains Debian components'],
 ]);
 const reviewedGithubActions = new Map([

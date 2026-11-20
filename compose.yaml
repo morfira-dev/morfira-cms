@@ -36,12 +36,15 @@ services:
       - database_data:/var/lib/mysql
 
   composer:
-    image: composer:2
+    image: composer:2.11.2@sha256:0c8e663f14c94d07b3c45b175c51f5a14718508f21fe4dd7e54f09488dd0ed71
     working_dir: /app/back
     volumes:
       - .:/app
     environment:
       COMPOSER_HOME: /tmp/composer
+      GIT_CONFIG_COUNT: "1"
+      GIT_CONFIG_KEY_0: safe.directory
+      GIT_CONFIG_VALUE_0: /app
       DATABASE_URL: mysql://cms:cms@database:3306/cms?serverVersion=11.4.0-MariaDB&charset=utf8mb4
 
   front:

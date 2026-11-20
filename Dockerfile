@@ -8,7 +8,7 @@ COPY front/ ./
 COPY back/openapi/openapi.yaml /build/back/openapi/openapi.yaml
 RUN pnpm run build
 
-FROM composer:2 AS php-dependencies
+FROM composer:2.11.2@sha256:0c8e663f14c94d07b3c45b175c51f5a14718508f21fe4dd7e54f09488dd0ed71 AS php-dependencies
 
 WORKDIR /build/back
 COPY back/composer.json back/composer.lock ./
