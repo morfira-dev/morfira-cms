@@ -63,7 +63,15 @@ Inspect the module under `back/src/<Module>/` and its tests.
 - Reuse MUI and the existing theme before adding custom primitives.
 - Preserve loading, empty, error, conflict, and authorization states.
 - Test pure transformations and request behavior; add browser evidence when interaction or layout is material.
-- Run `npm run check` in the frontend container.
+- Use pnpm in the frontend container for dependency changes, OpenAPI generation, and verification. Run `pnpm run check` before handoff.
+
+### Routing and initial requests
+
+- Keep `/admin/` as the canonical Studio dashboard URL. Keep the Vite base path, server entry point, router, and dashboard links aligned. Direct entry via `/admin` must reach `/admin/` with query parameters and the URL fragment intact.
+- For routing changes, use Chromium to verify both dashboard entry URLs, a direct load of an affected nested route, navigation back to the dashboard, and reload at the URL shown in the address bar.
+- Keep React Strict Mode enabled. For each activation of a screen, issue one initial request per resource and set effect dependencies according to the inputs that determine the request. UI-only changes such as locale switches must leave locale-independent reads alone.
+- On cleanup, cancel pending reads and prevent obsolete results from updating data, loading, or error state. Preserve intentional reloads, retries, and requests for new inputs.
+- For bootstrap or data-loading changes, count browser request starts in Chromium against Vite, including requests later cancelled. Reuse the [Admin Studio regression](../../front/e2e/admin-requests.spec.ts) for dashboard routing, startup, and language-switch coverage.
 
 ## Persistence
 

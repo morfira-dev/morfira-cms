@@ -45,21 +45,25 @@ services:
       DATABASE_URL: mysql://cms:cms@database:3306/cms?serverVersion=11.4.0-MariaDB&charset=utf8mb4
 
   front:
-    image: node:22-bookworm-slim
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.front
     working_dir: /app/front
-    command: npm run dev -- --host 0.0.0.0
+    command: pnpm run dev --host 0.0.0.0
     ports:
       - "${CMS_FRONT_PORT:-5174}:5173"
     environment:
       VITE_PUBLIC_SITE_URL: http://localhost:8080
     volumes:
       - .:/app
-      - front_node_modules:/app/front/node_modules
+      - front_pnpm_node_modules:/app/front/node_modules
+      - front_pnpm_store:/app/.pnpm-store
     depends_on:
       - app
 
 volumes:
   database_data:
-  front_node_modules:
+  front_pnpm_node_modules:
+  front_pnpm_store:
   media_data:
   private_media_data:

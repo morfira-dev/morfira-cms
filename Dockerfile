@@ -1,11 +1,12 @@
 FROM node:22-bookworm-slim AS admin-builder
 
+RUN corepack enable pnpm
 WORKDIR /build/front
-COPY front/package.json front/package-lock.json ./
-RUN npm ci
+COPY front/package.json front/pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
 COPY front/ ./
 COPY back/openapi/openapi.yaml /build/back/openapi/openapi.yaml
-RUN npm run build
+RUN pnpm run build
 
 FROM composer:2 AS php-dependencies
 

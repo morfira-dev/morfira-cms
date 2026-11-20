@@ -1,7 +1,9 @@
+import { execFileSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import process from 'node:process';
 
-const npmLockfiles = ['package-lock.json', 'front/package-lock.json'];
+const npmLockfile = 'package-lock.json';
+const pnpmLockfile = 'front/pnpm-lock.yaml';
 const composerLockfile = 'back/composer.lock';
 const reviewedContainerImages = new Map([
   ['dunglas/frankenphp:php8.4-bookworm', 'MIT image label; PHP and Debian components retain their own licenses'],
@@ -58,35 +60,53 @@ function addLicense(counts, license) {
 }
 
 function validateLicense(source, identifier, license) {
-  const isReviewedLightningCss = source === 'front/package-lock.json'
+  const isReviewedLightningCss = source === pnpmLockfile
     && license === 'MPL-2.0'
-    && /^node_modules\/lightningcss(?:-[^@]+)?@1\.33\.0$/u.test(identifier);
+    && /^lightningcss(?:-[^@]+)?@1\.33\.0$/u.test(identifier);
 
   if (!acceptedLicenses.has(license) && !isReviewedLightningCss) {
     failures.push(`${source}: ${identifier} uses unapproved license ${JSON.stringify(license)}.`);
   }
 }
 
-for (const lockfile of npmLockfiles) {
-  const lock = await readJson(lockfile);
-  const counts = new Map();
-  let packages = 0;
+const npmLock = await readJson(npmLockfile);
+const npmCounts = new Map();
+let npmPackages = 0;
 
-  for (const [packagePath, metadata] of Object.entries(lock.packages ?? {})) {
-    if (packagePath === '') {
-      continue;
-    }
-
-    packages += 1;
-    const identifier = `${packagePath}@${metadata.version ?? 'unknown-version'}`;
-    const override = npmMetadataOverrides.get(identifier);
-    const license = metadata.license ?? override?.license ?? 'UNKNOWN';
-
-    addLicense(counts, license);
-    validateLicense(lockfile, identifier, license);
+for (const [packagePath, metadata] of Object.entries(npmLock.packages ?? {})) {
+  if (packagePath === '') {
+    continue;
   }
 
-  summaries.push({ source: lockfile, packages, counts });
+  npmPackages += 1;
+  const identifier = `${packagePath}@${metadata.version ?? 'unknown-version'}`;
+  const override = npmMetadataOverrides.get(identifier);
+  const license = metadata.license ?? override?.license ?? 'UNKNOWN';
+  addLicense(npmCounts, license);
+  validateLicense(npmLockfile, identifier, license);
+}
+summaries.push({ source: npmLockfile, packages: npmPackages, counts: npmCounts });
+
+try {
+  const report = execFileSync('docker', ['compose', 'run', '--rm', '--no-deps', '-T', 'front', 'sh', '-ec', `
+    audit_dir=$(mktemp -d)
+    cp package.json pnpm-lock.yaml "$audit_dir/"
+    cd "$audit_dir"
+    pnpm install --frozen-lockfile --force --ignore-scripts >&2
+    node /app/scripts/read-pnpm-licenses.mjs
+  `], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] });
+  const packages = Object.entries(JSON.parse(report));
+  const counts = new Map();
+  if (packages.length === 0) {
+    throw new Error('The pnpm license inventory is empty.');
+  }
+  for (const [identifier, license] of packages) {
+    addLicense(counts, license);
+    validateLicense(pnpmLockfile, identifier, license);
+  }
+  summaries.push({ source: pnpmLockfile, packages: packages.length, counts });
+} catch (error) {
+  failures.push(`${pnpmLockfile}: could not audit the locked frontend packages. ${error.message}`);
 }
 
 const composerLock = await readJson(composerLockfile);
@@ -108,7 +128,7 @@ for (const section of ['packages', 'packages-dev']) {
 summaries.push({ source: composerLockfile, packages: composerPackages, counts: composerCounts });
 
 const composeFiles = await Promise.all(['compose.yaml', 'compose.prod.yaml', 'compose.e2e.yaml'].map((path) => readFile(path, 'utf8')));
-const dockerfiles = await Promise.all(['back/Dockerfile', 'Dockerfile', 'docker/Dockerfile.e2e'].map((path) => readFile(path, 'utf8')));
+const dockerfiles = await Promise.all(['back/Dockerfile', 'Dockerfile', 'docker/Dockerfile.front', 'docker/Dockerfile.e2e'].map((path) => readFile(path, 'utf8')));
 const releaseWorkflow = await readFile('.github/workflows/release.yml', 'utf8');
 const containerImages = [...new Set([
   ...composeFiles.flatMap((file) => [...file.matchAll(/^\s*image:\s*([^\s#]+).*$/gm)].map((match) => match[1])),

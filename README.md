@@ -13,7 +13,7 @@ The project starts as a modular monolith. Symfony provides infrastructure and de
 
 ```bash
 docker compose run --rm composer install
-docker compose run --rm front npm install
+docker compose run --build --rm --no-deps front pnpm install --frozen-lockfile
 docker compose up app front
 ```
 
@@ -62,10 +62,10 @@ composer install
 composer check
 ```
 
-Frontend commands run through Docker:
+Frontend commands run through Docker with the pnpm version pinned in `front/package.json`. The root release tooling uses its own npm lockfile.
 
 ```bash
-docker compose run --rm --no-deps front npm run check
+docker compose run --rm --no-deps front pnpm run check
 ```
 
 ## Releases

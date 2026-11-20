@@ -7,6 +7,7 @@ back/vendor
 front/dist
 front/node_modules
 node_modules
+**/.pnpm-store
 playwright-report
 test-results
 *.log

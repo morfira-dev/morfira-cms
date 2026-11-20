@@ -41,7 +41,7 @@ jobs:
         run: docker compose run --rm --no-deps composer install --no-interaction --prefer-dist
 
       - name: Install frontend dependencies
-        run: docker compose run --rm --no-deps front npm ci
+        run: docker compose run --build --rm --no-deps front pnpm install --frozen-lockfile
 
       - name: Verify dependency licenses
         run: npm run licenses:check
@@ -50,7 +50,7 @@ jobs:
         run: docker compose run --rm --no-deps composer check
 
       - name: Verify frontend
-        run: docker compose run --rm --no-deps front npm run check
+        run: docker compose run --rm --no-deps front pnpm run check
 
       - name: Verify production browser journey
         env:

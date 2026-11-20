@@ -1,6 +1,7 @@
 /.idea/
 /.DS_Store
 /node_modules/
+.pnpm-store/
 /npm-debug.log*
 /back/.env.local
 /back/.phpunit.cache/

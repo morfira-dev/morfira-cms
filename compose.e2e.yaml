@@ -19,4 +19,4 @@ services:
     depends_on:
       app:
         condition: service_healthy
-    command: npm run test:e2e
+    command: pnpm run test:e2e

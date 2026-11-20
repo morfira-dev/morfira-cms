@@ -24,7 +24,7 @@ Unit and HTTP tests do not prove that a browser can complete the critical setup,
 4. It verifies public HTML and the headless API.
 
 ## Contracts
-- `npm run test:e2e` runs the suite; `npm run test:e2e:install` installs Chromium dependencies.
+- `pnpm run test:e2e` runs the suite. `pnpm run test:e2e:install` installs Chromium dependencies.
 
 ## Data and invariants
 - Tests generate unique content and never run against a production database.

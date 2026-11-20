@@ -25,7 +25,7 @@ If an instruction file changes during a session, reload it before continuing.
 Morfira is a lightweight, scalable CMS that supports both complete server-rendered websites and headless API delivery.
 
 - Backend: PHP 8.4+, Symfony, Doctrine, Twig.
-- Admin Studio: React, TypeScript, MUI, Vite.
+- Admin Studio: React, TypeScript, MUI, Vite, and pnpm with the version pinned in `front/package.json`.
 - Contract: OpenAPI 3.1 under `back/openapi/openapi.yaml`.
 - Persistence: MariaDB in local Docker; keep persistence boundaries database-portable where practical.
 - Local environment and verification: Docker Compose.
@@ -53,7 +53,7 @@ Repository layout:
 
 - Treat `back/openapi/openapi.yaml` as the authoritative HTTP contract.
 - Keep `/api/v1` backward compatible within the major version. Breaking API changes require an explicit migration/versioning decision.
-- After changing OpenAPI, regenerate and commit `front/src/api/schema.d.ts` with `npm run api:types` in the frontend container.
+- After changing OpenAPI, regenerate and commit `front/src/api/schema.d.ts` with `pnpm run api:types` in the frontend container.
 - Do not edit `front/src/api/schema.d.ts` manually.
 - Do not track or edit `back/config/reference.php`; Symfony generates it per environment and it is ignored.
 
@@ -81,6 +81,7 @@ Repository layout:
 - Update tests, OpenAPI, generated types, migrations, documentation, and ADRs in the same change when their contracts move together.
 - Add an ADR when a change introduces or reverses a durable architectural decision.
 - Use Docker for application dependency installation, generation, tests, and analysis.
+- Install frontend dependencies with `pnpm install --frozen-lockfile` for reproducible builds. Use `front/pnpm-lock.yaml` as the frontend lockfile.
 - Do not edit vendor, build, cache, or runtime output.
 
 ## Verification
@@ -96,8 +97,10 @@ docker compose run --rm --no-deps composer check
 Frontend:
 
 ```bash
-docker compose run --rm --no-deps front npm run check
+docker compose run --rm --no-deps front pnpm run check
 ```
+
+For Admin Studio routing, session bootstrap, or initial data-loading changes, run the relevant Chromium regression against the Vite development server with React Strict Mode enabled. Verify direct entry, client navigation, reload, and request counts as applicable. Follow the [Admin Studio workflow](docs/agents/SKILLS.md#admin-studio).
 
 Release configuration:
 
