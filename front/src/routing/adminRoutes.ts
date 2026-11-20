@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { MessageKey } from '../i18n/messages'
 
-export type AdminRouteId = 'dashboard' | 'pages' | 'media' | 'navigation' | 'content-types' | 'taxonomies' | 'entries' | 'users' | 'extensions' | 'settings'
+export type AdminRouteId = 'dashboard' | 'pages' | 'media' | 'navigation' | 'content-types' | 'taxonomies' | 'entries' | 'users' | 'extensions' | 'import' | 'settings'
 
 export interface AdminRoute {
   id: AdminRouteId
@@ -20,6 +20,7 @@ export const adminRoutes: AdminRoute[] = [
   { id: 'entries', label: 'Entries', path: '/admin/entries' },
   { id: 'users', label: 'Users', path: '/admin/users', ownerOnly: true },
   { id: 'extensions', label: 'Extensions', path: '/admin/extensions', ownerOnly: true },
+  { id: 'import', label: 'WordPress import', path: '/admin/import', ownerOnly: true },
   { id: 'settings', label: 'Settings', path: '/admin/settings' },
 ]
 

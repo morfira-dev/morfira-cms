@@ -711,6 +711,40 @@ paths:
       responses:
         '204': { description: Section deleted. }
         '404': { description: Section not found. }
+  /api/v1/admin/imports/wordpress:
+    post:
+      operationId: importWordPressExport
+      tags: [Admin Content]
+      summary: Preview or apply a WordPress WXR import as drafts
+      description: Requires an owner session. The upload is limited to 8 MiB and 5000 WXR items.
+      security: [{ sessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/CsrfTokenHeader' }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [file, source, mode]
+              properties:
+                file: { type: string, format: binary }
+                source: { type: string, maxLength: 80, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' }
+                mode: { type: string, enum: [dry-run, apply] }
+                selectedIds:
+                  type: string
+                  maxLength: 104999
+                  pattern: '^[1-9][0-9]{0,19}(,[1-9][0-9]{0,19})*$'
+                  description: Optional comma-separated list of 1–5000 unique WXR page or post IDs for apply. Omit to import the whole source.
+      responses:
+        '200':
+          description: Dry-run or apply report. Raw content is omitted.
+          content: { application/json: { schema: { $ref: '#/components/schemas/WordPressImportReport' } } }
+        '401': { description: Authentication required, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '403': { description: Owner permission or a valid CSRF token is required, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '409': { description: Concurrent import conflict, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '413': { description: The upload exceeds the allowed size, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '422': { description: Invalid source key, WXR input, or selected item IDs, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
   /api/v1/admin/pages:
     get:
       operationId: listPages
@@ -2323,6 +2357,92 @@ components:
         type: string
         example: '"019db391-89cb-7d2f-9aa0-9cd4765d9125"'
   schemas:
+    WordPressImportReport:
+      type: object
+      required: [mode, input, source, counts, skippedTypes, items, media, taxonomy, authors]
+      properties:
+        mode: { type: string, enum: [dry-run, apply] }
+        input: { type: string, const: wxr }
+        scope:
+          type: string
+          const: selection
+          description: Present for a selective apply report.
+        source: { type: string }
+        counts:
+          type: object
+          additionalProperties: { type: integer, minimum: 0 }
+        skippedTypes:
+          type: object
+          additionalProperties: { type: integer, minimum: 0 }
+        items:
+          type: array
+          items:
+            type: object
+            required: [id, type, status, sourcePath, targetPath, state]
+            properties:
+              id: { type: string }
+              type: { type: string, enum: [page, post] }
+              status: { type: string }
+              title:
+                type: string
+                minLength: 1
+                maxLength: 200
+                description: Plain-text source title for an unprotected page or post with an importable status.
+              sourcePath: { type: [string, 'null'] }
+              targetPath: { type: [string, 'null'] }
+              state: { type: string }
+              reason: { type: string }
+              redirect: { type: string }
+              author: { type: string }
+              images:
+                type: object
+                required: [inline, missingInline, featured]
+                properties:
+                  inline: { type: integer, minimum: 0 }
+                  missingInline: { type: integer, minimum: 0 }
+                  featured: { type: string }
+        media:
+          type: array
+          items:
+            type: object
+            required: [id, state]
+            properties:
+              id: { type: string }
+              state: { type: string }
+              reason: { type: string }
+              assetId: { type: string, format: uuid }
+              isPrivate: { type: boolean, description: Whether the mapped Morfira asset requires an authenticated session. }
+        taxonomy:
+          type: object
+          required: [terms, assignments]
+          properties:
+            terms:
+              type: array
+              items:
+                type: object
+                required: [taxonomy, slug, state]
+                properties:
+                  taxonomy: { type: string }
+                  slug: { type: string }
+                  state: { type: string }
+            assignments:
+              type: array
+              items:
+                type: object
+                required: [entryId, taxonomy, slug, state]
+                properties:
+                  entryId: { type: string, description: Draft entry UUID after apply or a wp-prefixed source ID during dry-run. }
+                  taxonomy: { type: string }
+                  slug: { type: string }
+                  state: { type: string }
+        authors:
+          type: array
+          items:
+            type: object
+            required: [state]
+            properties:
+              state: { type: string }
+              profileId: { type: string, format: uuid }
     SetupStatus:
       type: object
       additionalProperties: false

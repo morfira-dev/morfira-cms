@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cms\Content\Infrastructure\Import;
 
+use Cms\Content\Application\Import\WordPressExportSource;
 use DOMDocument;
 use DOMElement;
 
@@ -13,13 +14,11 @@ use DOMElement;
  * @phpstan-type Attachment array{id:string,path:string,url:string,alt:string,eligible:bool,isPrivate?:bool}
  * @phpstan-type Author array{login:string,name:string}
  * @phpstan-type ExportItem array{id: string, type: string, status: string, title: string, slug: string, html: string, link: string, passwordProtected: bool, terms:list<TermReference>, thumbnailId:?string, authorLogin:?string, restrictedSource?:bool}
- * @phpstan-type Export array{items:list<ExportItem>,skippedTypes:array<string,int>,attachments:list<Attachment>,terms:list<Term>,authors:list<Author>,sourceUrl:?string}
+ * @phpstan-import-type Export from WordPressExportSource
  */
-final class WordPressExportReader
+final class WordPressExportReader implements WordPressExportSource
 {
-    private const MAX_BYTES = 8 * 1024 * 1024;
     private const MAX_ELEMENTS = 100_000;
-    private const MAX_ITEMS = 5_000;
     private const CONTENT_NAMESPACE = 'http://purl.org/rss/1.0/modules/content/';
     private const CREATOR_NAMESPACE = 'http://purl.org/dc/elements/1.1/';
     private const WORDPRESS_NAMESPACES = [

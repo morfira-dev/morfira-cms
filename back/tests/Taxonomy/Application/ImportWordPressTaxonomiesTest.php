@@ -16,6 +16,22 @@ use PHPUnit\Framework\TestCase;
 
 final class ImportWordPressTaxonomiesTest extends TestCase
 {
+    public function testSelectionPreservesAllDeclarationsAndFollowsNormalizedAncestors(): void
+    {
+        $terms = [
+            ['taxonomy' => 'category', 'slug' => 'child', 'name' => 'First child declaration', 'parent' => 'новости'],
+            ['taxonomy' => 'category', 'slug' => 'child', 'name' => 'Conflicting declaration', 'parent' => 'alternative'],
+            ['taxonomy' => 'category', 'slug' => rawurlencode('новости'), 'name' => 'Parent', 'parent' => 'child'],
+            ['taxonomy' => 'category', 'slug' => 'alternative', 'name' => 'Alternative parent', 'parent' => ''],
+            ['taxonomy' => 'post_tag', 'slug' => 'child', 'name' => 'Independent tag', 'parent' => ''],
+        ];
+
+        self::assertSame(
+            array_slice($terms, 0, 4),
+            ImportWordPressTaxonomies::referencedDefinitions($terms, [['taxonomy' => 'category', 'slug' => 'child']]),
+        );
+    }
+
     public function testPlansAndCreatesHierarchyThenAssignsTermsIdempotently(): void
     {
         $repository = new InMemoryTaxonomyRepository();

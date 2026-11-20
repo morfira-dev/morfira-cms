@@ -6,6 +6,10 @@ describe('resolveAdminRoute', () => {
     expect(resolveAdminRoute('/admin/taxonomies').id).toBe('taxonomies')
   })
 
+  it('marks the WordPress import workspace as owner-only', () => {
+    expect(resolveAdminRoute('/admin/import')).toMatchObject({ id: 'import', ownerOnly: true })
+  })
+
   it('preserves the legacy root entry as pages', () => {
     expect(resolveAdminRoute('/').path).toBe('/admin/pages')
   })

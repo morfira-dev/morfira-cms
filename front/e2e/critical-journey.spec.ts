@@ -1,4 +1,6 @@
+import { readFile } from 'node:fs/promises'
 import { expect, test } from '@playwright/test'
+import type { components } from '../src/api/schema'
 
 test.setTimeout(90_000)
 
@@ -291,4 +293,169 @@ test('owner creates, edits and publishes a page through the production surface',
   await entryImage.click()
   await page.getByRole('option', { name: 'public.webp', exact: true }).click()
   await expect(entryImage).not.toHaveAccessibleDescription(privateImageWarning)
+
+  await page.getByRole('link', { name: 'Импорт WordPress', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Импорт WordPress', exact: true })).toBeVisible()
+  const sourceKey = page.getByRole('textbox', { name: 'Ключ источника', exact: true })
+  await sourceKey.fill('studio-e2e')
+  await page.getByLabel('Файл WXR', { exact: true }).setInputFiles({
+    name: 'studio-export.xml',
+    mimeType: 'application/xml',
+    buffer: Buffer.from(`<rss xmlns:wp="http://wordpress.org/export/1.2/"
+      xmlns:content="http://purl.org/rss/1.0/modules/content/">
+      <channel><link>https://wordpress.example/</link><wp:wxr_version>1.2</wp:wxr_version>
+      <wp:category><wp:category_nicename>studio-import</wp:category_nicename><wp:cat_name>Studio import</wp:cat_name></wp:category>
+      <item><title>Studio import page</title><link>https://wordpress.example/legacy/studio-import-page/</link>
+      <wp:post_id>99001</wp:post_id><wp:post_name>studio-import-page</wp:post_name>
+      <wp:post_type>page</wp:post_type><wp:status>publish</wp:status>
+      <wp:postmeta><wp:meta_key>_thumbnail_id</wp:meta_key><wp:meta_value>99002</wp:meta_value></wp:postmeta>
+      <content:encoded><![CDATA[<p>Imported through Studio. <a href="https://wordpress.example/legacy/studio-second-page/">Read the second page</a></p>]]></content:encoded></item>
+      <item><title>Studio attachment</title><wp:post_id>99002</wp:post_id>
+      <wp:post_type>attachment</wp:post_type><wp:status>inherit</wp:status>
+      <wp:attachment_url>https://wordpress.example/wp-content/uploads/studio.png</wp:attachment_url></item>
+      <item><title>Studio second page</title><link>https://wordpress.example/legacy/studio-second-page/</link>
+      <wp:post_id>99003</wp:post_id><wp:post_name>studio-second-page</wp:post_name>
+      <wp:post_type>page</wp:post_type><wp:status>publish</wp:status>
+      <content:encoded><![CDATA[<p>Imported in the second batch. <a href="https://wordpress.example/legacy/studio-import-page/#intro">Read the first page</a></p>]]></content:encoded></item>
+      </channel></rss>`),
+  })
+  const previewImport = page.getByRole('button', { name: 'Предпросмотр импорта', exact: true })
+  const applyImport = page.getByRole('button', { name: 'Создать черновики', exact: true })
+  const importResponse = () => page.waitForResponse((response) =>
+    response.url().endsWith('/api/v1/admin/imports/wordpress') && response.request().method() === 'POST',
+  )
+  const listDrafts = async () => {
+    const response = await page.request.get('/api/v1/admin/pages')
+    expect(response.ok()).toBeTruthy()
+    return (await response.json() as components['schemas']['PageCollection']).items
+  }
+  const importedDrafts = async () => {
+    return (await listDrafts())
+      .map((item) => item.slug)
+      .filter((slug) => ['studio-import-page', 'studio-second-page'].includes(slug))
+      .sort()
+  }
+  const getDraft = async (slug: string) => {
+    const draft = (await listDrafts()).find((item) => item.slug === slug)
+    if (!draft) throw new Error(`Draft ${slug} is missing.`)
+
+    const response = await page.request.get(`/api/v1/admin/pages/${draft.id}`)
+    expect(response.ok()).toBeTruthy()
+    return await response.json() as components['schemas']['Page']
+  }
+
+  const [dryRun] = await Promise.all([importResponse(), previewImport.click()])
+  expect(dryRun.ok()).toBeTruthy()
+  const dryRunReport = await dryRun.json()
+  expect(dryRunReport).toMatchObject({ mode: 'dry-run', counts: { planned: 2 } })
+  await expect(page.getByText('/studio-import-page', { exact: true })).toBeVisible()
+  expect(await importedDrafts()).toHaveLength(0)
+
+  const reportTable = page.getByRole('table', { name: 'Отчёт импорта WordPress' })
+  const reportRow = reportTable.getByRole('row', { name: /Studio import page/ })
+  await expect(reportRow.getByText('Миниатюра отсутствует')).toBeVisible()
+  await expect(reportRow.getByText('Редирект запланирован')).toBeVisible()
+  const attachmentTable = page.getByRole('table', { name: 'Вложения', exact: true })
+  await expect(attachmentTable.getByRole('row', { name: /99002/ })).toContainText('Нужны файлы вложений')
+  await page.getByRole('combobox', { name: 'Раздел отчёта' }).click()
+  await page.getByRole('option', { name: 'Термины таксономии · 1', exact: true }).click()
+  const termTable = page.getByRole('table', { name: 'Термины таксономии', exact: true })
+  await expect(termTable.getByRole('row', { name: /studio-import/ })).toContainText('Готово к импорту')
+
+  const search = page.getByRole('textbox', { name: 'Поиск по заголовку, ID или пути' })
+  await search.fill('studio IMPORT')
+  await expect(reportRow).toBeVisible()
+  const itemType = page.getByRole('combobox', { name: 'Тип материала' })
+  await itemType.click()
+  await page.getByRole('option', { name: 'Записи WordPress', exact: true }).click()
+  await expect(page.getByText('Нет материалов по заданным фильтрам.')).toBeVisible()
+  await expect(reportRow).toHaveCount(0)
+
+  const downloadReport = async (mode: string, report: unknown) => {
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: 'Скачать отчёт JSON' }).click(),
+    ])
+    expect(download.suggestedFilename()).toBe(`wordpress-import-studio-e2e-${mode}.json`)
+    expect(JSON.parse(await readFile(await download.path(), 'utf8'))).toEqual(report)
+  }
+  await downloadReport('dry-run', dryRunReport)
+
+  await sourceKey.fill('other-source')
+  await expect(page.getByText('/studio-import-page', { exact: true })).toHaveCount(0)
+  await sourceKey.fill('studio-e2e')
+  await previewImport.click()
+  await expect(applyImport).toBeEnabled()
+  const firstSelection = reportRow.getByRole('checkbox')
+  const secondSelection = reportTable.getByRole('row', { name: /Studio second page/ }).getByRole('checkbox')
+  await expect(firstSelection).toBeChecked()
+  await expect(secondSelection).toBeChecked()
+  await search.fill('Studio second page')
+  await page.getByRole('button', { name: 'Снять выбор с материалов по фильтру', exact: true }).click()
+  await expect(page.getByText('Выбрано материалов: 1 из 2', { exact: true })).toBeVisible()
+  await search.clear()
+  await expect(firstSelection).toBeChecked()
+  await expect(secondSelection).not.toBeChecked()
+  await firstSelection.uncheck()
+  await expect(applyImport).toBeDisabled()
+  await firstSelection.check()
+
+  const [apply] = await Promise.all([importResponse(), applyImport.click()])
+  expect(apply.ok()).toBeTruthy()
+  const applyReport = await apply.json()
+  expect(applyReport).toMatchObject({
+    mode: 'apply',
+    scope: 'selection',
+    counts: { imported: 1 },
+    items: [{ id: '99001', state: 'imported' }],
+    taxonomy: { terms: [] },
+  })
+  await downloadReport('apply', applyReport)
+  expect(await importedDrafts()).toEqual(['studio-import-page'])
+  expect((await request.get('/studio-import-page')).status()).toBe(404)
+  const firstDraft = await getDraft('studio-import-page')
+  const originalForwardLink = 'href="https://wordpress.example/legacy/studio-second-page/"'
+  const localBacklink = 'href="/studio-import-page#intro"'
+  const richTextWith = (href: string) => expect.arrayContaining([expect.objectContaining({
+    type: 'richText', data: { content: expect.stringContaining(href) },
+  })])
+  expect(firstDraft.blocks).toEqual(richTextWith(originalForwardLink))
+
+  const [remaining] = await Promise.all([importResponse(), previewImport.click()])
+  expect(remaining.ok()).toBeTruthy()
+  await expect(remaining.json()).resolves.toMatchObject({ mode: 'dry-run', counts: { already_imported: 1, planned: 1 } })
+  await expect(reportRow.getByRole('checkbox')).toHaveCount(0)
+  await expect(secondSelection).toBeChecked()
+  const [secondApply] = await Promise.all([importResponse(), applyImport.click()])
+  expect(secondApply.ok()).toBeTruthy()
+  await expect(secondApply.json()).resolves.toMatchObject({ mode: 'apply', counts: { already_imported: 1, imported: 1 } })
+  expect(await importedDrafts()).toEqual(['studio-import-page', 'studio-second-page'])
+  const firstDraftAfterSecondImport = await getDraft('studio-import-page')
+  expect(firstDraftAfterSecondImport.version).toBe(firstDraft.version)
+  expect(firstDraftAfterSecondImport.blocks).toEqual(firstDraft.blocks)
+  const secondDraft = await getDraft('studio-second-page')
+  expect(secondDraft.blocks).toEqual(richTextWith(localBacklink))
+  expect((await request.get('/studio-second-page')).status()).toBe(404)
+  expect((await request.get('/api/v1/content/pages/studio-second-page')).status()).toBe(404)
+
+  const [replay] = await Promise.all([importResponse(), previewImport.click()])
+  expect(replay.ok()).toBeTruthy()
+  await expect(replay.json()).resolves.toMatchObject({ mode: 'dry-run', counts: { already_imported: 2 } })
+  expect(await importedDrafts()).toEqual(['studio-import-page', 'studio-second-page'])
+
+  const csrf = await page.request.get('/api/v1/auth/csrf')
+  expect(csrf.ok()).toBeTruthy()
+  const { token } = await csrf.json() as components['schemas']['CsrfToken']
+  const publish = await page.request.post(`/api/v1/admin/pages/${secondDraft.id}/publish`, {
+    data: { version: secondDraft.version },
+    headers: { 'X-CSRF-Token': token },
+  })
+  expect(publish.ok()).toBeTruthy()
+
+  const publicImportedPage = await request.get('/studio-second-page')
+  expect(publicImportedPage.status()).toBe(200)
+  expect(await publicImportedPage.text()).toContain(localBacklink)
+  const headlessImportedPage = await request.get('/api/v1/content/pages/studio-second-page')
+  expect(headlessImportedPage.status()).toBe(200)
+  await expect(headlessImportedPage.json()).resolves.toMatchObject({ blocks: richTextWith(localBacklink) })
 })

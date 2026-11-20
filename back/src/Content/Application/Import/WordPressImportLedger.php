@@ -17,6 +17,17 @@ interface WordPressImportLedger
      */
     public function claim(string $source, string $externalId): void;
 
+    /** @return list<array{externalId:string,url:string,kind:'page'|'post',targetId:string}> */
+    public function draftPermalinks(string $source): array;
+
+    /**
+     * Record the permalink against a fresh claim in the draft creation transaction.
+     *
+     * @param 'page'|'post' $kind
+     * @throws WordPressImportClaimConflict
+     */
+    public function recordDraftPermalink(string $source, string $externalId, string $url, string $kind, string $targetId): void;
+
     public function mediaAssetId(string $source, string $externalId): ?string;
 
     public function recordMediaAsset(string $source, string $externalId, string $assetId): void;

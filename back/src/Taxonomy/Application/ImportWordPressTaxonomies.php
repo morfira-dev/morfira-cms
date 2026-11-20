@@ -81,6 +81,43 @@ final readonly class ImportWordPressTaxonomies
     }
 
     /**
+     * Keep all declarations for each referenced term and its ancestors.
+     *
+     * @param list<SourceTerm> $terms
+     * @param list<SourceAssignment> $references
+     * @return list<SourceTerm>
+     */
+    public static function referencedDefinitions(array $terms, array $references): array
+    {
+        $parents = [];
+        foreach ($terms as $term) {
+            if ($term['parent'] !== '') {
+                $parents[self::termKey($term['taxonomy'], $term['slug'])][] = self::termKey($term['taxonomy'], $term['parent']);
+            }
+        }
+
+        $queue = array_map(static fn (array $term): string => self::termKey($term['taxonomy'], $term['slug']), $references);
+        $seen = [];
+        for ($index = 0; $index < count($queue); ++$index) {
+            $key = $queue[$index];
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            foreach ($parents[$key] ?? [] as $parent) {
+                $queue[] = $parent;
+            }
+        }
+
+        return array_values(array_filter($terms, static fn (array $term): bool => isset($seen[self::termKey($term['taxonomy'], $term['slug'])])));
+    }
+
+    private static function termKey(string $taxonomy, string $slug): string
+    {
+        return $taxonomy.':'.self::slugKey($slug);
+    }
+
+    /**
      * @param list<SourceTerm> $source
      * @return array{array<array-key,Term>,array<array-key,string>,list<Term>}
      */

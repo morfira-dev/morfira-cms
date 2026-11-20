@@ -34,7 +34,7 @@ use Cms\Taxonomy\Application\ImportWordPressTaxonomies;
  * @phpstan-type TermReference array{taxonomy:string,slug:string}
  * @phpstan-type Term array{taxonomy:string,slug:string,name:string,parent:string}
  * @phpstan-type SourceItem array{id:string,type:string,status:string,title:string,slug:string,html:string,link:string,passwordProtected:bool,terms:list<TermReference>,thumbnailId:?string,authorLogin:?string,restrictedSource?:bool}
- * @phpstan-type ReportItem array{id:string,type:string,status:string,sourcePath:?string,targetPath:?string,state:string,reason?:string,images?:array{inline:int,missingInline:int,featured:string},author?:string,redirect?:string,restrictedSource?:bool}
+ * @phpstan-type ReportItem array{id:string,type:string,status:string,sourcePath:?string,targetPath:?string,state:string,title?:string,reason?:string,images?:array{inline:int,missingInline:int,featured:string},author?:string,redirect?:string,restrictedSource?:bool}
  * @phpstan-type DraftPlan array{title:string,slug:string,segments:list<Segment>,featured:?string,post:?array{fields:list<Field>,values:array<string,string>}}
  * @phpstan-type TaxonomyOutcomes array{terms:list<array{taxonomy:string,slug:string,state:string}>,assignments:list<array{entryId:string,taxonomy:string,slug:string,state:string}>}
  * @phpstan-type ImportReport array{items:list<ReportItem>,media:list<MediaOutcome>,taxonomy:TaxonomyOutcomes,authors:list<AuthorOutcome>}
@@ -42,6 +42,7 @@ use Cms\Taxonomy\Application\ImportWordPressTaxonomies;
 final readonly class ImportWordPressDrafts
 {
     private const string POST_TYPE = 'wordpress-posts';
+    private const int MAX_RECORDED_PERMALINK_BYTES = 2048;
 
     public function __construct(
         private WordPressImportLedger $ledger,
@@ -70,7 +71,7 @@ final readonly class ImportWordPressDrafts
      * @param list<string> $allowedMediaHosts
      * @return ImportReport
      */
-    public function __invoke(string $source, array $items, bool $apply, array $terms, array $attachments, ?string $mediaDirectory, array $authors, ?string $sourceUrl, ?string $apiUrl = null, array $allowedMediaHosts = [], ?WordPressRestCredentials $credentials = null): array
+    public function __invoke(string $source, array $items, bool $apply, array $terms, array $attachments, ?string $mediaDirectory, array $authors, ?string $sourceUrl, ?string $apiUrl = null, array $allowedMediaHosts = [], ?WordPressRestCredentials $credentials = null, bool $scopeDependencies = false): array
     {
         if (!self::validSourceKey($source)) {
             throw new \InvalidArgumentException('Source must be a lowercase identifier of at most 80 characters.');
@@ -79,13 +80,21 @@ final readonly class ImportWordPressDrafts
         /** @var \ArrayObject<int,MediaAssetView> $created */
         $created = new \ArrayObject();
         $credentials = $apiUrl === null ? null : $credentials;
-        $run = function () use ($source, $items, $apply, $terms, $attachments, $mediaDirectory, $created, $authors, $sourceUrl, $apiUrl, $allowedMediaHosts, $credentials): array {
+        $run = function () use ($source, $items, $apply, $terms, $attachments, $mediaDirectory, $created, $authors, $sourceUrl, $apiUrl, $allowedMediaHosts, $credentials, $scopeDependencies): array {
             $media = ($this->media)($source, $attachments, $mediaDirectory, $apply, $created, $apiUrl, $allowedMediaHosts, $credentials);
+            $dependencyItems = $scopeDependencies
+                ? array_values(array_filter($items, fn (array $item): bool => !$this->ledger->contains($source, $item['id'])))
+                : $items;
             $logins = [];
-            foreach ($items as $item) {
+            foreach ($dependencyItems as $item) {
                 if ($item['type'] === 'post' && $item['authorLogin'] !== null) {
                     $logins[] = $item['authorLogin'];
                 }
+            }
+            if ($scopeDependencies) {
+                $authorKeys = array_fill_keys(array_map(ImportWordPressAuthors::key(...), $logins), true);
+                $authors = array_values(array_filter($authors, static fn (array $author): bool => isset($authorKeys[ImportWordPressAuthors::key($author['login'])])));
+                $terms = ImportWordPressTaxonomies::referencedDefinitions($terms, array_merge(...array_column($dependencyItems, 'terms')));
             }
             $importedAuthors = ($this->authors)($source, $authors, $logins, $apply);
             $assignments = [];
@@ -128,14 +137,19 @@ final readonly class ImportWordPressDrafts
         $postTypeId = $postSchema?->id;
         $compatibleSchema = $postSchema === null || $this->supportsPostBody($postSchema);
         $occupied = [];
+        $targetPaths = ['page' => [], 'post' => []];
         foreach ($this->pages->all() as $page) {
             if ($page->locale === $locale) {
-                $occupied['/'.$page->slug->value] = true;
+                $path = '/'.$page->slug->value;
+                $occupied[$path] = true;
+                $targetPaths['page'][$page->id->value] = $path === '/home' ? '/' : $path;
             }
         }
         if ($postTypeId !== null) {
             foreach ($this->entries->all($postTypeId) as $entry) {
-                $occupied[$this->postPath($entry->slug->value)] = true;
+                $path = $this->postPath($entry->slug->value);
+                $occupied[$path] = true;
+                $targetPaths['post'][$entry->id->value] = $path;
             }
         }
 
@@ -151,14 +165,16 @@ final readonly class ImportWordPressDrafts
                 $drafts[$index] = $draft;
             }
             if ($apply) {
-                $path = $draft !== null && $item['status'] === 'publish' && !$item['passwordProtected'] && !($item['restrictedSource'] ?? false)
+                $path = $draft !== null && self::isPublicLinkTarget($item)
                     ? $row['targetPath']
                     : null;
-                $permalinks[] = ['url' => $item['link'], 'path' => $path === '/home' ? '/' : $path];
+                $permalinks[$item['id']] = ['url' => $item['link'], 'path' => $path === '/home' ? '/' : $path];
             }
         }
 
-        $links = WordPressInternalLinks::index($sourceUrl, $permalinks);
+        $links = $apply && $drafts !== [] && $sourceUrl !== null
+            ? $this->linksForBatch($source, $sourceUrl, $items, $permalinks, $targetPaths)
+            : [];
         foreach ($report as $index => $row) {
             if (!isset($drafts[$index])) {
                 continue;
@@ -168,6 +184,11 @@ final readonly class ImportWordPressDrafts
             if ($apply) {
                 $this->ledger->claim($source, $item['id']);
                 $targetId = $this->createDraft($drafts[$index], $locale, $postSchema, $links);
+                if (self::isPublicLinkTarget($item) && strlen($item['link']) <= self::MAX_RECORDED_PERMALINK_BYTES
+                    && WordPressInternalLinks::sourcePermalinkKey($sourceUrl, $item['link']) !== null) {
+                    $kind = $item['type'] === 'page' ? 'page' : 'post';
+                    $this->ledger->recordDraftPermalink($source, $item['id'], $item['link'], $kind, $targetId);
+                }
                 $row['state'] = 'imported';
             }
             $row['redirect'] = $this->redirect($item, $sourceUrl, $row['targetPath'], $targetId);
@@ -178,6 +199,41 @@ final readonly class ImportWordPressDrafts
         }
 
         return $report;
+    }
+
+    /**
+     * @param list<SourceItem> $items
+     * @param array<array-key,array{url:string,path:?string}> $permalinks
+     * @param array{page:array<string,string>,post:array<string,string>} $targetPaths
+     * @return array<string,string>
+     */
+    private function linksForBatch(string $source, string $sourceUrl, array $items, array $permalinks, array $targetPaths): array
+    {
+        $itemsById = array_column($items, null, 'id');
+        $historical = [];
+        foreach ($this->ledger->draftPermalinks($source) as $record) {
+            $key = WordPressInternalLinks::sourcePermalinkKey($sourceUrl, $record['url']);
+            if ($key === null) {
+                continue;
+            }
+
+            $current = $itemsById[$record['externalId']] ?? null;
+            if ($current !== null && WordPressInternalLinks::sourcePermalinkKey($sourceUrl, $current['link']) === $key) {
+                unset($permalinks[$record['externalId']]);
+            }
+            $path = $current === null || ($current['type'] === $record['kind'] && self::isPublicLinkTarget($current))
+                ? ($targetPaths[$record['kind']][$record['targetId']] ?? null)
+                : null;
+            $historical[] = ['url' => $record['url'], 'path' => $path];
+        }
+
+        return WordPressInternalLinks::index($sourceUrl, array_merge($historical, array_values($permalinks)));
+    }
+
+    /** @param SourceItem $item */
+    private static function isPublicLinkTarget(array $item): bool
+    {
+        return $item['status'] === 'publish' && !$item['passwordProtected'] && !($item['restrictedSource'] ?? false);
     }
 
     /**

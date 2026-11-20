@@ -40,6 +40,41 @@ final readonly class DoctrineWordPressImportLedger implements WordPressImportLed
         return $this->connection->transactional($operation);
     }
 
+    public function draftPermalinks(string $source): array
+    {
+        $rows = $this->connection->fetchAllAssociative(<<<'SQL'
+SELECT external_id, draft_source_url, draft_kind, draft_target_id
+FROM content_wordpress_import_items
+WHERE source_key = ? AND draft_source_url IS NOT NULL
+ORDER BY external_id
+SQL, [$source]);
+        $permalinks = [];
+        foreach ($rows as $row) {
+            $id = $row['external_id'];
+            $url = $row['draft_source_url'];
+            $kind = $row['draft_kind'];
+            $targetId = $row['draft_target_id'];
+            if (!is_string($id) || !is_string($url) || !in_array($kind, ['page', 'post'], true) || !is_string($targetId)) {
+                throw new \UnexpectedValueException('Invalid WordPress draft permalink in the import ledger.');
+            }
+            $permalinks[] = ['externalId' => $id, 'url' => $url, 'kind' => $kind, 'targetId' => $targetId];
+        }
+
+        return $permalinks;
+    }
+
+    public function recordDraftPermalink(string $source, string $externalId, string $url, string $kind, string $targetId): void
+    {
+        $affected = $this->connection->executeStatement(<<<'SQL'
+UPDATE content_wordpress_import_items
+SET draft_source_url = ?, draft_kind = ?, draft_target_id = ?
+WHERE source_key = ? AND external_id = ? AND draft_source_url IS NULL AND media_asset_id IS NULL
+SQL, [$url, $kind, $targetId, $source, $externalId]);
+        if ((int) $affected !== 1) {
+            throw new WordPressImportClaimConflict();
+        }
+    }
+
     public function mediaAssetId(string $source, string $externalId): ?string
     {
         $id = $this->connection->fetchOne(

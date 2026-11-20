@@ -15,6 +15,7 @@ import { UsersWorkspace } from '../users/UsersWorkspace'
 import { SettingsWorkspace } from '../settings/SettingsWorkspace'
 import { DashboardWorkspace } from '../dashboard/DashboardWorkspace'
 import { ExtensionsWorkspace } from '../extensions/ExtensionsWorkspace'
+import { WordPressImportWorkspace } from '../wordpressImport/WordPressImportWorkspace'
 import { useAdminLocale } from '../../i18n/AdminLocaleProvider'
 import type { AdminLocale } from '../../i18n/AdminLocaleProvider'
 
@@ -95,6 +96,7 @@ export function ContentWorkspace({ route, isOwner, currentUserId, currentAdminLo
   else if (route === 'entries') workspace = <EntriesWorkspace contentTypes={contentTypes} mediaAssets={assets} taxonomies={taxonomies} />
   else if (route === 'users') workspace = isOwner ? <UsersWorkspace currentUserId={currentUserId} /> : <Alert severity="error">{t('Owner access is required.')}</Alert>
   else if (route === 'extensions') workspace = isOwner ? <ExtensionsWorkspace /> : <Alert severity="error">{t('Owner access is required.')}</Alert>
+  else if (route === 'import') workspace = isOwner ? <WordPressImportWorkspace /> : <Alert severity="error">{t('Owner access is required.')}</Alert>
   else if (route === 'settings') workspace = <SettingsWorkspace isOwner={isOwner} adminLocale={currentAdminLocale} onAdminLocaleChange={onAdminLocaleChange} onSessionEnded={onSessionEnded} />
   else workspace = <DashboardWorkspace onNavigate={onNavigate} />
 

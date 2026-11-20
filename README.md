@@ -137,6 +137,8 @@ Remote theme/extension installation, live-linked sections and advanced editorial
 
 ## Import drafts from WordPress
 
+In Admin Studio, owners can open **WordPress import**, upload a WXR export, enter a stable source key, and preview the import report before creating drafts. Search and filter materials, inspect media, taxonomy, author, and redirect outcomes, and select which drafts to create. Use the same source key to continue with the remaining materials. Download the current report as JSON before or after applying. The Studio workflow accepts WXR content exports. REST sources and local media trees are available from the CLI. See the [Studio import specification](docs/specs/wordpress-studio-import.md).
+
 Export a WXR file (1.0–1.2, up to 8 MiB and 5,000 items) from WordPress. Start the Morfira stack and apply pending migrations before using the importer. For the development stack, run:
 
 ```bash
@@ -178,7 +180,7 @@ Without `--apply` this is a dry-run in Morfira. Apply stores restricted items as
 
 For WXR attachments or to use a local copy with REST, mount a trusted read-only WordPress uploads tree into the application container and pass `--media-dir=/path/to/uploads`. Supported JPEG, PNG and WebP attachments are added to the media library as WebP variants. Imported drafts receive inline image references in content order. A plain-text caption on a resolved single-image figure can travel with its image block on a page. Featured images appear in page Open Graph settings or the dedicated post media field. Review unresolved links in the JSON report before publishing. See the [image caption specification](docs/specs/wordpress-image-captions.md).
 
-WordPress authors become content profiles and new posts retain author attribution and a profile relation. For published WordPress items, supported old URLs are staged as permanent redirects and become active when the new drafts are published in Morfira. Absolute links between eligible public items in the same import batch are rewritten to their planned Morfira routes. See the [internal link specification](docs/specs/wordpress-internal-links.md).
+WordPress authors become content profiles and new posts retain author attribution and a profile relation. For published WordPress items, supported old URLs are staged as permanent redirects and become active when the new drafts are published in Morfira. Absolute WordPress links in newly imported drafts can resolve to Morfira routes from the current batch or earlier batches with recorded targets under the same source key. See the [internal link specification](docs/specs/wordpress-internal-links.md).
 
 The importer keeps existing drafts unchanged on replay. Attachment mappings created before image binding support have no target UUID and cannot be reused automatically. See the [draft import](docs/specs/wordpress-wxr-import.md), [media and taxonomy](docs/specs/wordpress-wxr-media-taxonomy.md), [image binding](docs/specs/wordpress-wxr-image-bindings.md) and [authors and redirects](docs/specs/wordpress-wxr-authors-redirects.md) specifications.
 

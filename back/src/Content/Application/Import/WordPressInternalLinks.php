@@ -22,9 +22,8 @@ final class WordPressInternalLinks
         $links = [];
         $seen = [];
         foreach ($items as $item) {
-            $parts = self::absoluteHttpParts($item['url']);
-            if ($parts === null || $parts['host'] !== $source['host'] || ($parts['port'] ?? null) !== ($source['port'] ?? null)
-                || isset($parts['fragment']) || ($key = self::permalinkKey($parts)) === null) {
+            $key = self::keyForSource($source, $item['url']);
+            if ($key === null) {
                 continue;
             }
             if (isset($seen[$key])) {
@@ -40,6 +39,25 @@ final class WordPressInternalLinks
         }
 
         return $links;
+    }
+
+    public static function sourcePermalinkKey(?string $sourceUrl, string $url): ?string
+    {
+        $source = self::absoluteHttpParts($sourceUrl ?? '');
+
+        return $source === null ? null : self::keyForSource($source, $url);
+    }
+
+    /** @param array{host:string,port?:int} $source */
+    private static function keyForSource(array $source, string $url): ?string
+    {
+        $parts = self::absoluteHttpParts($url);
+        if ($parts === null || $parts['host'] !== $source['host'] || ($parts['port'] ?? null) !== ($source['port'] ?? null)
+            || isset($parts['fragment'])) {
+            return null;
+        }
+
+        return self::permalinkKey($parts);
     }
 
     /** @param array<string,string> $links */

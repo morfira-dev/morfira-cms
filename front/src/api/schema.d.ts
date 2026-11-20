@@ -327,6 +327,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/imports/wordpress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview or apply a WordPress WXR import as drafts
+         * @description Requires an owner session. The upload is limited to 8 MiB and 5000 WXR items.
+         */
+        post: operations["importWordPressExport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/pages": {
         parameters: {
             query?: never;
@@ -952,6 +972,71 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        WordPressImportReport: {
+            /** @enum {string} */
+            mode: "dry-run" | "apply";
+            /** @constant */
+            input: "wxr";
+            /**
+             * @description Present for a selective apply report.
+             * @constant
+             */
+            scope?: "selection";
+            source: string;
+            counts: {
+                [key: string]: number;
+            };
+            skippedTypes: {
+                [key: string]: number;
+            };
+            items: {
+                id: string;
+                /** @enum {string} */
+                type: "page" | "post";
+                status: string;
+                /** @description Plain-text source title for an unprotected page or post with an importable status. */
+                title?: string;
+                sourcePath: string | null;
+                targetPath: string | null;
+                state: string;
+                reason?: string;
+                redirect?: string;
+                author?: string;
+                images?: {
+                    inline: number;
+                    missingInline: number;
+                    featured: string;
+                };
+            }[];
+            media: {
+                id: string;
+                state: string;
+                reason?: string;
+                /** Format: uuid */
+                assetId?: string;
+                /** @description Whether the mapped Morfira asset requires an authenticated session. */
+                isPrivate?: boolean;
+            }[];
+            taxonomy: {
+                terms: {
+                    taxonomy: string;
+                    slug: string;
+                    state: string;
+                }[];
+                assignments: {
+                    /** @description Draft entry UUID after apply or a wp-prefixed source ID during dry-run. */
+                    entryId: string;
+                    taxonomy: string;
+                    slug: string;
+                    state: string;
+                }[];
+            };
+            authors: {
+                state: string;
+                /** Format: uuid */
+                profileId?: string;
+            }[];
+        };
         SetupStatus: {
             required: boolean;
         };
@@ -2664,6 +2749,86 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    importWordPressExport: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Session-bound token obtained from `/api/v1/auth/csrf`. */
+                "X-CSRF-Token": components["parameters"]["CsrfTokenHeader"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                    source: string;
+                    /** @enum {string} */
+                    mode: "dry-run" | "apply";
+                    /** @description Optional comma-separated list of 1–5000 unique WXR page or post IDs for apply. Omit to import the whole source. */
+                    selectedIds?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Dry-run or apply report. Raw content is omitted. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WordPressImportReport"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Owner permission or a valid CSRF token is required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Concurrent import conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The upload exceeds the allowed size */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid source key */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
             };
         };
     };

@@ -16,6 +16,7 @@ RUN composer install --no-dev --no-interaction --prefer-dist --optimize-autoload
 FROM dunglas/frankenphp:php8.4-bookworm AS runtime
 
 RUN install-php-extensions pdo_mysql gd
+COPY back/php.ini /usr/local/etc/php/conf.d/cms.ini
 
 WORKDIR /app/back
 COPY back/ ./
