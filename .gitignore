@@ -2,7 +2,8 @@
 /.DS_Store
 /node_modules/
 .pnpm-store/
-/npm-debug.log*
+/pnpm-debug.log*
+/.pnpm-debug.log*
 /back/.env.local
 /back/.phpunit.cache/
 /back/config/reference.php

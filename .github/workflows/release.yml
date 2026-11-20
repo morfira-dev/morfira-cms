@@ -31,11 +31,12 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: 24.15.0
-          cache: npm
-          cache-dependency-path: package-lock.json
+
+      - name: Enable pnpm
+        run: corepack enable pnpm
 
       - name: Install release dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Install backend dependencies
         run: docker compose run --rm --no-deps composer install --no-interaction --prefer-dist
@@ -44,7 +45,7 @@ jobs:
         run: docker compose run --build --rm --no-deps front pnpm install --frozen-lockfile
 
       - name: Verify dependency licenses
-        run: npm run licenses:check
+        run: pnpm run licenses:check
 
       - name: Verify backend
         run: docker compose run --rm --no-deps composer check
@@ -60,4 +61,6 @@ jobs:
       - name: Create release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npm run release
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: pnpm run release

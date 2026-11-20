@@ -1,9 +1,11 @@
 import { execFileSync } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
+import { copyFile, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import process from 'node:process';
 
-const npmLockfile = 'package-lock.json';
-const pnpmLockfile = 'front/pnpm-lock.yaml';
+const releaseLockfile = 'pnpm-lock.yaml';
+const frontendLockfile = 'front/pnpm-lock.yaml';
 const composerLockfile = 'back/composer.lock';
 const reviewedContainerImages = new Map([
   ['dunglas/frankenphp:php8.4-bookworm', 'MIT image label; PHP and Debian components retain their own licenses'],
@@ -31,16 +33,6 @@ const acceptedLicenses = new Map([
   ['(BSD-2-Clause OR MIT OR Apache-2.0)', 'permissive choice'],
 ]);
 
-const npmMetadataOverrides = new Map([
-  [
-    'node_modules/npm/node_modules/qrcode-terminal@0.12.0',
-    {
-      license: 'Apache-2.0',
-      reason: 'The npm lock metadata omits the legacy `licenses` field; the installed package LICENSE is Apache-2.0.',
-    },
-  ],
-]);
-
 const failures = [];
 const summaries = [];
 
@@ -60,7 +52,7 @@ function addLicense(counts, license) {
 }
 
 function validateLicense(source, identifier, license) {
-  const isReviewedLightningCss = source === pnpmLockfile
+  const isReviewedLightningCss = source === frontendLockfile
     && license === 'MPL-2.0'
     && /^lightningcss(?:-[^@]+)?@1\.33\.0$/u.test(identifier);
 
@@ -69,23 +61,34 @@ function validateLicense(source, identifier, license) {
   }
 }
 
-const npmLock = await readJson(npmLockfile);
-const npmCounts = new Map();
-let npmPackages = 0;
-
-for (const [packagePath, metadata] of Object.entries(npmLock.packages ?? {})) {
-  if (packagePath === '') {
-    continue;
+function auditPnpmReport(lockfile, report) {
+  const packages = Object.entries(JSON.parse(report));
+  const counts = new Map();
+  if (packages.length === 0) throw new Error('The pnpm license inventory is empty.');
+  for (const [identifier, license] of packages) {
+    addLicense(counts, license);
+    validateLicense(lockfile, identifier, license);
   }
-
-  npmPackages += 1;
-  const identifier = `${packagePath}@${metadata.version ?? 'unknown-version'}`;
-  const override = npmMetadataOverrides.get(identifier);
-  const license = metadata.license ?? override?.license ?? 'UNKNOWN';
-  addLicense(npmCounts, license);
-  validateLicense(npmLockfile, identifier, license);
+  summaries.push({ source: lockfile, packages: packages.length, counts });
 }
-summaries.push({ source: npmLockfile, packages: npmPackages, counts: npmCounts });
+
+const releaseAuditDir = await mkdtemp(join(tmpdir(), 'morfira-release-licenses-'));
+try {
+  await Promise.all(['package.json', releaseLockfile].map((path) => copyFile(path, join(releaseAuditDir, path))));
+  execFileSync('pnpm', ['install', '--frozen-lockfile', '--force', '--ignore-scripts'], {
+    cwd: releaseAuditDir,
+    stdio: 'inherit',
+  });
+  const report = execFileSync(process.execPath, [resolve('scripts/read-pnpm-licenses.mjs')], {
+    cwd: releaseAuditDir,
+    encoding: 'utf8',
+  });
+  auditPnpmReport(releaseLockfile, report);
+} catch (error) {
+  failures.push(`${releaseLockfile}: could not audit the locked release packages. ${error.message}`);
+} finally {
+  await rm(releaseAuditDir, { recursive: true, force: true });
+}
 
 try {
   const report = execFileSync('docker', ['compose', 'run', '--rm', '--no-deps', '-T', 'front', 'sh', '-ec', `
@@ -95,18 +98,9 @@ try {
     pnpm install --frozen-lockfile --force --ignore-scripts >&2
     node /app/scripts/read-pnpm-licenses.mjs
   `], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] });
-  const packages = Object.entries(JSON.parse(report));
-  const counts = new Map();
-  if (packages.length === 0) {
-    throw new Error('The pnpm license inventory is empty.');
-  }
-  for (const [identifier, license] of packages) {
-    addLicense(counts, license);
-    validateLicense(pnpmLockfile, identifier, license);
-  }
-  summaries.push({ source: pnpmLockfile, packages: packages.length, counts });
+  auditPnpmReport(frontendLockfile, report);
 } catch (error) {
-  failures.push(`${pnpmLockfile}: could not audit the locked frontend packages. ${error.message}`);
+  failures.push(`${frontendLockfile}: could not audit the locked frontend packages. ${error.message}`);
 }
 
 const composerLock = await readJson(composerLockfile);

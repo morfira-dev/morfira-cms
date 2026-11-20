@@ -116,7 +116,7 @@
     [
       "@semantic-release/exec",
       {
-        "prepareCmd": "npm run release:update-openapi -- ${nextRelease.version}"
+        "prepareCmd": "pnpm run release:update-openapi ${nextRelease.version}"
       }
     ],
     [
@@ -134,6 +134,18 @@
           "back/openapi/openapi.yaml"
         ],
         "message": "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
+      }
+    ],
+    [
+      "./scripts/release-telegram.mjs",
+      {
+        "packageName": "Morfira CMS",
+        "notifications": [
+          {
+            "chatIds": "TELEGRAM_CHAT_ID"
+          }
+        ],
+        "failOnError": false
       }
     ]
   ]

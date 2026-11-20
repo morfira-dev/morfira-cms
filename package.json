@@ -4,6 +4,7 @@
   "description": "A lightweight, scalable and extensible content management system.",
   "license": "MIT",
   "private": true,
+  "packageManager": "pnpm@10.34.9",
   "engines": {
     "node": ">=24.15.0"
   },
@@ -14,6 +15,7 @@
     "release:update-openapi": "node scripts/update-openapi-version.mjs"
   },
   "devDependencies": {
+    "@nuykon/semantic-release-tg-bot": "1.2.1",
     "@semantic-release/changelog": "^7.0.0",
     "@semantic-release/commit-analyzer": "^13.0.1",
     "@semantic-release/exec": "^7.1.0",

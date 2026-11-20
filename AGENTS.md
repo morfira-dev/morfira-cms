@@ -67,11 +67,11 @@ Repository layout:
 
 ## Licensing and dependencies
 
-- Morfira community core is licensed under the root MIT `LICENSE`; keep npm and Composer manifest metadata synchronized with it.
+- Morfira community core is licensed under the root MIT `LICENSE`; keep JavaScript and Composer manifest metadata synchronized with it.
 - Before adding or updating a dependency, verify its license, commercial-use terms, redistribution duties, maintenance status, and known security advisories.
 - Do not introduce copyleft, source-available, non-commercial, custom, or unknown licenses without an explicit product decision.
 - Record reviewed exceptions in `docs/dependencies/licenses.md` and keep `scripts/check-licenses.mjs` fail-closed for new package licenses, container images, and GitHub Actions.
-- Run `npm run licenses:check` after every dependency or delivery-image change.
+- Run `pnpm run licenses:check` after every dependency or delivery-image change.
 - Keep proprietary commercial modules in separately licensed packages or repositories; copied MIT core code must retain the MIT notice.
 
 ## Implementation workflow
@@ -81,7 +81,7 @@ Repository layout:
 - Update tests, OpenAPI, generated types, migrations, documentation, and ADRs in the same change when their contracts move together.
 - Add an ADR when a change introduces or reverses a durable architectural decision.
 - Use Docker for application dependency installation, generation, tests, and analysis.
-- Install frontend dependencies with `pnpm install --frozen-lockfile` for reproducible builds. Use `front/pnpm-lock.yaml` as the frontend lockfile.
+- Install JavaScript dependencies with `pnpm install --frozen-lockfile`. The root release tooling and Admin Studio have separate lockfiles at `pnpm-lock.yaml` and `front/pnpm-lock.yaml`.
 - Do not edit vendor, build, cache, or runtime output.
 
 ## Verification
@@ -105,7 +105,7 @@ For Admin Studio routing, session bootstrap, or initial data-loading changes, ru
 Release configuration:
 
 ```bash
-npm run release:dry-run -- --no-ci
+pnpm run release:dry-run --no-ci
 ```
 
 Also run `git diff --check`. Do not describe a check as passing if it was skipped, blocked, or only partially executed.

@@ -99,6 +99,7 @@ An ADR must state context, decision, alternatives or constraints, consequences, 
 ## Release engineering
 
 - Keep release configuration in `.releaserc.json` and CI orchestration in `.github/workflows/release.yml`.
+- Use pnpm for release tooling and keep the root lockfile separate from the Admin Studio lockfile.
 - Use English Conventional Commits.
 - Validate commit analysis and generated notes when adding a custom commit type.
 - Never publish packages or containers unless the user explicitly requests that channel.

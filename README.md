@@ -62,7 +62,7 @@ composer install
 composer check
 ```
 
-Frontend commands run through Docker with the pnpm version pinned in `front/package.json`. The root release tooling uses its own npm lockfile.
+Frontend commands run through Docker with the pnpm version pinned in `front/package.json`. Release tooling uses the version pinned in the root `package.json` and a separate root `pnpm-lock.yaml`.
 
 ```bash
 docker compose run --rm --no-deps front pnpm run check
@@ -79,10 +79,14 @@ Releases are created automatically from Conventional Commits after a verified pu
 
 Each release updates `CHANGELOG.md`, creates a `vX.Y.Z` tag and publishes a GitHub Release. Morfira CMS is not published to npm.
 
+Set the `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` GitHub Actions secrets to send successful release announcements and release notes to Telegram. The bot must be able to post to the destination. The release workflow skips Telegram when either secret is missing and logs delivery failures without failing an already published release.
+
 Validate the next release locally without publishing it:
 
 ```bash
-npm run release:dry-run
+corepack enable pnpm
+pnpm install --frozen-lockfile
+pnpm run release:dry-run --no-ci
 ```
 
 ## Current scope
