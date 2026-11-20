@@ -1,3 +1,17 @@
+## [1.13.0](https://github.com/morfira-dev/morfira-cms/compare/v1.12.0...v1.13.0) (2026-11-19)
+
+### Features
+
+* **import:** add WordPress WXR draft migration ([684b032](https://github.com/morfira-dev/morfira-cms/commit/684b032544560771a6b959c9000fd087b78d067c))
+* **import:** allow WordPress REST CDN media hosts ([b879060](https://github.com/morfira-dev/morfira-cms/commit/b8790606013e8fa52f523a4aac134d27bcabd1a3))
+* **import:** bind WordPress images to content ([d497430](https://github.com/morfira-dev/morfira-cms/commit/d497430542ca64f7c4e092166a4d383822db9961))
+* **import:** download WordPress REST media ([b55b7ff](https://github.com/morfira-dev/morfira-cms/commit/b55b7ffe83d902f4a7884b4b2f17a102298b2d88))
+* **import:** migrate WordPress authors and permalinks ([aa53a08](https://github.com/morfira-dev/morfira-cms/commit/aa53a08ab6406d823df5a5f592a4942880ea975a))
+* **import:** migrate WordPress media and taxonomies ([3270489](https://github.com/morfira-dev/morfira-cms/commit/3270489d8762eead09453991ce3093a6f6ddebb9))
+* **import:** protect private WordPress attachments ([031de3d](https://github.com/morfira-dev/morfira-cms/commit/031de3dd868974dbe5d27a2c145a53059ef8860d))
+* **import:** read restricted WordPress REST content ([b2ab385](https://github.com/morfira-dev/morfira-cms/commit/b2ab38538d28bea420a122f44e912929f4ba1cd8))
+* **import:** read WordPress content over REST ([40d2a36](https://github.com/morfira-dev/morfira-cms/commit/40d2a367d32e3d01c67c79f6e843a49de4ed062e))
+
 ## [1.12.0](https://github.com/morfira-dev/morfira-cms/compare/v1.11.0...v1.12.0) (2026-10-15)
 
 ### Features
