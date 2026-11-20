@@ -2,6 +2,8 @@ import { type FormEvent, type ReactNode, useEffect, useState } from 'react'
 import { Alert, Button, Card, CardContent, CircularProgress, Stack, TextField, Typography } from '../../ui'
 import { getCurrentUser, getSetupStatus, login, logout, setupOwner, updateAdminLocale, type AuthenticatedUser } from './api'
 import { useAdminLocale } from '../../i18n/AdminLocaleProvider'
+import type { MessageKey } from '../../i18n/messages'
+import { scheduleAbortableLoad } from '../../utils/scheduleAbortableLoad'
 
 interface AuthGateProps {
   children: (user: AuthenticatedUser, signOut: () => Promise<void>, sessionEnded: () => void, changeAdminLocale: (locale: AuthenticatedUser['adminLocale']) => Promise<void>) => ReactNode
@@ -17,11 +19,12 @@ export function AuthGate({ children }: AuthGateProps) {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<{ reason: unknown; message: MessageKey } | null>(null)
 
-  useEffect(() => {
-    Promise.all([getSetupStatus(), getCurrentUser()])
+  useEffect(() => scheduleAbortableLoad((signal) => {
+    Promise.all([getSetupStatus(signal), getCurrentUser(signal)])
       .then(([setupRequired, currentUser]) => {
+        if (signal.aborted) return
         if (setupRequired) setMode('setup')
         else if (currentUser) {
           setUser(currentUser)
@@ -30,10 +33,11 @@ export function AuthGate({ children }: AuthGateProps) {
         } else setMode('login')
       })
       .catch((reason: unknown) => {
-        setError(errorMessage(reason, 'Could not initialize Admin Studio.'))
+        if (signal.aborted) return
+        setError({ reason, message: 'Could not initialize Admin Studio.' })
         setMode('login')
       })
-  }, [])
+  }), [setLocale])
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -53,7 +57,7 @@ export function AuthGate({ children }: AuthGateProps) {
       setConfirmPassword('')
       setMode('authenticated')
     } catch (reason) {
-      setError(errorMessage(reason, 'Authentication failed.'))
+      setError({ reason, message: 'Authentication failed.' })
     } finally {
       setSubmitting(false)
     }
@@ -98,7 +102,7 @@ export function AuthGate({ children }: AuthGateProps) {
                 </Typography>
               </div>
 
-              {error && <Alert severity="error">{error}</Alert>}
+              {error && <Alert severity="error">{errorMessage(error.reason, error.message)}</Alert>}
 
               <TextField label={t('Email')} type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
               <TextField

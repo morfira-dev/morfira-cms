@@ -3,8 +3,8 @@ import { apiFetch, readApiError, resetCsrfToken } from '../../api/http'
 
 export type AuthenticatedUser = components['schemas']['AuthenticatedUser']
 
-export async function getSetupStatus(): Promise<boolean> {
-  const response = await apiFetch('/api/v1/setup')
+export async function getSetupStatus(signal?: AbortSignal): Promise<boolean> {
+  const response = await apiFetch('/api/v1/setup', { signal })
   if (!response.ok) throw new Error(await readApiError(response))
   const body = (await response.json()) as components['schemas']['SetupStatus']
   return body.required
@@ -33,8 +33,8 @@ export async function login(email: string, password: string): Promise<Authentica
   return user
 }
 
-export async function getCurrentUser(): Promise<AuthenticatedUser | null> {
-  const response = await apiFetch('/api/v1/auth/me')
+export async function getCurrentUser(signal?: AbortSignal): Promise<AuthenticatedUser | null> {
+  const response = await apiFetch('/api/v1/auth/me', { signal })
   if (response.status === 401) return null
   if (!response.ok) throw new Error(await readApiError(response))
   return (await response.json()) as AuthenticatedUser

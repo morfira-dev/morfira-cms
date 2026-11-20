@@ -11,7 +11,7 @@ export interface AdminRoute {
 }
 
 export const adminRoutes: AdminRoute[] = [
-  { id: 'dashboard', label: 'Dashboard', path: '/admin' },
+  { id: 'dashboard', label: 'Dashboard', path: '/admin/' },
   { id: 'pages', label: 'Pages', path: '/admin/pages' },
   { id: 'media', label: 'Media', path: '/admin/media' },
   { id: 'navigation', label: 'Navigation', path: '/admin/navigation' },
@@ -37,8 +37,9 @@ export function useAdminRoute() {
 
   useEffect(() => {
     const syncRoute = () => {
-      const resolved = resolveAdminRoute(window.location.pathname)
-      if (window.location.pathname !== resolved.path) window.history.replaceState({}, '', resolved.path)
+      const { pathname, search, hash } = window.location
+      const resolved = resolveAdminRoute(pathname)
+      if (pathname !== resolved.path) window.history.replaceState(window.history.state, '', resolved.path + search + hash)
       setRoute(resolved)
     }
 

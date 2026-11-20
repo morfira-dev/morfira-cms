@@ -15,6 +15,10 @@ describe('resolveAdminRoute', () => {
   })
 
   it('recovers unknown paths to the dashboard', () => {
-    expect(resolveAdminRoute('/admin/unknown').path).toBe('/admin')
+    expect(resolveAdminRoute('/admin/unknown').path).toBe('/admin/')
+  })
+
+  it.each(['/admin', '/admin/'])('resolves %s to the canonical dashboard', (path) => {
+    expect(resolveAdminRoute(path)).toMatchObject({ id: 'dashboard', path: '/admin/' })
   })
 })
