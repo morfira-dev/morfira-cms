@@ -46,7 +46,26 @@ function ItemStatus({ item }: { item: WordPressImportItem }) {
   )
 }
 
-interface ImportItemSelection {
+function DraftLink({ draft }: { draft: NonNullable<WordPressImportItem['draft']> }) {
+  const { t } = useAdminLocale()
+  const query = new URLSearchParams({ draft: draft.id })
+  if (draft.kind === 'entry') query.set('type', draft.contentTypeId)
+
+  return (
+    <Button
+      component="a"
+      href={`/admin/${draft.kind === 'page' ? 'pages' : 'entries'}?${query}`}
+      target="_blank"
+      rel="noopener"
+      size="small"
+      sx={{ alignSelf: 'flex-start', px: 0 }}
+    >
+      {t('Open draft in a new tab')}
+    </Button>
+  )
+}
+
+export interface ImportItemSelection {
   excludedIds: ReadonlySet<string>
   plannedCount: number
   disabled: boolean
@@ -181,7 +200,12 @@ export function WordPressImportItems({ items, selection }: {
                       </TableCell>
                       <TableCell sx={{ overflowWrap: 'anywhere' }}>{item.sourcePath ?? '—'}</TableCell>
                       <TableCell sx={{ overflowWrap: 'anywhere' }}>{item.targetPath ?? '—'}</TableCell>
-                      <TableCell><ItemStatus item={item} /></TableCell>
+                      <TableCell>
+                        <Stack spacing={0.5}>
+                          <ItemStatus item={item} />
+                          {item.draft && <DraftLink draft={item.draft} />}
+                        </Stack>
+                      </TableCell>
                     </TableRow>
                   )
                 })}

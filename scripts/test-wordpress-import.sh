@@ -31,7 +31,12 @@ media_query="SELECT COUNT(*) FROM media_assets WHERE original_name IN ('sample.p
 taxonomy_query="SELECT COUNT(*) FROM taxonomy_vocabularies WHERE slug IN ('wordpress-categories', 'wordpress-tags')"
 author_query="SELECT COUNT(*) FROM content_wordpress_import_authors WHERE source_key = 'wordpress-e2e'"
 redirect_query="SELECT COUNT(*) FROM published_import_redirects"
+history_query="SELECT COUNT(*) FROM content_wordpress_import_runs"
 identity_before=$(db_query "SELECT COUNT(*) FROM identity_users")
+schema_before=$(db_query "$schema_query")
+taxonomy_before=$(db_query "$taxonomy_query")
+redirects_at_start=$(db_query "$redirect_query")
+history_before=$(db_query "$history_query")
 
 compose cp "$fixture" "app:$container_fixture"
 compose exec -T app php -r '
@@ -53,18 +58,20 @@ printf '%s\n' "$report" | jq -e '
     ([.taxonomy.assignments[] | select(.state == "planned")] | length) == 2
 ' >/dev/null
 test "$(db_query "$page_query")" = 0
-test "$(db_query "$schema_query")" = 0
+test "$(db_query "$schema_query")" = "$schema_before"
 test "$(db_query "$entry_query")" = 0
 test "$(db_query "$ledger_query")" = 0
 test "$(db_query "$media_query")" = 0
-test "$(db_query "$taxonomy_query")" = 0
+test "$(db_query "$taxonomy_query")" = "$taxonomy_before"
 test "$(db_query "$author_query")" = 0
-test "$(db_query "$redirect_query")" = 0
+test "$(db_query "$redirect_query")" = "$redirects_at_start"
+test "$(db_query "$history_query")" = "$history_before"
 test "$(compose exec -T app sh -c 'find public/media -type f | wc -l')" = "$media_before"
 
 report=$(import wordpress-e2e --apply)
 printf '%s\n' "$report" | jq -e '
     (.items | length) == 2 and
+    all(.items[]; has("draft") | not) and
     ([.items[] | select(.state == "imported") | .type] | sort) == ["page", "post"] and
     ([.media[] | .state] | sort) == ["imported", "imported", "invalid"] and
     ([.items[].redirect] == ["registered", "registered"]) and .authors[0].state == "imported"
@@ -76,7 +83,7 @@ test "$(db_query "$ledger_query")" = 4
 test "$(db_query "$media_query")" = 2
 test "$(db_query "$taxonomy_query")" = 2
 test "$(db_query "$author_query")" = 1
-test "$(db_query "$redirect_query")" = 2
+test "$(db_query "$redirect_query")" = "$((redirects_at_start + 2))"
 test "$(db_query "SELECT COUNT(*) FROM identity_users")" = "$identity_before"
 test "$(db_query "SELECT COUNT(*) FROM content_entries AS post
     JOIN content_entries AS author ON author.id = JSON_UNQUOTE(JSON_EXTRACT(post.values_json, '\$.wordpressAuthor'))
@@ -129,7 +136,7 @@ test "$(db_query "$entry_query")" = 1
 test "$(db_query "$ledger_query")" = 4
 test "$(db_query "$media_query")" = 2
 test "$(db_query "$author_query")" = 1
-test "$(db_query "$redirect_query")" = 2
+test "$(db_query "$redirect_query")" = "$((redirects_at_start + 2))"
 test "$(db_query "SELECT COUNT(*) FROM content_page_revisions AS revision JOIN content_pages AS page ON page.id = revision.page_id WHERE page.slug = 'wp-import-about' AND page.title = 'Imported About'")" = 2
 test "$(db_query "SELECT COUNT(*) FROM content_entry_revisions AS revision JOIN content_entries AS entry ON entry.id = revision.entry_id WHERE entry.slug = 'wp-import-news' AND entry.title = 'Imported News'")" = 1
 
@@ -484,4 +491,5 @@ for route in /restricted-rest-page /api/v1/content/pages/restricted-rest-page /c
     test "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' "$CMS_PUBLIC_SITE_URL$route")" = 404
 done
 
+test "$(db_query "$history_query")" = "$history_before"
 printf '%s\n' 'WordPress import production CLI journey passed.'

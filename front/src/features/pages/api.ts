@@ -75,8 +75,8 @@ export async function unpublishPage(id: string): Promise<void> {
   }
 }
 
-export async function getPageRedirects(id: string): Promise<PublishedRedirect[]> {
-  const response = await apiFetch(`/api/v1/admin/pages/${id}/redirects`)
+export async function getPageRedirects(id: string, signal?: AbortSignal): Promise<PublishedRedirect[]> {
+  const response = await apiFetch(`/api/v1/admin/pages/${id}/redirects`, { signal })
 
   if (!response.ok) {
     throw new Error(await readApiError(response))

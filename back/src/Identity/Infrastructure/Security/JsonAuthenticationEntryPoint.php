@@ -14,6 +14,6 @@ final readonly class JsonAuthenticationEntryPoint implements AuthenticationEntry
 {
     public function start(Request $request, ?AuthenticationException $authException = null): Response
     {
-        return new JsonResponse(['error' => 'Authentication required.'], 401);
+        return new JsonResponse(['error' => 'Authentication required.'], 401, ['Cache-Control' => 'private, no-store']);
     }
 }

@@ -745,6 +745,43 @@ paths:
         '409': { description: Concurrent import conflict, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
         '413': { description: The upload exceeds the allowed size, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
         '422': { description: Invalid source key, WXR input, or selected item IDs, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/imports/wordpress/runs:
+    get:
+      operationId: listWordPressImportRuns
+      tags: [Admin Content]
+      summary: List completed WordPress WXR imports
+      description: Requires an owner session. Returns up to 20 runs per page, newest first.
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 1000000, default: 1 }
+      responses:
+        '200':
+          description: A page of completed imports.
+          content: { application/json: { schema: { $ref: '#/components/schemas/WordPressImportRunCollection' } } }
+        '401': { description: Authentication required, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '403': { description: Owner permission is required, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '422': { description: Invalid page, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/imports/wordpress/runs/{id}:
+    get:
+      operationId: getWordPressImportRunReport
+      tags: [Admin Content]
+      summary: Retrieve the report from a completed WordPress WXR import
+      description: Requires an owner session. Returns the report as it was at the end of the import.
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Saved import report.
+          content: { application/json: { schema: { $ref: '#/components/schemas/WordPressImportReport' } } }
+        '401': { description: Authentication required, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '403': { description: Owner permission is required, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '404': { description: Run not found, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
   /api/v1/admin/pages:
     get:
       operationId: listPages
@@ -2390,6 +2427,9 @@ components:
                 description: Plain-text source title for an unprotected page or post with an importable status.
               sourcePath: { type: [string, 'null'] }
               targetPath: { type: [string, 'null'] }
+              draft:
+                description: Editor reference for a draft created by this Studio apply.
+                $ref: '#/components/schemas/WordPressImportDraft'
               state: { type: string }
               reason: { type: string }
               redirect: { type: string }
@@ -2443,6 +2483,50 @@ components:
             properties:
               state: { type: string }
               profileId: { type: string, format: uuid }
+    WordPressImportDraft:
+      oneOf:
+        - $ref: '#/components/schemas/WordPressImportedPageDraft'
+        - $ref: '#/components/schemas/WordPressImportedEntryDraft'
+      discriminator:
+        propertyName: kind
+        mapping:
+          page: '#/components/schemas/WordPressImportedPageDraft'
+          entry: '#/components/schemas/WordPressImportedEntryDraft'
+    WordPressImportedPageDraft:
+      type: object
+      additionalProperties: false
+      required: [kind, id]
+      properties:
+        kind: { type: string, const: page }
+        id: { type: string, format: uuid }
+    WordPressImportedEntryDraft:
+      type: object
+      additionalProperties: false
+      required: [kind, id, contentTypeId]
+      properties:
+        kind: { type: string, const: entry }
+        id: { type: string, format: uuid }
+        contentTypeId: { type: string, format: uuid }
+    WordPressImportRunCollection:
+      type: object
+      required: [items, page, hasMore]
+      properties:
+        items:
+          type: array
+          maxItems: 20
+          items:
+            type: object
+            required: [id, source, scope, completedAt, counts]
+            properties:
+              id: { type: string, format: uuid }
+              source: { type: string }
+              scope: { type: string, enum: [all, selection] }
+              completedAt: { type: string, format: date-time }
+              counts:
+                type: object
+                additionalProperties: { type: integer, minimum: 0 }
+        page: { type: integer, minimum: 1, maximum: 1000000 }
+        hasMore: { type: boolean }
     SetupStatus:
       type: object
       additionalProperties: false

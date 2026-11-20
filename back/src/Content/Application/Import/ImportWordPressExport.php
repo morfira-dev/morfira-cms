@@ -12,12 +12,17 @@ use Cms\Content\Domain\PageTitle;
  * @phpstan-import-type MediaOutcome from ImportWordPressMedia
  * @phpstan-import-type AuthorOutcome from ImportWordPressAuthors
  * @phpstan-import-type SourceItem from ImportWordPressDrafts
+ * @phpstan-import-type Export from WordPressExportSource
  * @phpstan-type Report array{mode:'apply'|'dry-run',input:'wxr',source:string,scope?:'selection',counts:object,skippedTypes:object,items:list<ReportItem>,media:list<MediaOutcome>,taxonomy:TaxonomyOutcomes,authors:list<AuthorOutcome>}
  */
 final readonly class ImportWordPressExport
 {
-    public function __construct(private WordPressExportSource $exports, private ImportWordPressDrafts $drafts)
-    {
+    public function __construct(
+        private WordPressExportSource $exports,
+        private ImportWordPressDrafts $drafts,
+        private WordPressImportLedger $ledger,
+        private WordPressImportRunHistory $history,
+    ) {
     }
 
     /** @return Report */
@@ -33,6 +38,25 @@ final readonly class ImportWordPressExport
         $selection = $selectedIds === null ? null : $this->parseSelection($selectedIds);
         $export = $this->exports->read($path);
         $items = $selection === null ? $export['items'] : $this->selectedItems($export['items'], $selection);
+        if (!$apply) {
+            return $this->run($source, $export, $items, false, false);
+        }
+
+        return $this->ledger->transactional(function () use ($source, $export, $items, $selection): array {
+            $report = $this->run($source, $export, $items, true, $selection !== null);
+            $this->history->record($report);
+
+            return $report;
+        });
+    }
+
+    /**
+     * @param Export $export
+     * @param list<SourceItem> $items
+     * @return Report
+     */
+    private function run(string $source, array $export, array $items, bool $apply, bool $selected): array
+    {
         $report = ($this->drafts)(
             $source,
             $items,
@@ -42,7 +66,8 @@ final readonly class ImportWordPressExport
             null,
             $export['authors'],
             $export['sourceUrl'],
-            scopeDependencies: $selection !== null,
+            scopeDependencies: $selected,
+            includeDraftReferences: true,
         );
 
         $titles = [];
@@ -62,8 +87,8 @@ final readonly class ImportWordPressExport
             'input' => 'wxr',
             'source' => $source,
             'counts' => (object) array_count_values(array_column($report['items'], 'state')),
-            'skippedTypes' => (object) ($selection === null ? $export['skippedTypes'] : []),
-        ] + ($selection === null ? [] : ['scope' => 'selection']) + $report;
+            'skippedTypes' => (object) ($selected ? [] : $export['skippedTypes']),
+        ] + ($selected ? ['scope' => 'selection'] : []) + $report;
     }
 
     /** @return array<int|string,true> */

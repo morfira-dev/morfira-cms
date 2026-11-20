@@ -347,6 +347,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/imports/wordpress/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List completed WordPress WXR imports
+         * @description Requires an owner session. Returns up to 20 runs per page, newest first.
+         */
+        get: operations["listWordPressImportRuns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/imports/wordpress/runs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Retrieve the report from a completed WordPress WXR import
+         * @description Requires an owner session. Returns the report as it was at the end of the import.
+         */
+        get: operations["getWordPressImportRunReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/pages": {
         parameters: {
             query?: never;
@@ -998,6 +1038,8 @@ export interface components {
                 title?: string;
                 sourcePath: string | null;
                 targetPath: string | null;
+                /** @description Editor reference for a draft created by this Studio apply. */
+                draft?: components["schemas"]["WordPressImportDraft"];
                 state: string;
                 reason?: string;
                 redirect?: string;
@@ -1036,6 +1078,43 @@ export interface components {
                 /** Format: uuid */
                 profileId?: string;
             }[];
+        };
+        WordPressImportDraft: components["schemas"]["WordPressImportedPageDraft"] | components["schemas"]["WordPressImportedEntryDraft"];
+        WordPressImportedPageDraft: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "page";
+            /** Format: uuid */
+            id: string;
+        };
+        WordPressImportedEntryDraft: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "entry";
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            contentTypeId: string;
+        };
+        WordPressImportRunCollection: {
+            items: {
+                /** Format: uuid */
+                id: string;
+                source: string;
+                /** @enum {string} */
+                scope: "all" | "selection";
+                /** Format: date-time */
+                completedAt: string;
+                counts: {
+                    [key: string]: number;
+                };
+            }[];
+            page: number;
+            hasMore: boolean;
         };
         SetupStatus: {
             required: boolean;
@@ -2823,6 +2902,104 @@ export interface operations {
             };
             /** @description Invalid source key */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listWordPressImportRuns: {
+        parameters: {
+            query?: {
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of completed imports. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WordPressImportRunCollection"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Owner permission is required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid page */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getWordPressImportRunReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Saved import report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WordPressImportReport"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Owner permission is required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Run not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

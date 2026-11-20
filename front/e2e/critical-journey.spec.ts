@@ -353,6 +353,8 @@ test('owner creates, edits and publishes a page through the production surface',
 
   const reportTable = page.getByRole('table', { name: 'Отчёт импорта WordPress' })
   const reportRow = reportTable.getByRole('row', { name: /Studio import page/ })
+  const openDraftLabel = 'Открыть черновик в новой вкладке'
+  await expect(reportRow.getByRole('link', { name: openDraftLabel })).toHaveCount(0)
   await expect(reportRow.getByText('Миниатюра отсутствует')).toBeVisible()
   await expect(reportRow.getByText('Редирект запланирован')).toBeVisible()
   const attachmentTable = page.getByRole('table', { name: 'Вложения', exact: true })
@@ -394,6 +396,12 @@ test('owner creates, edits and publishes a page through the production surface',
   await page.getByRole('button', { name: 'Снять выбор с материалов по фильтру', exact: true }).click()
   await expect(page.getByText('Выбрано материалов: 1 из 2', { exact: true })).toBeVisible()
   await search.clear()
+  await expect(firstSelection).toBeChecked()
+  await expect(secondSelection).not.toBeChecked()
+  const openImportHistory = page.getByRole('button', { name: 'История импорта', exact: true })
+  await openImportHistory.click()
+  await expect(page.getByText('Завершённых импортов пока нет.')).toBeVisible()
+  await page.getByRole('button', { name: 'Вернуться к импорту', exact: true }).click()
   await expect(firstSelection).toBeChecked()
   await expect(secondSelection).not.toBeChecked()
   await firstSelection.uncheck()
@@ -458,4 +466,58 @@ test('owner creates, edits and publishes a page through the production surface',
   const headlessImportedPage = await request.get('/api/v1/content/pages/studio-second-page')
   expect(headlessImportedPage.status()).toBe(200)
   await expect(headlessImportedPage.json()).resolves.toMatchObject({ blocks: richTextWith(localBacklink) })
+
+  await page.reload()
+  await openImportHistory.click()
+  const historyTable = page.getByRole('table', { name: 'История импорта', exact: true })
+  const runRows = historyTable.getByRole('row').filter({ hasText: 'studio-e2e' })
+  await expect(runRows).toHaveCount(2)
+  await expect(runRows.first()).toContainText('Весь источник')
+  const selectiveRun = runRows.filter({ hasText: 'Выбранные материалы' })
+  await expect(selectiveRun).toContainText('Импортировано как черновик')
+  await selectiveRun.getByRole('button', { name: 'Открыть отчёт', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Отчёт завершённого импорта', exact: true })).toBeVisible()
+  await expect(reportRow).toBeVisible()
+  await downloadReport('apply', applyReport)
+  const [pageEditor] = await Promise.all([
+    page.context().waitForEvent('page'),
+    reportRow.getByRole('link', { name: openDraftLabel }).click(),
+  ])
+  await expect(pageEditor).toHaveURL(new RegExp(`/admin/pages\\?draft=${firstDraft.id}$`))
+  await expect(pageEditor.getByRole('heading', { name: 'Изменение страницы', exact: true })).toBeVisible()
+  await expect(pageEditor.locator('input[value="Studio import page"]')).toBeVisible()
+  await pageEditor.reload()
+  await expect(pageEditor.locator('input[value="Studio import page"]')).toBeVisible()
+  await pageEditor.close()
+  await expect(reportRow).toBeVisible()
+  await page.getByRole('button', { name: 'Вернуться к истории', exact: true }).click()
+  await expect(runRows).toHaveCount(2)
+
+  await page.getByRole('button', { name: 'Вернуться к импорту', exact: true }).click()
+  await sourceKey.fill('studio-e2e-post')
+  await page.getByLabel('Файл WXR', { exact: true }).setInputFiles({
+    name: 'studio-post.xml',
+    mimeType: 'application/xml',
+    buffer: Buffer.from(`<rss xmlns:wp="http://wordpress.org/export/1.2/"><channel><wp:wxr_version>1.2</wp:wxr_version>
+      <item><title>Studio imported post</title><wp:post_id>99004</wp:post_id><wp:post_name>studio-imported-post</wp:post_name>
+      <wp:post_type>post</wp:post_type><wp:status>draft</wp:status></item></channel></rss>`),
+  })
+  const [postPlan] = await Promise.all([importResponse(), previewImport.click()])
+  expect(postPlan.ok()).toBeTruthy()
+  await expect(postPlan.json()).resolves.toMatchObject({ mode: 'dry-run', counts: { planned: 1 } })
+  const [postApply] = await Promise.all([importResponse(), applyImport.click()])
+  expect(postApply.ok()).toBeTruthy()
+  const postReport = await postApply.json() as components['schemas']['WordPressImportReport']
+  const postDraft = postReport.items[0]?.draft
+  if (postDraft?.kind !== 'entry') throw new Error('The imported post did not return an entry draft reference.')
+  const [entryEditor] = await Promise.all([
+    page.context().waitForEvent('page'),
+    reportTable.getByRole('row', { name: /Studio imported post/ }).getByRole('link', { name: openDraftLabel }).click(),
+  ])
+  await expect(entryEditor).toHaveURL(new RegExp(`/admin/entries\\?draft=${postDraft.id}&type=${postDraft.contentTypeId}$`))
+  await expect(entryEditor.getByRole('heading', { name: 'Изменение материала', exact: true })).toBeVisible()
+  await expect(entryEditor.getByRole('textbox', { name: 'Заголовок', exact: true })).toHaveValue('Studio imported post')
+  await entryEditor.reload()
+  await expect(entryEditor.getByRole('textbox', { name: 'Заголовок', exact: true })).toHaveValue('Studio imported post')
+  await entryEditor.close()
 })

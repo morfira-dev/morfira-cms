@@ -6,12 +6,14 @@ namespace Cms\Tests\Content\Presentation\Http;
 
 use Cms\Content\Application\Import\WordPressImportClaimConflict;
 use Cms\Content\Application\Import\WordPressImportLedger;
+use Cms\Content\Application\Import\WordPressImportRunHistory;
 use Cms\Content\Domain\EntryId;
 use Cms\Content\Domain\Page;
 use Cms\Content\Domain\PageId;
 use Cms\Content\Domain\PageSlug;
 use Cms\Content\Domain\PageTitle;
 use Cms\Content\Infrastructure\Import\DoctrineWordPressImportLedger;
+use Cms\Content\Infrastructure\Import\DoctrineWordPressImportRunHistory;
 use Cms\Content\Infrastructure\Persistence\DoctrineEntryRepository;
 use Cms\Content\Infrastructure\Persistence\DoctrinePageRepository;
 use Cms\Content\Infrastructure\Persistence\DoctrineRelationTargetLookup;
@@ -39,6 +41,7 @@ use Symfony\Component\Security\Core\User\UserProviderInterface;
 final class WordPressImportControllerTest extends WebTestCase
 {
     private const string ENDPOINT = '/api/v1/admin/imports/wordpress';
+    private const string RUN_ID = 'b0c1db43-027e-4d77-9d81-3804bcec4b25';
     private const string EXPORT = <<<'XML'
         <rss version="2.0" xmlns:wp="http://wordpress.org/export/1.2/">
           <channel>
@@ -69,6 +72,94 @@ final class WordPressImportControllerTest extends WebTestCase
 
         self::assertResponseStatusCodeSame(403);
         self::assertJsonStringEqualsJsonString('{"error":"Owner access required."}', (string) $client->getResponse()->getContent());
+    }
+
+    public function testHistoryRequiresOwnerOnBothRoutes(): void
+    {
+        $client = self::createClient();
+        $client->request('GET', self::ENDPOINT.'/runs');
+        self::assertResponseStatusCodeSame(401);
+        self::assertTrue($client->getResponse()->headers->hasCacheControlDirective('no-store'));
+        $client->request('GET', self::ENDPOINT.'/runs/'.self::RUN_ID);
+        self::assertResponseStatusCodeSame(401);
+        self::assertTrue($client->getResponse()->headers->hasCacheControlDirective('no-store'));
+
+        self::ensureKernelShutdown();
+        $client = $this->authenticatedClient(['ROLE_EDITOR']);
+        $history = $this->createMock(WordPressImportRunHistory::class);
+        $history->expects(self::never())->method('latest');
+        $history->expects(self::never())->method('report');
+        self::getContainer()->set(DoctrineWordPressImportRunHistory::class, $history);
+        foreach (['/runs', '/runs/'.self::RUN_ID] as $route) {
+            $client->request('GET', self::ENDPOINT.$route);
+            self::assertResponseStatusCodeSame(403);
+            self::assertTrue($client->getResponse()->headers->hasCacheControlDirective('no-store'));
+        }
+    }
+
+    public function testHistoryPaginatesAndReopensReport(): void
+    {
+        $client = $this->authenticatedClient();
+        $summary = [
+            'id' => self::RUN_ID,
+            'source' => 'legacy-site',
+            'scope' => 'selection',
+            'completedAt' => '2026-11-20T12:13:14.000+00:00',
+            'counts' => (object) ['imported' => 1],
+        ];
+        $reportJson = '{"mode":"apply","input":"wxr","source":"legacy-site","scope":"selection","counts":{},"skippedTypes":{},"items":[],"media":[],"taxonomy":{"terms":[],"assignments":[]},"authors":[]}';
+        $report = json_decode($reportJson, flags: JSON_THROW_ON_ERROR);
+        self::assertInstanceOf(\stdClass::class, $report);
+        $history = $this->createMock(WordPressImportRunHistory::class);
+        $history->expects(self::exactly(2))->method('latest')->willReturnCallback(static function (int $offset, int $limit) use ($summary): array {
+            self::assertSame(21, $limit);
+            self::assertContains($offset, [0, 20]);
+
+            return $offset === 0 ? array_fill(0, 21, $summary) : [$summary];
+        });
+        $history->expects(self::once())->method('report')->with(self::RUN_ID)->willReturn($report);
+        self::getContainer()->set(DoctrineWordPressImportRunHistory::class, $history);
+
+        $client->request('GET', self::ENDPOINT.'/runs');
+        self::assertResponseIsSuccessful();
+        self::assertTrue($client->getResponse()->headers->hasCacheControlDirective('no-store'));
+        self::assertJsonStringEqualsJsonString(json_encode([
+            'items' => array_fill(0, 20, $summary),
+            'page' => 1,
+            'hasMore' => true,
+        ], JSON_THROW_ON_ERROR), (string) $client->getResponse()->getContent());
+        $client->request('GET', self::ENDPOINT.'/runs?page=2');
+        self::assertResponseIsSuccessful();
+        self::assertJsonStringEqualsJsonString(json_encode([
+            'items' => [$summary],
+            'page' => 2,
+            'hasMore' => false,
+        ], JSON_THROW_ON_ERROR), (string) $client->getResponse()->getContent());
+        $client->request('GET', self::ENDPOINT.'/runs/'.self::RUN_ID);
+        self::assertResponseIsSuccessful();
+        self::assertTrue($client->getResponse()->headers->hasCacheControlDirective('private'));
+        self::assertTrue($client->getResponse()->headers->hasCacheControlDirective('no-store'));
+        self::assertSame($reportJson, $client->getResponse()->getContent());
+    }
+
+    public function testHistoryRejectsInvalidPageAndUnknownRun(): void
+    {
+        $client = $this->authenticatedClient();
+        $history = $this->createMock(WordPressImportRunHistory::class);
+        $history->expects(self::never())->method('latest');
+        $history->expects(self::once())->method('report')->with(self::RUN_ID)->willReturn(null);
+        self::getContainer()->set(DoctrineWordPressImportRunHistory::class, $history);
+
+        foreach (['page=0', 'page=1000001', 'page=1.5', 'page[]=-1'] as $query) {
+            $client->request('GET', self::ENDPOINT.'/runs?'.$query);
+            self::assertResponseStatusCodeSame(422);
+            self::assertTrue($client->getResponse()->headers->hasCacheControlDirective('no-store'));
+        }
+        foreach (['invalid-id', self::RUN_ID] as $id) {
+            $client->request('GET', self::ENDPOINT.'/runs/'.$id);
+            self::assertResponseStatusCodeSame(404);
+            self::assertTrue($client->getResponse()->headers->hasCacheControlDirective('no-store'));
+        }
     }
 
     public function testOwnerNeedsCsrfToken(): void
@@ -126,7 +217,23 @@ final class WordPressImportControllerTest extends WebTestCase
         $ledger->expects(self::once())->method('recordAuthor');
         $ledger->expects(self::never())->method('recordMediaAsset');
         $ledger->method('mediaAssetId')->with('legacy-site', '20')->willReturn($assetId->value);
-        $ledger->method('transactional')->willReturnCallback(static fn (\Closure $operation): mixed => $operation());
+        $transactionDepth = 0;
+        $ledger->method('transactional')->willReturnCallback(static function (\Closure $operation) use (&$transactionDepth): mixed {
+            ++$transactionDepth;
+            try {
+                return $operation();
+            } finally {
+                --$transactionDepth;
+            }
+        });
+        $history = $this->createMock(WordPressImportRunHistory::class);
+        /** @var list<string> $recorded */
+        $recorded = [];
+        $history->expects(self::exactly(2))->method('record')->willReturnCallback(static function (array $report) use (&$recorded, &$transactionDepth): void {
+            self::assertSame(1, $transactionDepth);
+            $recorded[] = json_encode($report, JSON_THROW_ON_ERROR);
+        });
+        self::getContainer()->set(DoctrineWordPressImportRunHistory::class, $history);
         self::getContainer()->set(DoctrineWordPressImportLedger::class, $ledger);
         self::getContainer()->set(DoctrinePageRepository::class, $pages);
         self::getContainer()->set(DoctrineEntryRepository::class, $entries);
@@ -178,6 +285,7 @@ final class WordPressImportControllerTest extends WebTestCase
             $client->request('POST', self::ENDPOINT, $fields, ['file' => $this->upload($file)], $headers);
 
             self::assertResponseIsSuccessful();
+            self::assertJsonStringEqualsJsonString($recorded[0], (string) $client->getResponse()->getContent());
             $response = json_decode((string) $client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
             self::assertIsArray($response);
             self::assertSame('selection', $response['scope']);
@@ -190,17 +298,32 @@ final class WordPressImportControllerTest extends WebTestCase
             self::assertSame('99999999999999999999', $response['items'][1]['id']);
             self::assertSame(['Studio import'], array_map(static fn (Page $page): string => $page->title->value, $pages->all()));
             self::assertSame(['Selected author', 'Selected post'], array_column($entries->all(), 'title'));
+            self::assertSame([
+                'kind' => 'page',
+                'id' => $pages->all()[0]->id->value,
+            ], $response['items'][0]['draft']);
+            $post = $entries->all()[1];
+            self::assertSame([
+                'kind' => 'entry',
+                'id' => $post->id->value,
+                'contentTypeId' => $post->contentTypeId,
+            ], $response['items'][1]['draft']);
             self::assertSame(['parent', 'child'], array_column(array_values($taxonomies->termItems), 'slug'));
-            $postId = $entries->all()[1]->id->value;
-            self::assertSame(['child'], array_column($taxonomies->entryTerms($postId), 'slug'));
-            self::assertSame($assetId->value, $entries->all()[1]->values['wordpressFeaturedImage']);
-            self::assertSame($assetId->value, $entries->all()[1]->values['wordpressInlineImage1']);
+            self::assertSame(['child'], array_column($taxonomies->entryTerms($post->id->value), 'slug'));
+            self::assertSame($assetId->value, $post->values['wordpressFeaturedImage']);
+            self::assertSame($assetId->value, $post->values['wordpressInlineImage1']);
 
             $client->request('POST', self::ENDPOINT, $fields, ['file' => $this->upload($file)], $headers);
             self::assertResponseIsSuccessful();
+            self::assertJsonStringEqualsJsonString($recorded[1], (string) $client->getResponse()->getContent());
             $response = json_decode((string) $client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
             self::assertIsArray($response);
             self::assertSame(['already_imported' => 2], $response['counts']);
+            self::assertIsArray($response['items']);
+            self::assertIsArray($response['items'][0]);
+            self::assertIsArray($response['items'][1]);
+            self::assertArrayNotHasKey('draft', $response['items'][0]);
+            self::assertArrayNotHasKey('draft', $response['items'][1]);
             self::assertSame([], $response['authors']);
             self::assertSame(['terms' => [], 'assignments' => []], $response['taxonomy']);
             self::assertCount(1, $pages->all());
@@ -264,6 +387,9 @@ final class WordPressImportControllerTest extends WebTestCase
         $ledger->expects(self::once())->method('contains')->with('legacy-site', '12')->willReturn(false);
         $ledger->expects(self::never())->method('claim');
         $ledger->expects(self::never())->method('transactional');
+        $history = $this->createMock(WordPressImportRunHistory::class);
+        $history->expects(self::never())->method('record');
+        self::getContainer()->set(DoctrineWordPressImportRunHistory::class, $history);
         self::getContainer()->set(DoctrineWordPressImportLedger::class, $ledger);
         self::getContainer()->set(DoctrinePageRepository::class, $pages);
         self::getContainer()->set(DoctrineContentTypeRepository::class, new InMemoryContentTypeRepository());
@@ -407,6 +533,7 @@ final class WordPressImportControllerTest extends WebTestCase
               </channel>
             </rss>
             XML;
+        self::getContainer()->set(DoctrineWordPressImportRunHistory::class, $this->createStub(WordPressImportRunHistory::class));
         foreach (['legacy-site' => 'cross-batch', 'other-site' => 'cross-batch-isolated'] as $source => $slug) {
             $file = tmpfile();
             self::assertIsResource($file);
@@ -444,6 +571,9 @@ final class WordPressImportControllerTest extends WebTestCase
         $headers = $this->multipartHeaders($client);
         $ledger = $this->createMock(WordPressImportLedger::class);
         $ledger->expects(self::once())->method('transactional')->willThrowException(new WordPressImportClaimConflict());
+        $history = $this->createMock(WordPressImportRunHistory::class);
+        $history->expects(self::never())->method('record');
+        self::getContainer()->set(DoctrineWordPressImportRunHistory::class, $history);
         self::getContainer()->set(DoctrineWordPressImportLedger::class, $ledger);
 
         $file = tmpfile();

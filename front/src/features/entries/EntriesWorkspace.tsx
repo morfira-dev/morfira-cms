@@ -40,11 +40,30 @@ import { initializeEntryValues, publishedEntryUrl, setEntryValue, validateEntryV
 import { useAdminLocale } from '../../i18n/AdminLocaleProvider'
 import type { MessageKey } from '../../i18n/messages'
 import { RichTextEditor } from '../richText/RichTextEditor'
+import { readDraftLink } from '../../routing/draftLink'
+import { scheduleAbortableLoad } from '../../utils/scheduleAbortableLoad'
 
-interface EntriesWorkspaceProps { contentTypes: ContentType[]; mediaAssets: MediaAsset[]; taxonomies: Taxonomy[] }
+interface EntriesWorkspaceProps {
+  contentTypes: ContentType[]
+  loadingContentTypes: boolean
+  mediaAssets: MediaAsset[]
+  taxonomies: Taxonomy[]
+}
 interface EntryForm { id: string | null; title: string; slug: string; values: EntryValues; version: number | null }
 
-export function EntriesWorkspace({ contentTypes, mediaAssets, taxonomies }: EntriesWorkspaceProps) {
+async function loadTypedEntry(id: string, contentTypeId: string, signal: AbortSignal) {
+  const entry = await getEntry(id, signal)
+  if (entry.contentTypeId !== contentTypeId) throw new Error('The entry does not match the requested content type.')
+
+  const [entries, references, revisions] = await Promise.all([
+    getEntries(contentTypeId, signal),
+    getEntryReferences(id, signal),
+    getEntryRevisions(id, signal),
+  ])
+  return { entry, entries, references, revisions }
+}
+
+export function EntriesWorkspace({ contentTypes, loadingContentTypes, mediaAssets, taxonomies }: EntriesWorkspaceProps) {
   const { locale, t } = useAdminLocale()
   const [contentTypeId, setContentTypeId] = useState('')
   const [entries, setEntries] = useState<Entry[]>([])
@@ -60,10 +79,34 @@ export function EntriesWorkspace({ contentTypes, mediaAssets, taxonomies }: Entr
   const [references, setReferences] = useState<EntryReference[]>([])
   const [revisions, setRevisions] = useState<EntryRevision[]>([])
   const [restoringRevision, setRestoringRevision] = useState<number | null>(null)
+  const [draftLink] = useState(() => readDraftLink(window.location.search))
+  const [draftLinkError, setDraftLinkError] = useState<MessageKey | null>(draftLink && (!draftLink.id || !draftLink.contentTypeId) ? 'This draft link is invalid.' : null)
+  const [draftLinkHandled, setDraftLinkHandled] = useState(false)
   const request = useRef<AbortController | null>(null)
   const skipContentTypeReload = useRef(false)
 
   const contentType = contentTypes.find((type) => type.id === contentTypeId) ?? null
+  const linkedType = contentTypes.find((type) => type.id === draftLink?.contentTypeId)
+  const openingDraftLink = Boolean(!draftLinkHandled && draftLink?.id && draftLink.contentTypeId)
+
+  useEffect(() => () => request.current?.abort(), [])
+
+  useEffect(() => {
+    if (!openingDraftLink || loadingContentTypes || !draftLink?.id) return
+    if (!linkedType) {
+      setDraftLinkError('The linked draft could not be opened.')
+      setDraftLinkHandled(true)
+      return
+    }
+
+    const id = draftLink.id
+    return scheduleAbortableLoad((signal) => {
+      loadTypedEntry(id, linkedType.id, signal)
+        .then((result) => { if (!signal.aborted) openTypedEditor(linkedType, result) })
+        .catch(() => { if (!signal.aborted) setDraftLinkError('The linked draft could not be opened.') })
+        .finally(() => { if (!signal.aborted) setDraftLinkHandled(true) })
+    })
+  }, [draftLink, linkedType, loadingContentTypes, openingDraftLink])
 
   useEffect(() => {
     if (skipContentTypeReload.current) {
@@ -83,11 +126,11 @@ export function EntriesWorkspace({ contentTypes, mediaAssets, taxonomies }: Entr
     setLoading(true)
     setError(null)
     getEntries(contentTypeId, controller.signal)
-      .then(setEntries)
+      .then((items) => { if (!controller.signal.aborted) setEntries(items) })
       .catch((reason: unknown) => {
-        if (!(reason instanceof DOMException && reason.name === 'AbortError')) setError(localizedError(locale, reason, t('Could not load entries.')))
+        if (!controller.signal.aborted) setError(localizedError(locale, reason, t('Could not load entries.')))
       })
-      .finally(() => { if (request.current === controller) setLoading(false) })
+      .finally(() => { if (!controller.signal.aborted && request.current === controller) setLoading(false) })
     setEditing(null)
     setDirty(false)
     setSuccess(null)
@@ -102,18 +145,14 @@ export function EntriesWorkspace({ contentTypes, mediaAssets, taxonomies }: Entr
     request.current = controller
     setLoading(true)
     setError(null)
+    setDraftLinkError(null)
     try {
       const [entry, incoming, history] = await Promise.all([getEntry(id, controller.signal), getEntryReferences(id, controller.signal), getEntryRevisions(id, controller.signal)])
-      setEditing(toForm(entry, contentType))
-      setReferences(incoming)
-      setRevisions(history)
-      setDirty(false)
-      setSuccess(null)
-      setPublishedUrl(null)
+      if (!controller.signal.aborted) openTypedEditor(contentType, { entry, entries: null, references: incoming, revisions: history })
     } catch (reason) {
-      if (!(reason instanceof DOMException && reason.name === 'AbortError')) setError(localizedError(locale, reason, t('Could not load entry.')))
+      if (!controller.signal.aborted) setError(localizedError(locale, reason, t('Could not load entry.')))
     } finally {
-      if (request.current === controller) setLoading(false)
+      if (!controller.signal.aborted && request.current === controller) setLoading(false)
     }
   }
 
@@ -196,18 +235,38 @@ export function EntriesWorkspace({ contentTypes, mediaAssets, taxonomies }: Entr
   async function openReference(reference: EntryReference) {
     const type = contentTypes.find((item) => item.id === reference.contentTypeId)
     if (!type) return
-    setLoading(true); setError(null)
+    request.current?.abort()
+    const controller = new AbortController()
+    request.current = controller
+    setLoading(true)
+    setError(null)
     try {
-      const [entry, typeEntries, incoming, history] = await Promise.all([getEntry(reference.id), getEntries(reference.contentTypeId), getEntryReferences(reference.id), getEntryRevisions(reference.id)])
-      if(reference.contentTypeId!==contentTypeId)skipContentTypeReload.current=true
-      setContentTypeId(reference.contentTypeId)
-      setEntries(typeEntries)
-      setEditing(toForm(entry, type))
-      setReferences(incoming)
-      setRevisions(history)
-      setDirty(false); setSuccess(null); setPublishedUrl(null)
-    } catch (reason) { setError(localizedError(locale, reason, t('Could not load entry.'))) }
-    finally { setLoading(false) }
+      const result = await loadTypedEntry(reference.id, type.id, controller.signal)
+      if (!controller.signal.aborted) openTypedEditor(type, result)
+    } catch (reason) {
+      if (!controller.signal.aborted) setError(localizedError(locale, reason, t('Could not load entry.')))
+    } finally {
+      if (!controller.signal.aborted && request.current === controller) setLoading(false)
+    }
+  }
+
+  function openTypedEditor(type: ContentType, result: {
+    entry: Entry
+    entries: Entry[] | null
+    references: EntryReference[]
+    revisions: EntryRevision[]
+  }) {
+    if (type.id !== contentTypeId) {
+      skipContentTypeReload.current = true
+      setContentTypeId(type.id)
+    }
+    if (result.entries) setEntries(result.entries)
+    setEditing(toForm(result.entry, type))
+    setReferences(result.references)
+    setRevisions(result.revisions)
+    setDirty(false)
+    setSuccess(null)
+    setPublishedUrl(null)
   }
 
   async function restoreRevision(revision: number) {
@@ -223,14 +282,18 @@ export function EntriesWorkspace({ contentTypes, mediaAssets, taxonomies }: Entr
   return (
     <Stack spacing={3}>
       <div><Typography component="h1" variant="h1">{t('Entries')}</Typography><Typography color="text.secondary" sx={{ mt: 0.75 }}>{t('Create structured content with a form generated from its schema.')}</Typography></div>
+      {draftLinkError && <Alert severity="error">{t(draftLinkError)}</Alert>}
       {error && <Alert severity="error">{error}</Alert>}
       {success && <Alert severity="success">{success}</Alert>}
 
-      <TextField select label={t('Content type')} value={contentTypeId} onChange={(event) => setContentTypeId(event.target.value)} helperText={t('Choose the schema for these entries')}>
+      <TextField select label={t('Content type')} value={contentTypeId} disabled={openingDraftLink} onChange={(event) => {
+        setDraftLinkError(null)
+        setContentTypeId(event.target.value)
+      }} helperText={t('Choose the schema for these entries')}>
         {contentTypes.map((type) => <MenuItem key={type.id} value={type.id}>{type.name} ({type.apiName})</MenuItem>)}
       </TextField>
 
-      {!contentType ? <Alert severity="info">{t('Create and select a content type first.')}</Alert> : (
+      {openingDraftLink ? <Stack sx={{ py: 4, alignItems: 'center' }}><CircularProgress size={26} /></Stack> : !contentType ? <Alert severity="info">{t('Create and select a content type first.')}</Alert> : (
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '280px minmax(0, 1fr)' }, gap: 3 }}>
           <Card variant="outlined" sx={{ alignSelf: 'start' }}><CardContent>
             <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}><Typography variant="h6">{contentType.name}</Typography><Button size="small" variant="contained" onClick={newEntry}>{t('New')}</Button></Stack>

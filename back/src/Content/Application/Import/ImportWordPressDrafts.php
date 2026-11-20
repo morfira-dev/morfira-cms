@@ -34,7 +34,8 @@ use Cms\Taxonomy\Application\ImportWordPressTaxonomies;
  * @phpstan-type TermReference array{taxonomy:string,slug:string}
  * @phpstan-type Term array{taxonomy:string,slug:string,name:string,parent:string}
  * @phpstan-type SourceItem array{id:string,type:string,status:string,title:string,slug:string,html:string,link:string,passwordProtected:bool,terms:list<TermReference>,thumbnailId:?string,authorLogin:?string,restrictedSource?:bool}
- * @phpstan-type ReportItem array{id:string,type:string,status:string,sourcePath:?string,targetPath:?string,state:string,title?:string,reason?:string,images?:array{inline:int,missingInline:int,featured:string},author?:string,redirect?:string,restrictedSource?:bool}
+ * @phpstan-type DraftReference array{kind:'page',id:string}|array{kind:'entry',id:string,contentTypeId:string}
+ * @phpstan-type ReportItem array{id:string,type:string,status:string,sourcePath:?string,targetPath:?string,state:string,title?:string,reason?:string,images?:array{inline:int,missingInline:int,featured:string},author?:string,redirect?:string,restrictedSource?:bool,draft?:DraftReference}
  * @phpstan-type DraftPlan array{title:string,slug:string,segments:list<Segment>,featured:?string,post:?array{fields:list<Field>,values:array<string,string>}}
  * @phpstan-type TaxonomyOutcomes array{terms:list<array{taxonomy:string,slug:string,state:string}>,assignments:list<array{entryId:string,taxonomy:string,slug:string,state:string}>}
  * @phpstan-type ImportReport array{items:list<ReportItem>,media:list<MediaOutcome>,taxonomy:TaxonomyOutcomes,authors:list<AuthorOutcome>}
@@ -71,8 +72,21 @@ final readonly class ImportWordPressDrafts
      * @param list<string> $allowedMediaHosts
      * @return ImportReport
      */
-    public function __invoke(string $source, array $items, bool $apply, array $terms, array $attachments, ?string $mediaDirectory, array $authors, ?string $sourceUrl, ?string $apiUrl = null, array $allowedMediaHosts = [], ?WordPressRestCredentials $credentials = null, bool $scopeDependencies = false): array
-    {
+    public function __invoke(
+        string $source,
+        array $items,
+        bool $apply,
+        array $terms,
+        array $attachments,
+        ?string $mediaDirectory,
+        array $authors,
+        ?string $sourceUrl,
+        ?string $apiUrl = null,
+        array $allowedMediaHosts = [],
+        ?WordPressRestCredentials $credentials = null,
+        bool $scopeDependencies = false,
+        bool $includeDraftReferences = false,
+    ): array {
         if (!self::validSourceKey($source)) {
             throw new \InvalidArgumentException('Source must be a lowercase identifier of at most 80 characters.');
         }
@@ -80,7 +94,7 @@ final readonly class ImportWordPressDrafts
         /** @var \ArrayObject<int,MediaAssetView> $created */
         $created = new \ArrayObject();
         $credentials = $apiUrl === null ? null : $credentials;
-        $run = function () use ($source, $items, $apply, $terms, $attachments, $mediaDirectory, $created, $authors, $sourceUrl, $apiUrl, $allowedMediaHosts, $credentials, $scopeDependencies): array {
+        $run = function () use ($source, $items, $apply, $terms, $attachments, $mediaDirectory, $created, $authors, $sourceUrl, $apiUrl, $allowedMediaHosts, $credentials, $scopeDependencies, $includeDraftReferences): array {
             $media = ($this->media)($source, $attachments, $mediaDirectory, $apply, $created, $apiUrl, $allowedMediaHosts, $credentials);
             $dependencyItems = $scopeDependencies
                 ? array_values(array_filter($items, fn (array $item): bool => !$this->ledger->contains($source, $item['id'])))
@@ -99,7 +113,7 @@ final readonly class ImportWordPressDrafts
             $importedAuthors = ($this->authors)($source, $authors, $logins, $apply);
             $assignments = [];
             $images = new WordPressImageIndex($attachments, $media, fn (string $id): ?array => $this->media->reusableImage($source, $id));
-            $report = $this->process($source, $items, $apply, $assignments, $images, $importedAuthors['profiles'], $sourceUrl, $credentials !== null);
+            $report = $this->process($source, $items, $apply, $assignments, $images, $importedAuthors['profiles'], $sourceUrl, $credentials !== null, $includeDraftReferences);
             $taxonomy = ($this->taxonomies)($terms, $assignments, $apply);
 
             return [
@@ -129,7 +143,7 @@ final readonly class ImportWordPressDrafts
      * @param array<string,AuthorReference> $authors
      * @return list<ReportItem>
      */
-    private function process(string $source, array $items, bool $apply, array &$assignments, WordPressImageIndex $images, array $authors, ?string $sourceUrl, bool $includePrivate): array
+    private function process(string $source, array $items, bool $apply, array &$assignments, WordPressImageIndex $images, array $authors, ?string $sourceUrl, bool $includePrivate, bool $includeDraftReferences): array
     {
         $locale = ($this->settings)()->defaultLocale;
         $postSchema = $this->findPostSchema();
@@ -183,13 +197,17 @@ final readonly class ImportWordPressDrafts
             $targetId = null;
             if ($apply) {
                 $this->ledger->claim($source, $item['id']);
-                $targetId = $this->createDraft($drafts[$index], $locale, $postSchema, $links);
+                $target = $this->createDraft($drafts[$index], $locale, $postSchema, $links);
+                $targetId = $target['id'];
                 if (self::isPublicLinkTarget($item) && strlen($item['link']) <= self::MAX_RECORDED_PERMALINK_BYTES
                     && WordPressInternalLinks::sourcePermalinkKey($sourceUrl, $item['link']) !== null) {
                     $kind = $item['type'] === 'page' ? 'page' : 'post';
                     $this->ledger->recordDraftPermalink($source, $item['id'], $item['link'], $kind, $targetId);
                 }
                 $row['state'] = 'imported';
+                if ($includeDraftReferences) {
+                    $row['draft'] = $target;
+                }
             }
             $row['redirect'] = $this->redirect($item, $sourceUrl, $row['targetPath'], $targetId);
             $report[$index] = $row;
@@ -316,8 +334,9 @@ final readonly class ImportWordPressDrafts
     /**
      * @param DraftPlan $draft
      * @param array<string,string> $links
+     * @return DraftReference
      */
-    private function createDraft(array $draft, string $locale, ?ContentTypeDefinition &$postSchema, array $links): string
+    private function createDraft(array $draft, string $locale, ?ContentTypeDefinition &$postSchema, array $links): array
     {
         ['title' => $title, 'slug' => $slug, 'segments' => $segments, 'featured' => $featured, 'post' => $post] = $draft;
         if ($post === null) {
@@ -326,7 +345,7 @@ final readonly class ImportWordPressDrafts
                 ($this->updatePage)($page->id, $title, $slug, $this->pageBlocks($segments, $links), new PageSeo('', '', false, $featured), $page->version);
             }
 
-            return $page->id;
+            return ['kind' => 'page', 'id' => $page->id];
         }
 
         $postSchema = $this->savePostSchema($postSchema, $post['fields']);
@@ -337,7 +356,9 @@ final readonly class ImportWordPressDrafts
             }
         }
 
-        return ($this->createEntry)($postSchema->id, $title, $slug, $values)->id;
+        $entry = ($this->createEntry)($postSchema->id, $title, $slug, $values);
+
+        return ['kind' => 'entry', 'id' => $entry->id, 'contentTypeId' => $entry->contentTypeId];
     }
 
     /** @param SourceItem $item */

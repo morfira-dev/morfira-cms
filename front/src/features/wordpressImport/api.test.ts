@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resetCsrfToken } from '../../api/http'
-import { importWordPress, type WordPressImportReport } from './api'
+import { getWordPressImportRun, importWordPress, listWordPressImportRuns, type WordPressImportReport, type WordPressImportRunCollection } from './api'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -57,5 +57,51 @@ describe('importWordPress', () => {
 
     await expect(importWordPress(new File([], 'invalid.xml'), 'old-site', 'dry-run', new AbortController().signal))
       .rejects.toThrow('Invalid WXR file.')
+  })
+})
+
+describe('WordPress import history', () => {
+  it('reads the requested history page and run without a CSRF request', async () => {
+    const collection: WordPressImportRunCollection = {
+      items: [{ id: '0199b348-1d8f-7e2f-8672-9b8356792e42', source: 'old-site', scope: 'selection', completedAt: '2026-11-20T08:00:00Z', counts: { imported: 1 } }],
+      page: 2,
+      hasMore: true,
+    }
+    const report: WordPressImportReport = {
+      mode: 'apply',
+      input: 'wxr',
+      source: 'old-site',
+      scope: 'selection',
+      counts: { imported: 1 },
+      skippedTypes: {},
+      items: [],
+      media: [],
+      taxonomy: { terms: [], assignments: [] },
+      authors: [],
+    }
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json(collection))
+      .mockResolvedValueOnce(Response.json(report))
+    vi.stubGlobal('fetch', fetchMock)
+    const { signal } = new AbortController()
+    const run = collection.items[0]
+
+    await expect(listWordPressImportRuns(2, signal)).resolves.toEqual(collection)
+    await expect(getWordPressImportRun(run.id, signal)).resolves.toEqual(report)
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      '/api/v1/admin/imports/wordpress/runs?page=2',
+      `/api/v1/admin/imports/wordpress/runs/${run.id}`,
+    ])
+    for (const [, init] of fetchMock.mock.calls) {
+      expect(init?.signal).toBe(signal)
+      expect(init?.credentials).toBe('same-origin')
+      expect(new Headers(init?.headers).has('X-CSRF-Token')).toBe(false)
+    }
+  })
+
+  it('exposes a missing run error', async () => {
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockResolvedValue(Response.json({ error: 'Import run not found.' }, { status: 404 })))
+
+    await expect(getWordPressImportRun('missing', new AbortController().signal)).rejects.toThrow('Import run not found.')
   })
 })

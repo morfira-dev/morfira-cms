@@ -3,6 +3,16 @@ import type { components } from '../../api/schema'
 
 export type WordPressImportReport = components['schemas']['WordPressImportReport']
 export type WordPressImportMode = WordPressImportReport['mode']
+export type WordPressImportRunCollection = components['schemas']['WordPressImportRunCollection']
+export type WordPressImportRun = WordPressImportRunCollection['items'][number]
+
+const importPath = '/api/v1/admin/imports/wordpress'
+
+async function readImportResponse<T>(response: Response): Promise<T> {
+  if (!response.ok) throw new Error(await readApiError(response))
+
+  return await response.json() as T
+}
 
 export async function importWordPress(
   file: File,
@@ -17,8 +27,16 @@ export async function importWordPress(
   body.set('mode', mode)
   if (mode === 'apply' && selectedIds !== undefined) body.set('selectedIds', selectedIds.join(','))
 
-  const response = await apiFetch('/api/v1/admin/imports/wordpress', { method: 'POST', body, signal })
-  if (!response.ok) throw new Error(await readApiError(response))
+  const response = await apiFetch(importPath, { method: 'POST', body, signal })
+  return readImportResponse<WordPressImportReport>(response)
+}
 
-  return await response.json() as WordPressImportReport
+export async function listWordPressImportRuns(page: number, signal: AbortSignal) {
+  const response = await apiFetch(`${importPath}/runs?page=${page}`, { signal })
+  return readImportResponse<WordPressImportRunCollection>(response)
+}
+
+export async function getWordPressImportRun(id: string, signal: AbortSignal) {
+  const response = await apiFetch(`${importPath}/runs/${encodeURIComponent(id)}`, { signal })
+  return readImportResponse<WordPressImportReport>(response)
 }

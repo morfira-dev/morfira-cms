@@ -48,6 +48,9 @@ import { createReusableSection, deleteReusableSection, getReusableSections, getT
 import { copySectionBlocks, duplicatePageBlock, movePageBlock } from './pageBuilder'
 import { getSiteSettings } from '../settings/api'
 import { useAdminLocale } from '../../i18n/AdminLocaleProvider'
+import type { MessageKey } from '../../i18n/messages'
+import { readDraftLink } from '../../routing/draftLink'
+import { scheduleAbortableLoad } from '../../utils/scheduleAbortableLoad'
 
 const publicSiteUrl = import.meta.env.VITE_PUBLIC_SITE_URL || window.location.origin
 
@@ -89,37 +92,61 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null)
   const [draggedBlockId, setDraggedBlockId] = useState<string | null>(null)
   const [builderViewport, setBuilderViewport] = useState<'desktop' | 'tablet' | 'mobile'>('desktop')
+  const [draftLink] = useState(() => readDraftLink(window.location.search))
+  const [draftLinkError, setDraftLinkError] = useState<MessageKey | null>(draftLink && !draftLink.id ? 'This draft link is invalid.' : null)
+  const [editorAttempt, setEditorAttempt] = useState(0)
+  const editingId = editing?.id
 
   function mediaLabel(asset: MediaAsset): string {
     return asset.isPrivate ? t('{{name}} (private)', { name: asset.originalName }) : asset.originalName
   }
 
-  useEffect(() => {
-    const controller = new AbortController()
-
-    getPages(controller.signal)
-      .then(setPages)
-      .catch((reason: unknown) => {
-        if (reason instanceof DOMException && reason.name === 'AbortError') {
-          return
+  useEffect(() => scheduleAbortableLoad((signal) => {
+    getPages(signal)
+      .then((drafts) => {
+        if (signal.aborted) return
+        setPages(drafts)
+        if (draftLink?.id) {
+          const draft = drafts.find((page) => page.id === draftLink.id)
+          if (draft) openEditor(draft)
+          else setDraftLinkError('The linked draft could not be opened.')
         }
-
-        setError(localizedError(adminLocale, reason, t('Could not load pages.')))
       })
-      .finally(() => setLoading(false))
+      .catch((reason: unknown) => {
+        if (!signal.aborted) setError(localizedError(adminLocale, reason, t('Could not load pages.')))
+      })
+      .finally(() => { if (!signal.aborted) setLoading(false) })
+  }), [draftLink])
 
-    return () => controller.abort()
-  }, [])
+  useEffect(() => scheduleAbortableLoad((signal) => {
+    Promise.all([getThemes(signal), getReusableSections(signal), getSiteSettings(signal)])
+      .then(([themeCatalog, sectionCatalog, settings]) => {
+        if (signal.aborted) return
+        setThemes(themeCatalog)
+        setSections(sectionCatalog)
+        setLocale(settings.defaultLocale)
+        setDefaultLocale(settings.defaultLocale)
+      })
+      .catch((reason: unknown) => {
+        if (!signal.aborted) setError(localizedError(adminLocale, reason, t('Could not load page builder catalogs.')))
+      })
+  }), [])
 
   useEffect(() => {
-    const controller = new AbortController()
-    Promise.all([getThemes(controller.signal), getReusableSections(controller.signal), getSiteSettings(controller.signal)])
-      .then(([themeCatalog, sectionCatalog, settings]) => { setThemes(themeCatalog); setSections(sectionCatalog); setLocale(settings.defaultLocale); setDefaultLocale(settings.defaultLocale) })
-      .catch((reason: unknown) => {
-        if (!(reason instanceof DOMException && reason.name === 'AbortError')) setError(localizedError(adminLocale, reason, t('Could not load page builder catalogs.')))
-      })
-    return () => controller.abort()
-  }, [])
+    if (!editingId) return
+    return scheduleAbortableLoad((signal) => {
+      getPageRedirects(editingId, signal)
+        .then((items) => { if (!signal.aborted) setRedirects(items) })
+        .catch((reason: unknown) => {
+          if (!signal.aborted) setError(localizedError(adminLocale, reason, t('Could not load redirect history.')))
+        })
+      getPageRevisions(editingId, signal)
+        .then((items) => { if (!signal.aborted) setRevisions(items) })
+        .catch((reason: unknown) => {
+          if (!signal.aborted) setError(localizedError(adminLocale, reason, t('Could not load revision history.')))
+        })
+    })
+  }, [editingId, editorAttempt])
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -231,21 +258,15 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
   }
 
   function openEditor(page: PageSummary) {
+    setDraftLinkError(null)
+    setRedirects([])
+    setRevisions([])
+    setEditorAttempt((attempt) => attempt + 1)
     setEditing(structuredClone(page))
     setEditingDirty(false)
     setPublication(null)
     setSuccess(null)
-    setRedirects([])
-    setRevisions([])
     setSelectedBlockId(page.blocks[0]?.id ?? null)
-    getPageRedirects(page.id)
-      .then(setRedirects)
-      .catch((reason: unknown) => {
-        setError(localizedError(adminLocale, reason, t('Could not load redirect history.')))
-      })
-    getPageRevisions(page.id)
-      .then(setRevisions)
-      .catch((reason: unknown) => setError(localizedError(adminLocale, reason, t('Could not load revision history.'))))
   }
 
   async function restoreRevision(revision: number) {
@@ -409,6 +430,7 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
         </Typography>
       </div>
 
+      {draftLinkError && <Alert severity="error">{t(draftLinkError)}</Alert>}
       {error && <Alert severity="error">{error}</Alert>}
       {success && <Alert severity="success">{success}</Alert>}
 

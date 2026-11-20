@@ -8,6 +8,8 @@ import {
   putPublicationSchedule,
 } from './api'
 import { useAdminLocale } from '../../i18n/AdminLocaleProvider'
+import type { MessageKey } from '../../i18n/messages'
+import { scheduleAbortableLoad } from '../../utils/scheduleAbortableLoad'
 
 interface PublicationSchedulerProps {
   target: PublicationTargetType
@@ -22,30 +24,29 @@ export function PublicationScheduler({ target, targetId, sourceVersion, dirty }:
   const [scheduledAt, setScheduledAt] = useState(defaultLocalDateTime)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<{ reason?: unknown; message: MessageKey } | null>(null)
 
-  useEffect(() => {
-    const controller = new AbortController()
+  useEffect(() => scheduleAbortableLoad((signal) => {
     setLoading(true)
     setError(null)
-    getPublicationSchedule(target, targetId, controller.signal)
+    setSchedule(null)
+    setScheduledAt(defaultLocalDateTime())
+    getPublicationSchedule(target, targetId, signal)
       .then((current) => {
+        if (signal.aborted) return
         setSchedule(current)
         if (current?.status === 'pending') setScheduledAt(toLocalDateTime(current.scheduledAt))
       })
       .catch((reason: unknown) => {
-        if (!(reason instanceof DOMException && reason.name === 'AbortError')) {
-          setError(errorMessage(reason, 'Could not load the publication schedule.'))
-        }
+        if (!signal.aborted) setError({ reason, message: 'Could not load the publication schedule.' })
       })
-      .finally(() => setLoading(false))
-    return () => controller.abort()
-  }, [errorMessage, target, targetId])
+      .finally(() => { if (!signal.aborted) setLoading(false) })
+  }), [target, targetId])
 
   async function plan() {
     const parsed = new Date(scheduledAt)
     if (!scheduledAt || Number.isNaN(parsed.getTime()) || parsed <= new Date()) {
-      setError(t('Choose a future publication date and time.'))
+      setError({ message: 'Choose a future publication date and time.' })
       return
     }
     setSubmitting(true)
@@ -53,7 +54,7 @@ export function PublicationScheduler({ target, targetId, sourceVersion, dirty }:
     try {
       setSchedule(await putPublicationSchedule(target, targetId, sourceVersion, parsed.toISOString()))
     } catch (reason) {
-      setError(errorMessage(reason, 'Could not schedule publication.'))
+      setError({ reason, message: 'Could not schedule publication.' })
     } finally {
       setSubmitting(false)
     }
@@ -65,7 +66,7 @@ export function PublicationScheduler({ target, targetId, sourceVersion, dirty }:
     try {
       setSchedule(await cancelPublicationSchedule(target, targetId))
     } catch (reason) {
-      setError(errorMessage(reason, 'Could not cancel the publication schedule.'))
+      setError({ reason, message: 'Could not cancel the publication schedule.' })
     } finally {
       setSubmitting(false)
     }
@@ -80,7 +81,7 @@ export function PublicationScheduler({ target, targetId, sourceVersion, dirty }:
         </div>
         {schedule && <Chip label={t(schedule.status)} color={schedule.status === 'failed' ? 'error' : schedule.status === 'pending' ? 'warning' : 'default'} size="small" />}
       </Stack>
-      {error && <Alert severity="error">{error}</Alert>}
+      {error && <Alert severity="error">{errorMessage(error.reason, error.message)}</Alert>}
       {schedule?.failureReason && <Alert severity="error">{errorMessage(new Error(schedule.failureReason), 'Scheduled publication failed.')}</Alert>}
       {schedule?.status === 'pending' && (
         <Alert severity="info">{t('Version {{version}} is scheduled for {{date}}.', { version: schedule.sourceVersion, date: formatDateTime(schedule.scheduledAt) })}</Alert>
