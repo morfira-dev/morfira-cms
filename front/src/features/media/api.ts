@@ -15,7 +15,7 @@ export async function getMedia(signal?: AbortSignal): Promise<MediaAsset[]> {
   return ((await response.json()) as MediaCollection).items
 }
 
-export async function uploadMedia(file: File, alt: string): Promise<MediaAsset> {
+export async function uploadMedia(file: File, alt: string, signal?: AbortSignal): Promise<MediaAsset> {
   const body = new FormData()
   body.set('file', file)
   body.set('alt', alt)
@@ -23,6 +23,7 @@ export async function uploadMedia(file: File, alt: string): Promise<MediaAsset> 
   const response = await apiFetch('/api/v1/admin/media', {
     method: 'POST',
     body,
+    signal,
   })
 
   if (!response.ok) {

@@ -14,7 +14,8 @@
         dt { margin-bottom: 8px; color: #667085; font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
         dd { margin: 0; color: #344054; font-size: 18px; line-height: 1.65; white-space: pre-wrap; }
         dd.rich-text { white-space: normal; }
-        img { display: block; width: 100%; height: auto; border-radius: 16px; }
+        dd:not(.rich-text) img { display: block; width: 100%; height: auto; border-radius: 16px; }
+        {% include 'shared/rich-text.css.twig' %}
     </style>
 </head>
 <body>

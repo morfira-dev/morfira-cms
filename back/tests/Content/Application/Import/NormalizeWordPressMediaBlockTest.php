@@ -23,8 +23,8 @@ final class NormalizeWordPressMediaBlockTest extends TestCase
         );
 
         self::assertStringContainsString(
-            '<p><a href="https://wordpress.example/audio.mp3" rel="noopener noreferrer">https://wordpress.example/audio.mp3</a></p>Audio caption'
-            .'<p><a href="https://wordpress.example/movie.mp4" rel="noopener noreferrer">Watch movie</a></p>Video caption',
+            '<figure><p><a href="https://wordpress.example/audio.mp3" rel="noopener noreferrer">https://wordpress.example/audio.mp3</a></p><figcaption>Audio caption</figcaption></figure>'
+            .'<figure><p><a href="https://wordpress.example/movie.mp4" rel="noopener noreferrer">Watch movie</a></p><figcaption>Video caption</figcaption></figure>',
             $html,
         );
         self::assertStringNotContainsString('<audio', $html);
@@ -44,7 +44,7 @@ final class NormalizeWordPressMediaBlockTest extends TestCase
         self::assertStringNotContainsString('preview.pdf', $html);
         self::assertStringContainsString('<a href="https://wordpress.example/handbook.pdf" rel="noopener noreferrer">Handbook</a>', $html);
         self::assertStringContainsString('<p><a href="https://wordpress.example/download.pdf" rel="noopener noreferrer">https://wordpress.example/download.pdf</a></p>', $html);
-        self::assertStringContainsString('<p><a href="https://media.example/episode" rel="noopener noreferrer">https://media.example/episode</a></p>Episode caption', $html);
+        self::assertStringContainsString('<p><a href="https://media.example/episode" rel="noopener noreferrer">https://media.example/episode</a></p><figcaption>Episode caption</figcaption>', $html);
     }
 
     public function testRejectsUnsafeSourcesAndDoesNotExtractIframeUrls(): void

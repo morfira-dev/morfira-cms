@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cms\Publishing\Infrastructure\Persistence;
 
+use Cms\Media\Application\FindMediaReference;
 use Cms\Publishing\Application\PublishedMediaUsageLookup;
 use Doctrine\DBAL\Connection;
 
@@ -22,7 +23,7 @@ final readonly class DoctrinePublishedMediaUsageLookup implements PublishedMedia
             ['published_entry_snapshots', 'values_json', 'published entry'],
         ] as [$table, $column, $label]) {
             foreach ($this->connection->fetchFirstColumn(sprintf('SELECT %s FROM %s', $column, $table)) as $payload) {
-                if (is_string($payload) && self::contains(json_decode($payload, true, flags: JSON_THROW_ON_ERROR), $assetId)) {
+                if (is_string($payload) && FindMediaReference::inPayload(json_decode($payload, true, flags: JSON_THROW_ON_ERROR), $assetId)) {
                     $usages[] = $label;
                     break;
                 }
@@ -30,21 +31,5 @@ final readonly class DoctrinePublishedMediaUsageLookup implements PublishedMedia
         }
 
         return $usages;
-    }
-
-    private static function contains(mixed $value, string $assetId): bool
-    {
-        if ($value === $assetId) {
-            return true;
-        }
-        if (!is_array($value)) {
-            return false;
-        }
-        foreach ($value as $nested) {
-            if (self::contains($nested, $assetId)) {
-                return true;
-            }
-        }
-        return false;
     }
 }

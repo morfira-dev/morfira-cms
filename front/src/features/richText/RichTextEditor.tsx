@@ -1,38 +1,23 @@
-import { $generateHtmlFromNodes, $generateNodesFromDOM } from '@lexical/html'
-import { AutoLinkNode, LinkNode, TOGGLE_LINK_COMMAND } from '@lexical/link'
-import {
-  INSERT_ORDERED_LIST_COMMAND,
-  INSERT_UNORDERED_LIST_COMMAND,
-  ListItemNode,
-  ListNode,
-  REMOVE_LIST_COMMAND,
-} from '@lexical/list'
-import { LexicalComposer } from '@lexical/react/LexicalComposer'
-import { ContentEditable } from '@lexical/react/LexicalContentEditable'
-import { HistoryPlugin } from '@lexical/react/LexicalHistoryPlugin'
-import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary'
-import { LinkPlugin } from '@lexical/react/LexicalLinkPlugin'
-import { ListPlugin } from '@lexical/react/LexicalListPlugin'
-import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin'
-import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
-import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin'
-import { $setBlocksType } from '@lexical/selection'
-import { $createHeadingNode, $createQuoteNode, HeadingNode, QuoteNode } from '@lexical/rich-text'
-import {
-  $createParagraphNode,
-  $getRoot,
-  $getSelection,
-  $insertNodes,
-  $isRangeSelection,
-  FORMAT_TEXT_COMMAND,
-  type EditorState,
-  type LexicalEditor,
-} from 'lexical'
-import { useEffect, useRef, type MutableRefObject } from 'react'
-import { Box, Button, MenuItem, Stack, TextField, Typography } from '../../ui'
+import '@morfira-dev/wysiwyg-core/style.css'
+import '@morfira-dev/wysiwyg-plugins/checklists.css'
+import '@morfira-dev/wysiwyg-plugins/suggestions.css'
+import '@morfira-dev/wysiwyg-plugins/tables.css'
+import '@morfira-dev/wysiwyg-plugins/ui/editor.css'
+import '@morfira-dev/wysiwyg-plugins/ui/forms.css'
+import '@morfira-dev/wysiwyg-plugins/ui/search-highlights.css'
+import { checklists, checklistCommands } from '@morfira-dev/wysiwyg-plugins/checklists'
+import { horizontalRuleCommands } from '@morfira-dev/wysiwyg-plugins/horizontal-rule'
+import { createExtendedPreset } from '@morfira-dev/wysiwyg-plugins/presets/extended'
+import { createSlashActions } from '@morfira-dev/wysiwyg-plugins/slash'
+import { tableCommands } from '@morfira-dev/wysiwyg-plugins/tables'
+import { createExtendedEditorUI } from '@morfira-dev/wysiwyg-plugins/ui/extended'
+import { createSearchHighlights } from '@morfira-dev/wysiwyg-plugins/ui/search-highlights'
+import { MorfiraEditor, type MorfiraEditorHandle } from '@morfira-dev/wysiwyg-react'
+import { useLayoutEffect, useMemo, useRef } from 'react'
 import { useAdminLocale } from '../../i18n/AdminLocaleProvider'
-
-const EXTERNAL_HTML_SYNC_TAG = 'morfira-external-html-sync'
+import { Stack, Typography } from '../../ui'
+import { uploadMedia } from '../media/api'
+import { getPages } from '../pages/api'
 
 interface RichTextEditorProps {
   value: string
@@ -41,11 +26,81 @@ interface RichTextEditorProps {
   required?: boolean
 }
 
+const slashOptions = [
+  ['paragraph', 'Paragraph'], ['heading1', 'Heading 1'], ['heading2', 'Heading 2'],
+  ['heading3', 'Heading 3'], ['heading4', 'Heading 4'], ['heading5', 'Heading 5'],
+  ['heading6', 'Heading 6'], ['bulletList', 'Bullet list'], ['orderedList', 'Numbered list'],
+  ['blockquote', 'Quote'], ['codeBlock', 'Code block'], ['table', 'Table'],
+  ['checklist', 'Checklist'], ['horizontalRule', 'Horizontal rule'],
+] as const
+
 export function RichTextEditor({ value, onChange, label, required = false }: RichTextEditorProps) {
-  const { t } = useAdminLocale()
-  const initialValue = useRef(value)
-  const latestHtml = useRef(value)
+  const { locale, t } = useAdminLocale()
+  const translate = useRef(t)
+  translate.current = t
+  const editorRef = useRef<MorfiraEditorHandle>(null)
+  const toolbarRef = useRef<HTMLDivElement>(null)
   const accessibleLabel = label ?? t('Rich text content')
+  const placeholder = t('Start writing useful content…')
+  const html = useMemo(() => normalizeLegacyLinks(value), [value])
+  const preset = useMemo(() => createExtendedPreset({
+    images: {
+      maxFileSize: 10 * 1024 * 1024,
+      upload: async (file, { signal }) => {
+        const asset = await uploadMedia(file, file.name.slice(0, 300), signal)
+        const variant = asset.variants.reduce((largest, item) => item.width > largest.width ? item : largest)
+        return { src: variant.url, alt: asset.defaultAlt }
+      },
+    },
+    markdown: { blocks: true, inline: true },
+    autolink: { enabled: true },
+    mentions: {
+      persistent: true,
+      provide: async ({ query, limit, signal }) => {
+        const search = query.toLowerCase()
+        const pages = await getPages(signal)
+        return pages.filter((page) => page.title.toLowerCase().includes(search) || page.slug.includes(search))
+          .slice(0, limit)
+          .map((page) => ({ id: page.id, label: page.title, description: page.slug }))
+      },
+    },
+    slash: {
+      actions: {
+        ...createSlashActions(),
+        table: (editor) => tableCommands(editor).insert(3, 3),
+        checklist: (editor) => checklistCommands(editor).insert(),
+        horizontalRule: (editor) => horizontalRuleCommands(editor).insert(),
+      },
+      provide: ({ query, limit }) => {
+        const search = query.toLowerCase()
+        return slashOptions.map(([id, key]) => ({ id, label: translate.current(key), action: id }))
+          .filter(({ id, label }) => id.toLowerCase().includes(search) || label.toLowerCase().includes(search))
+          .slice(0, limit)
+      },
+    },
+    plugins: [checklists()],
+  }), [])
+
+  useLayoutEffect(() => {
+    const editor = editorRef.current?.getEditor()
+    const host = toolbarRef.current
+    if (!editor || !host) return
+    const ui = createExtendedEditorUI(host, editor, { overflow: 'wrap' })
+    const highlights = createSearchHighlights(editor)
+
+    return () => {
+      highlights.destroy()
+      ui.destroy()
+    }
+  }, [])
+
+  useLayoutEffect(() => {
+    const surface = editorRef.current?.getEditor()?.surface
+    if (!surface) return
+    surface.setAttribute('aria-label', accessibleLabel)
+    surface.setAttribute('aria-required', String(required))
+    surface.dataset.placeholder = placeholder
+  }, [accessibleLabel, placeholder, required])
 
   return (
     <Stack spacing={0.75}>
@@ -54,128 +109,29 @@ export function RichTextEditor({ value, onChange, label, required = false }: Ric
           {label}{required ? ' *' : ''}
         </Typography>
       )}
-      <LexicalComposer
-        initialConfig={{
-          namespace: 'MorfiraRichText',
-          nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode, LinkNode, AutoLinkNode],
-          onError(error) {
-            throw error
-          },
-          editorState: (editor) => importHtml(editor, initialValue.current),
-          theme: {
-            heading: { h2: 'morfira-editor-h2', h3: 'morfira-editor-h3', h4: 'morfira-editor-h4' },
-            link: 'morfira-editor-link',
-            list: { listitem: 'morfira-editor-listitem', ol: 'morfira-editor-list', ul: 'morfira-editor-list' },
-            quote: 'morfira-editor-quote',
-            text: { bold: 'morfira-editor-bold', italic: 'morfira-editor-italic', strikethrough: 'morfira-editor-strike', underline: 'morfira-editor-underline' },
-          },
-        }}
-      >
-        <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
-          <Toolbar />
-          <Box sx={{ position: 'relative' }}>
-            <RichTextPlugin
-              contentEditable={(
-                <ContentEditable
-                  aria-label={accessibleLabel}
-                  aria-required={required}
-                  style={{ minHeight: 180, outline: 'none', padding: '16px' }}
-                />
-              )}
-              placeholder={<Box sx={{ color: 'text.disabled', left: 16, pointerEvents: 'none', position: 'absolute', top: 16 }}>{t('Start writing useful content…')}</Box>}
-              ErrorBoundary={LexicalErrorBoundary}
-            />
-          </Box>
-        </Box>
-        <HistoryPlugin />
-        <ListPlugin />
-        <LinkPlugin />
-        <SyncHtmlPlugin value={value} latestHtml={latestHtml} />
-        <OnChangePlugin
-          ignoreSelectionChange
-          onChange={(editorState, editor, tags) => {
-            if (tags.has(EXTERNAL_HTML_SYNC_TAG)) return
-            emitHtml(editorState, editor, (html) => {
-              if (html === latestHtml.current) return
-              latestHtml.current = html
-              onChange(html)
-            })
-          }}
-        />
-      </LexicalComposer>
+      <div ref={toolbarRef} />
+      <MorfiraEditor
+        ref={editorRef}
+        plugins={preset.plugins}
+        value={html}
+        label={accessibleLabel}
+        locale={locale}
+        placeholder={placeholder}
+        onChange={({ html: nextHtml }) => onChange(nextHtml)}
+      />
     </Stack>
   )
 }
 
-function SyncHtmlPlugin({ value, latestHtml }: { value: string; latestHtml: MutableRefObject<string> }) {
-  const [editor] = useLexicalComposerContext()
+function normalizeLegacyLinks(html: string): string {
+  if (!html.includes('href="//')) return html
 
-  useEffect(() => {
-    if (value === latestHtml.current) return
-
-    latestHtml.current = value
-    editor.update(() => importHtml(editor, value), { tag: EXTERNAL_HTML_SYNC_TAG })
-  }, [editor, latestHtml, value])
-
-  return null
-}
-
-function Toolbar() {
-  const [editor] = useLexicalComposerContext()
-  const { t } = useAdminLocale()
-
-  function setBlock(type: string) {
-    if (type === 'bullet') editor.dispatchCommand(INSERT_UNORDERED_LIST_COMMAND, undefined)
-    else if (type === 'number') editor.dispatchCommand(INSERT_ORDERED_LIST_COMMAND, undefined)
-    else if (type === 'paragraph') {
-      editor.dispatchCommand(REMOVE_LIST_COMMAND, undefined)
-      editor.update(() => $setBlocksType($getSelection(), () => $createParagraphNode()))
-    } else {
-      editor.dispatchCommand(REMOVE_LIST_COMMAND, undefined)
-      editor.update(() => {
-        const selection = $getSelection()
-        if (!$isRangeSelection(selection)) return
-        $setBlocksType(selection, () => type === 'quote' ? $createQuoteNode() : $createHeadingNode(type as 'h2' | 'h3' | 'h4'))
-      })
-    }
+  const template = document.createElement('template')
+  template.innerHTML = html
+  for (const anchor of template.content.querySelectorAll('a[href^="//"]')) {
+    const href = anchor.getAttribute('href')
+    if (href && /^\/\/[^/\\]/.test(href)) anchor.setAttribute('href', window.location.protocol + href)
   }
 
-  function editLink() {
-    const url = window.prompt(t('Link URL. Leave empty to remove the link.'))
-    if (url === null) return
-    editor.dispatchCommand(TOGGLE_LINK_COMMAND, url.trim() || null)
-  }
-
-  return (
-    <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', bgcolor: 'grey.50', borderBottom: 1, borderColor: 'divider', flexWrap: 'wrap', gap: 0.75, p: 1 }}>
-      <TextField select size="small" defaultValue="paragraph" aria-label={t('Block style')} sx={{ minWidth: 130 }} onChange={(event) => setBlock(event.target.value)}>
-        <MenuItem value="paragraph">{t('Paragraph')}</MenuItem>
-        <MenuItem value="h2">{t('Heading 2')}</MenuItem>
-        <MenuItem value="h3">{t('Heading 3')}</MenuItem>
-        <MenuItem value="h4">{t('Heading 4')}</MenuItem>
-        <MenuItem value="quote">{t('Quote')}</MenuItem>
-        <MenuItem value="bullet">{t('Bullet list')}</MenuItem>
-        <MenuItem value="number">{t('Numbered list')}</MenuItem>
-      </TextField>
-      <Button size="small" onClick={() => editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'bold')}><strong>B</strong></Button>
-      <Button size="small" onClick={() => editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'italic')}><em>I</em></Button>
-      <Button size="small" onClick={() => editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'underline')}><u>U</u></Button>
-      <Button size="small" onClick={() => editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'strikethrough')}><s>S</s></Button>
-      <Button size="small" onClick={editLink}>{t('Link')}</Button>
-    </Stack>
-  )
-}
-
-function importHtml(editor: LexicalEditor, html: string) {
-  const parser = new DOMParser()
-  const document = parser.parseFromString(html || '<p></p>', 'text/html')
-  const nodes = $generateNodesFromDOM(editor, document)
-  const root = $getRoot()
-  root.clear()
-  if (nodes.length === 0) root.append($createParagraphNode())
-  else $insertNodes(nodes)
-}
-
-function emitHtml(editorState: EditorState, editor: LexicalEditor, onChange: (html: string) => void) {
-  editorState.read(() => onChange($generateHtmlFromNodes(editor)))
+  return template.innerHTML
 }

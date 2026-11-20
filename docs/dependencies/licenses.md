@@ -41,7 +41,7 @@ Until the upstream release-tool chain resolves those advisories, release jobs mu
 
 ### Direct product dependencies
 
-- The React, MUI, Emotion, and Lexical runtime dependencies are MIT licensed.
+- React, MUI, Emotion and the Morfira WYSIWYG core, React adapter and plugin packages are MIT licensed. Preserve their copyright and permission notices in redistributed copies.
 - TypeScript is Apache-2.0. Vite, Vitest, OpenAPI TypeScript, and the React/Vite development stack are MIT licensed.
 - Playwright is Apache-2.0 licensed and is used only for disposable browser verification; downloaded browser and operating-system components retain their own notices.
 - Symfony, Doctrine bundles, and PHPStan are MIT licensed. Twig and PHPUnit are BSD-3-Clause.

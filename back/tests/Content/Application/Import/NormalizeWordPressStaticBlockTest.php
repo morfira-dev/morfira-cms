@@ -71,7 +71,7 @@ final class NormalizeWordPressStaticBlockTest extends TestCase
             .'<pre class="classic-preformatted">Original'."\n".'lines</pre>'
             .'<div class="wp-block-categories"><select><option value="12">Existing category</option></select></div>';
 
-        self::assertSame((new SymfonyRichTextSanitizer())->sanitize($input), self::normalize($input));
+        self::assertSame('A heading<pre>Original'."\n".'lines</pre>Existing category', self::normalize($input));
     }
 
     public function testPreservesPreformattedWhitespaceWhenLineBreaksWouldNotBeEnough(): void

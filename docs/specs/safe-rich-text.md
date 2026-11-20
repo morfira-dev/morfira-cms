@@ -16,8 +16,7 @@ The RichText page block stores plain text in a multiline input. Editors need hea
 
 ## Non-goals
 
-- Arbitrary HTML, scripts, inline styles, embeds or iframes.
-- Rich HTML fields for custom content types.
+- Arbitrary HTML, scripts, unrestricted CSS, embeds or iframes.
 - Collaborative editing or editor plugins.
 
 ## Actors and permissions
@@ -36,13 +35,15 @@ The RichText page block stores plain text in a multiline input. Editors need hea
 ## Contracts
 
 - The existing `richText.data.content` string becomes sanitized HTML without changing its JSON shape.
-- Allowed elements are paragraphs, line breaks, headings 2–4, strong, emphasis, underline, strike, ordered/unordered lists, list items, block quote, code and links.
-- Links allow safe HTTP(S), mail and relative targets; unsafe attributes and protocols are removed.
+- The HTML subset includes headings, lists, tables, checklists, separators, images and captions, mentions, and basic inline formatting. CSS properties and values are restricted by an explicit server allowlist.
+- Links allow safe HTTP(S), mail, telephone and relative targets. Inline images can use public CMS media variants or explicit HTTPS URLs. Editing by upload uses the existing image pipeline, and inline references prevent CMS asset deletion while referenced by content or revisions.
+- Admin Studio uses the official Morfira WYSIWYG Extended preset and its UI. Markdown, autolink, search, statistics, and suggestions run in Studio. Slash commands include tables, checklists and separators. Mentions search the editor's existing page catalog and insert only the selected page label and identifier.
+- Existing HTML is loaded and changes still submit HTML. Protocol-relative links resolve to the current HTTP(S) scheme when opened for editing. The editor represents link targets with the default browsing context or a new tab.
 
 ## Data and invariants
 
 - Sanitization happens before domain validation and persistence.
-- Empty visual content is rejected after stripping markup.
+- Empty visual content is rejected. A valid image, table, or separator counts as visible content.
 - Stored content is limited to 20,000 characters after sanitization.
 - Existing plain-text blocks remain valid HTML text and render compatibly.
 
@@ -56,7 +57,7 @@ The RichText page block stores plain text in a multiline input. Editors need hea
 
 - Browser output is untrusted.
 - Public templates mark rich text as safe only after applying the server sanitizer.
-- No executable content, event attributes, CSS or remote embeds are allowed.
+- No executable content, event attributes, unrestricted CSS or active remote embeds are allowed. The server does not fetch authored HTTPS image URLs.
 
 ## Acceptance criteria
 
@@ -70,6 +71,7 @@ The RichText page block stores plain text in a multiline input. Editors need hea
 
 - Domain/application tests cover allowed formatting, XSS removal and empty content.
 - Frontend request/build tests verify the unchanged API shape.
+- The production browser journey verifies formatted HTML can be saved, reopened and published from both editors.
 - Preview/public template tests assert sanitized formatting is rendered.
 - A dependency license report is committed with the feature documentation.
 

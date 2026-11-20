@@ -52,7 +52,7 @@ final class NormalizeWordPressTextBlockTest extends TestCase
             .'</table><figcaption>Table notes</figcaption></figure>',
         );
 
-        self::assertStringContainsString('<p>Numbers</p><ul><li>Column A | Column B</li><li><strong>Value</strong> | Two</li></ul>Table notes', $html);
+        self::assertStringContainsString('<p>Numbers</p><ul><li>Column A | Column B</li><li><strong>Value</strong> | Two</li></ul><figcaption>Table notes</figcaption>', $html);
         self::assertStringNotContainsString('hidden', $html);
     }
 

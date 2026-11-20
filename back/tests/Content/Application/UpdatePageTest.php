@@ -87,13 +87,36 @@ final class UpdatePageTest extends TestCase
     }
 
     #[Test]
+    public function it_accepts_rich_text_with_visible_non_text_content(): void
+    {
+        $pages = new InMemoryPageRepository();
+        $created = (new CreatePage($pages))('Landing', 'landing');
+        $updated = (new UpdatePage($pages, new SymfonyRichTextSanitizer()))(
+            $created->id,
+            'Landing',
+            'landing',
+            [
+                ['id' => '6bb4ff18-266f-44a7-a3d0-1b4d84ac0ac8', 'type' => 'richText', 'data' => [
+                    'content' => '<img src="/media/5bb4ff18-266f-44a7-a3d0-1b4d84ac0ac8/480w.webp" alt="Graphic">',
+                ]],
+                ['id' => '7bb4ff18-266f-44a7-a3d0-1b4d84ac0ac8', 'type' => 'richText', 'data' => ['content' => '<hr>']],
+            ],
+            PageSeo::defaults(),
+            $created->version,
+        );
+
+        self::assertStringContainsString('<img src="/media/', $updated->blocks[0]['data']['content']);
+        self::assertSame('<hr />', $updated->blocks[1]['data']['content']);
+    }
+
+    #[Test]
     public function it_rejects_rich_text_that_is_visually_empty_after_sanitization(): void
     {
         $pages = new InMemoryPageRepository();
         $created = (new CreatePage($pages))('Landing', 'landing');
 
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('must contain visible text');
+        $this->expectExceptionMessage('must contain visible content');
 
         (new UpdatePage($pages, new SymfonyRichTextSanitizer()))(
             $created->id,

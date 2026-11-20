@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cms\Content\Infrastructure\Persistence;
 
 use Cms\Content\Application\ContentMediaUsageLookup;
+use Cms\Media\Application\FindMediaReference;
 use Doctrine\DBAL\Connection;
 
 final readonly class DoctrineContentMediaUsageLookup implements ContentMediaUsageLookup
@@ -26,7 +27,7 @@ final readonly class DoctrineContentMediaUsageLookup implements ContentMediaUsag
         ] as [$table, $column, $label]) {
             $rows = $this->connection->fetchFirstColumn(sprintf('SELECT %s FROM %s', $column, $table));
             foreach ($rows as $payload) {
-                if (is_string($payload) && self::contains(json_decode($payload, true, flags: JSON_THROW_ON_ERROR), $assetId)) {
+                if (is_string($payload) && FindMediaReference::inPayload(json_decode($payload, true, flags: JSON_THROW_ON_ERROR), $assetId)) {
                     $usages[] = $label;
                     break;
                 }
@@ -34,21 +35,5 @@ final readonly class DoctrineContentMediaUsageLookup implements ContentMediaUsag
         }
 
         return array_values(array_unique($usages));
-    }
-
-    private static function contains(mixed $value, string $assetId): bool
-    {
-        if ($value === $assetId) {
-            return true;
-        }
-        if (!is_array($value)) {
-            return false;
-        }
-        foreach ($value as $nested) {
-            if (self::contains($nested, $assetId)) {
-                return true;
-            }
-        }
-        return false;
     }
 }
