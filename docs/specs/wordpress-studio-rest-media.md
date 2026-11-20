@@ -10,7 +10,7 @@ Owners migrating a small public WordPress site can bring its images into Morfira
 
 ## Actors and flow
 
-An owner can enable downloading public images on the REST source form. Changing the option invalidates the current preview. The preview checks attachment metadata and plans eligible images without fetching files or writing data. Applying plans or reuses the source's public attachments and imports the chosen content. The option covers attachments from the source snapshot, including when the owner selects only some pages and posts. Studio explains this scope before applying.
+An owner can enable downloading public images on the REST source form. The report points to this option and counts the attachments that still require files when downloads are off. Changing the option invalidates the current preview. The preview checks attachment metadata and plans eligible images without fetching files or writing data. Applying plans or reuses the source's public attachments and imports the chosen content. The option covers attachments from the source snapshot, including when the owner selects only some pages and posts. Studio explains this scope before applying.
 
 ## Contracts
 

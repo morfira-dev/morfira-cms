@@ -29,6 +29,10 @@ export function WordPressImportReportContent({ report, selection }: {
   selection?: ImportItemSelection
 }) {
   const { t } = useAdminLocale()
+  const missingMediaCount = report.media.filter(({ state }) => state === 'media_directory_required').length
+  const missingMediaHint = report.input === 'rest'
+    ? 'To import the missing attachment files ({{count}}), enable Download public images and preview again.'
+    : 'Use the command-line importer with the WordPress uploads directory to import the missing attachment files ({{count}}).'
 
   return (
     <>
@@ -44,9 +48,9 @@ export function WordPressImportReportContent({ report, selection }: {
           <Chip variant="outlined" label={t('{{label}} · {{count}}', { label: t('Imported attachment details'), count: report.media.length })} />
         )}
       </Stack>
-      {report.input === 'wxr' && report.media.length > 0 && (
+      {missingMediaCount > 0 && (
         <Alert severity="info">
-          {t('The export references {{count}} attachments. Import their files with the command-line importer.', { count: report.media.length })}
+          {t(missingMediaHint, { count: missingMediaCount })}
         </Alert>
       )}
       <WordPressImportItems items={report.items} input={report.input} selection={selection} />

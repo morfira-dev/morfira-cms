@@ -37,7 +37,7 @@ test('previews, selects and reopens a public WordPress REST import', async ({ pa
           id: '143',
           state: body.downloadMedia ? (body.allowedMediaHosts?.includes(cdnHost) ? 'planned' : 'invalid') : 'media_directory_required',
           reason: body.downloadMedia && !body.allowedMediaHosts?.includes(cdnHost) ? 'The WordPress attachment host is not allowed.' : undefined,
-        }],
+        }, { id: '144', state: 'already_imported', assetId }],
         taxonomy: { terms: [], assignments: [] }, authors: [],
       }
       if (body.mode === 'dry-run') await route.fulfill({ json: preview })
@@ -79,6 +79,8 @@ test('previews, selects and reopens a public WordPress REST import', async ({ pa
   await previewButton.click()
   await expect(report.getByText('REST welcome')).toBeVisible()
   await expect(media.getByText('Нужны файлы вложений')).toBeVisible()
+  const missingFilesHint = page.getByText('Чтобы перенести недостающие файлы вложений (1), включите «Скачать общедоступные изображения» и повторите предпросмотр.', { exact: true })
+  await expect(missingFilesHint).toBeVisible()
   await includeBulletin.uncheck()
   await downloadImages.check()
   await expect(report).toHaveCount(0)
@@ -86,6 +88,7 @@ test('previews, selects and reopens a public WordPress REST import', async ({ pa
   await previewButton.click()
   await expect(includeBulletin).toBeChecked()
   await expect(media.getByText('Некорректные данные')).toBeVisible()
+  await expect(missingFilesHint).toHaveCount(0)
   await expect(media.getByText('Хост вложения WordPress не разрешён.', { exact: true })).toBeVisible()
   await expect(media.getByText(/укажите его точное имя в поле «Разрешённые хосты CDN»/)).toBeVisible()
   await includeBulletin.uncheck()
