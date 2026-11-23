@@ -15,14 +15,14 @@ importers:
         specifier: ^11.14.1
         version: 11.14.1(@emotion/react@11.14.0(@types/react@19.3.0)(react@19.3.0))(@types/react@19.3.0)(react@19.3.0)
       '@morfira-dev/wysiwyg-core':
-        specifier: 1.14.0
-        version: 1.14.0
+        specifier: 1.15.0
+        version: 1.15.0
       '@morfira-dev/wysiwyg-plugins':
-        specifier: 1.20.0
-        version: 1.20.0(@morfira-dev/wysiwyg-core@1.14.0)
+        specifier: 1.21.0
+        version: 1.21.0(@morfira-dev/wysiwyg-core@1.15.0)
       '@morfira-dev/wysiwyg-react':
-        specifier: 1.14.0
-        version: 1.14.0(@morfira-dev/wysiwyg-core@1.14.0)(react@19.3.0)
+        specifier: 1.15.0
+        version: 1.15.0(@morfira-dev/wysiwyg-core@1.15.0)(react@19.3.0)
       '@mui/material':
         specifier: ^9.4.0
         version: 9.4.0(@emotion/react@11.14.0(@types/react@19.3.0)(react@19.3.0))(@emotion/styled@11.14.1(@emotion/react@11.14.0(@types/react@19.3.0)(react@19.3.0))(@types/react@19.3.0)(react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -172,18 +172,18 @@ packages:
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
 
-  '@morfira-dev/wysiwyg-core@1.14.0':
-    resolution: {integrity: sha512-aLdR8Qd91s/O36ppR+pRhywFxXj71ZV7FZkuDf/8zMMuxqRiarsw3jv22A6cGoddUU/BmQQiQfW6zIAOW9ugMQ==}
+  '@morfira-dev/wysiwyg-core@1.15.0':
+    resolution: {integrity: sha512-lf02R1A6Axd7PJRQZ4HrtmWhWwD/pS3bbL+6oLnf51nUoeymlzkK/bRNc4LbnwTv0vWPyGY4zWNFleyotZ+i1Q==}
 
-  '@morfira-dev/wysiwyg-plugins@1.20.0':
-    resolution: {integrity: sha512-nSKg4ICvMR0PNjkEtnH7bAPFgcReQuAZswSs7dP0EHya1/gAr5D4nskqZY2I5JEebznUqekygyRvwt2LmoI9Pw==}
+  '@morfira-dev/wysiwyg-plugins@1.21.0':
+    resolution: {integrity: sha512-wzx+o3t8NaagksaRkE4Ub8j9NEX/vtp18JOsKPgi5NMNAi0WjVUToKgCgv3ZT3edq6LAPTku8V3ud6W0hSVVDA==}
     peerDependencies:
-      '@morfira-dev/wysiwyg-core': ^1.14.0
+      '@morfira-dev/wysiwyg-core': ^1.15.0
 
-  '@morfira-dev/wysiwyg-react@1.14.0':
-    resolution: {integrity: sha512-eC6ik6r1WTQt4+pVGOXLDjzpBCQQY8oJ75LSlEl2YPM1Zrhe6KUUYzg3lLSGaX2DRt1yVLUfvIs+27p3in3Vdw==}
+  '@morfira-dev/wysiwyg-react@1.15.0':
+    resolution: {integrity: sha512-xMMB196Ucn1nI6WG8lucxHV5UbFu++V4pxppX00nozcgNs58Wm49UGXeSU+7P/oZOrsHOCzSHb/XEoszgj2V2g==}
     peerDependencies:
-      '@morfira-dev/wysiwyg-core': ^1.14.0
+      '@morfira-dev/wysiwyg-core': ^1.15.0
       react: ^18.0.0 || ^19.0.0
     peerDependenciesMeta:
       react:
@@ -1108,15 +1108,15 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.6.0
 
-  '@morfira-dev/wysiwyg-core@1.14.0': {}
+  '@morfira-dev/wysiwyg-core@1.15.0': {}
 
-  '@morfira-dev/wysiwyg-plugins@1.20.0(@morfira-dev/wysiwyg-core@1.14.0)':
+  '@morfira-dev/wysiwyg-plugins@1.21.0(@morfira-dev/wysiwyg-core@1.15.0)':
     dependencies:
-      '@morfira-dev/wysiwyg-core': 1.14.0
+      '@morfira-dev/wysiwyg-core': 1.15.0
 
-  '@morfira-dev/wysiwyg-react@1.14.0(@morfira-dev/wysiwyg-core@1.14.0)(react@19.3.0)':
+  '@morfira-dev/wysiwyg-react@1.15.0(@morfira-dev/wysiwyg-core@1.15.0)(react@19.3.0)':
     dependencies:
-      '@morfira-dev/wysiwyg-core': 1.14.0
+      '@morfira-dev/wysiwyg-core': 1.15.0
     optionalDependencies:
       react: 19.3.0
 
