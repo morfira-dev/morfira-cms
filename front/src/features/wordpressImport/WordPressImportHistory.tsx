@@ -1,38 +1,19 @@
-import { type FormEvent, useEffect, useState } from 'react'
+import { type FormEvent, useState } from 'react'
 import { useAdminLocale } from '../../i18n/AdminLocaleProvider'
 import {
   Alert, Button, Card, CardContent, MenuItem, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography,
 } from '../../ui'
-import { scheduleAbortableLoad } from '../../utils/scheduleAbortableLoad'
-import { getWordPressImportRun, listWordPressImportRuns, type WordPressImportRun, type WordPressImportRunQuery } from './api'
+import { getWordPressImportRun, listWordPressImportRuns, type WordPressImportRun, type WordPressImportRunQuery, type WordPressImportSourceQuery } from './api'
 import { isWordPressSourceKey, MAX_SOURCE_KEY_LENGTH } from './sourceKey'
 import { WordPressImportOutcomeChips, WordPressImportReportContent } from './WordPressImportReportContent'
+import { WordPressImportSources } from './WordPressImportSources'
+import { useHistoryResult } from './useHistoryResult'
 
-type HistoryResult<T> = { data: T } | { error: unknown }
 type RunFilters = Omit<WordPressImportRunQuery, 'page'>
 type ImportRunSource = Pick<WordPressImportRun, 'source' | 'input'>
 
 const inputLabels = { wxr: 'WXR file', rest: 'WordPress REST API' } as const
 const channelLabels = { studio: 'Admin Studio', cli: 'Command line (CLI)' } as const
-
-function useHistoryResult<Input, Result>(load: (input: Input, signal: AbortSignal) => Promise<Result>, input: Input) {
-  const [result, setResult] = useState<HistoryResult<Result> | null>(null)
-  const [attempt, setAttempt] = useState(0)
-
-  useEffect(() => scheduleAbortableLoad((signal) => {
-    load(input, signal).then(
-      (data) => { if (!signal.aborted) setResult({ data }) },
-      (error: unknown) => { if (!signal.aborted) setResult({ error }) },
-    )
-  }), [attempt, input, load])
-
-  function retry() {
-    setResult(null)
-    setAttempt((previous) => previous + 1)
-  }
-
-  return { result, retry }
-}
 
 function ImportRunFilters({ applied, onApply }: {
   applied: RunFilters
@@ -182,8 +163,9 @@ function ImportRunsPage({ query, onPage, onOpen }: {
   )
 }
 
-function ImportRunReport({ run, onBack, onResume }: {
+function ImportRunReport({ run, fromSources, onBack, onResume }: {
   run: WordPressImportRun
+  fromSources: boolean
   onBack: () => void
   onResume: (source: ImportRunSource) => void
 }) {
@@ -196,7 +178,7 @@ function ImportRunReport({ run, onBack, onResume }: {
       <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
         <Typography component="h3" variant="subtitle1">{t('Import run report')}</Typography>
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
-          <Button onClick={onBack}>{t('Back to history')}</Button>
+          <Button onClick={onBack}>{t(fromSources ? 'Back to sources' : 'Back to history')}</Button>
           {report && (
             <Button variant="outlined" onClick={() => onResume({ source: run.source, input: run.input })}>
               {t('Continue from this source')}
@@ -224,6 +206,8 @@ export function WordPressImportHistory({ initialSource, onResume }: {
 }) {
   const { t } = useAdminLocale()
   const [query, setQuery] = useState<WordPressImportRunQuery>({ page: 1, source: initialSource })
+  const [sourceQuery, setSourceQuery] = useState<WordPressImportSourceQuery>({ page: 1 })
+  const [view, setView] = useState<'runs' | 'sources'>('runs')
   const [run, setRun] = useState<WordPressImportRun | null>(null)
 
   function applyFilters({ source, input, scope, channel }: RunFilters) {
@@ -234,22 +218,46 @@ export function WordPressImportHistory({ initialSource, onResume }: {
     )
   }
 
+  function openSourceRuns(source: string) {
+    setQuery({ page: 1, source })
+    setView('runs')
+  }
+
   return (
     <Card variant="outlined">
       <CardContent>
         <Stack spacing={2}>
           <Typography component="h2" variant="h6">{t('Import history')}</Typography>
           {run
-            ? <ImportRunReport key={run.id} run={run} onBack={() => setRun(null)} onResume={onResume} />
+            ? <ImportRunReport key={run.id} run={run} fromSources={view === 'sources'} onBack={() => setRun(null)} onResume={onResume} />
             : (
               <>
-                <ImportRunFilters applied={query} onApply={applyFilters} />
-                <ImportRunsPage
-                  key={JSON.stringify(query)}
-                  query={query}
-                  onPage={(page) => setQuery((current) => ({ ...current, page }))}
-                  onOpen={setRun}
-                />
+                <Stack direction="row" spacing={1}>
+                  <Button variant={view === 'runs' ? 'contained' : 'outlined'} aria-pressed={view === 'runs'} onClick={() => setView('runs')}>
+                    {t('Import runs')}
+                  </Button>
+                  <Button variant={view === 'sources' ? 'contained' : 'outlined'} aria-pressed={view === 'sources'} onClick={() => setView('sources')}>
+                    {t('Migration sources')}
+                  </Button>
+                </Stack>
+                {view === 'sources' ? (
+                  <WordPressImportSources
+                    query={sourceQuery}
+                    onQueryChange={setSourceQuery}
+                    onOpenRun={setRun}
+                    onOpenRuns={openSourceRuns}
+                  />
+                ) : (
+                  <>
+                    <ImportRunFilters applied={query} onApply={applyFilters} />
+                    <ImportRunsPage
+                      key={JSON.stringify(query)}
+                      query={query}
+                      onPage={(page) => setQuery((current) => ({ ...current, page }))}
+                      onOpen={setRun}
+                    />
+                  </>
+                )}
               </>
             )}
         </Stack>

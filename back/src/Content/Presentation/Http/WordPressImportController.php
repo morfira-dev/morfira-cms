@@ -26,7 +26,7 @@ final readonly class WordPressImportController
 {
     private const int MAX_REQUEST_BYTES = 9 * 1024 * 1024;
     private const int MAX_REST_REQUEST_BYTES = 128 * 1024;
-    private const int RUNS_PAGE_SIZE = 20;
+    private const int HISTORY_PAGE_SIZE = 20;
 
     public function __construct(
         private Security $security,
@@ -147,8 +147,8 @@ final readonly class WordPressImportController
             return self::json(['error' => 'Owner access required.'], 403);
         }
         $query = $request->query->all();
-        $page = $query['page'] ?? '1';
-        if (!is_string($page) || preg_match('/\A(?:[1-9][0-9]{0,5}|1000000)\z/', $page) !== 1) {
+        $page = self::historyPage($query['page'] ?? '1');
+        if ($page === null) {
             return self::json(['error' => 'Page must be an integer between 1 and 1000000.'], 422);
         }
         $source = $query['source'] ?? null;
@@ -167,13 +167,36 @@ final readonly class WordPressImportController
         if (!in_array($channel, [null, 'studio', 'cli'], true)) {
             return self::json(['error' => 'Channel must be studio or cli.'], 422);
         }
-        $page = (int) $page;
-        $runs = $this->history->latest(($page - 1) * self::RUNS_PAGE_SIZE, self::RUNS_PAGE_SIZE + 1, $source, $input, $scope, $channel);
+        $runs = $this->history->latest(($page - 1) * self::HISTORY_PAGE_SIZE, self::HISTORY_PAGE_SIZE + 1, $source, $input, $scope, $channel);
 
         return self::json([
-            'items' => array_slice($runs, 0, self::RUNS_PAGE_SIZE),
+            'items' => array_slice($runs, 0, self::HISTORY_PAGE_SIZE),
             'page' => $page,
-            'hasMore' => count($runs) > self::RUNS_PAGE_SIZE,
+            'hasMore' => count($runs) > self::HISTORY_PAGE_SIZE,
+        ]);
+    }
+
+    #[Route('/api/v1/admin/imports/wordpress/sources', name: 'content.imports.wordpress.sources', methods: ['GET'])]
+    public function sources(Request $request): JsonResponse
+    {
+        if (!$this->security->isGranted('ROLE_OWNER')) {
+            return self::json(['error' => 'Owner access required.'], 403);
+        }
+        $query = $request->query->all();
+        $page = self::historyPage($query['page'] ?? '1');
+        if ($page === null) {
+            return self::json(['error' => 'Page must be an integer between 1 and 1000000.'], 422);
+        }
+        $prefix = $query['prefix'] ?? null;
+        if ($prefix !== null && (!is_string($prefix) || strlen($prefix) > 80 || preg_match('/\A[a-z0-9]+(?:-[a-z0-9]+)*-?\z/', $prefix) !== 1)) {
+            return self::json(['error' => 'Prefix must be a lowercase source key prefix of at most 80 characters.'], 422);
+        }
+        $sources = $this->history->sources(($page - 1) * self::HISTORY_PAGE_SIZE, self::HISTORY_PAGE_SIZE + 1, $prefix);
+
+        return self::json([
+            'items' => array_slice($sources, 0, self::HISTORY_PAGE_SIZE),
+            'page' => $page,
+            'hasMore' => count($sources) > self::HISTORY_PAGE_SIZE,
         ]);
     }
 
@@ -206,6 +229,11 @@ final readonly class WordPressImportController
         }
 
         return self::json($report);
+    }
+
+    private static function historyPage(mixed $value): ?int
+    {
+        return is_string($value) && preg_match('/\A(?:[1-9][0-9]{0,5}|1000000)\z/', $value) === 1 ? (int) $value : null;
     }
 
     private static function json(mixed $data, int $status = 200): JsonResponse

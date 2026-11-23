@@ -74,4 +74,51 @@ final class DoctrineWordPressImportRunHistoryTest extends TestCase
 
         self::assertSame(['studio', 'cli'], $storedChannels);
     }
+
+    public function testReadsAFilteredSourcePageWithoutFetchingReportBodies(): void
+    {
+        $connection = $this->createMock(Connection::class);
+        $connection->expects(self::once())
+            ->method('fetchAllAssociative')
+            ->with(
+                self::callback(static function (string $sql): bool {
+                    self::assertStringNotContainsString('report_json', $sql);
+                    self::assertMatchesRegularExpression('/WHERE source_key LIKE \?\s+GROUP BY source_key\s+ORDER BY latest_completed_at DESC, source_key ASC\s+LIMIT \? OFFSET \?/', $sql);
+                    self::assertStringContainsString('candidate.completed_at = totals.latest_completed_at', $sql);
+                    self::assertStringContainsString('ORDER BY candidate.id DESC', $sql);
+
+                    return true;
+                }),
+                ['legacy-%', 21, 20],
+                [ParameterType::STRING, ParameterType::INTEGER, ParameterType::INTEGER],
+            )
+            ->willReturn([[
+                'id' => '14141414-1414-4414-8414-141414141414',
+                'source_key' => 'legacy-site',
+                'input_format' => 'rest',
+                'scope' => 'all',
+                'channel' => 'cli',
+                'completed_at' => '2026-11-20 10:00:00.000000',
+                'counts_json' => '{"imported":2}',
+                'run_count' => 3,
+                'studio_runs' => '1',
+                'cli_runs' => '2',
+            ]]);
+
+        self::assertEquals([[
+            'source' => 'legacy-site',
+            'runCount' => 3,
+            'studioRuns' => 1,
+            'cliRuns' => 2,
+            'latestRun' => [
+                'id' => '14141414-1414-4414-8414-141414141414',
+                'source' => 'legacy-site',
+                'input' => 'rest',
+                'scope' => 'all',
+                'channel' => 'cli',
+                'completedAt' => '2026-11-20T10:00:00.000+00:00',
+                'counts' => (object) ['imported' => 2],
+            ],
+        ]], (new DoctrineWordPressImportRunHistory($connection))->sources(20, 21, 'legacy-'));
+    }
 }

@@ -21,6 +21,7 @@ An owner can list completed runs and retrieve their reports. Both reads use the 
 5. The owner can open a newly created page or entry from the live or saved report in a separate tab. The editor opens the referenced draft on direct entry or reload.
 6. From a live result the owner can preview the current source again with the same settings, or open the run history filtered to that source key. A fresh preview reads the source again and replaces the old report and selection before any apply is available.
 7. From a saved report the owner can start a fresh preview for its source. Studio opens the importer with the saved input format and source key. The owner supplies the WXR file or REST URL and initiates the preview explicitly. Continuing from history replaces the current form and clears any current report and selection. The usual Back to import action still preserves the current form and report.
+8. Owners can switch to [Migration sources](wordpress-migration-sources.md) to browse recorded batches grouped by source key, open the latest report, or jump into that source's run history.
 
 ## Contracts
 

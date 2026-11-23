@@ -423,23 +423,24 @@ final class WordPressImportControllerTest extends WebTestCase
         }
     }
 
-    public function testHistoryRequiresOwnerOnBothRoutes(): void
+    public function testHistoryRoutesRequireAnOwnerSession(): void
     {
         $client = self::createClient();
-        $client->request('GET', self::ENDPOINT.'/runs');
-        self::assertResponseStatusCodeSame(401);
-        self::assertTrue($client->getResponse()->headers->hasCacheControlDirective('no-store'));
-        $client->request('GET', self::ENDPOINT.'/runs/'.self::RUN_ID);
-        self::assertResponseStatusCodeSame(401);
-        self::assertTrue($client->getResponse()->headers->hasCacheControlDirective('no-store'));
+        $routes = ['/runs', '/runs/'.self::RUN_ID, '/sources'];
+        foreach ($routes as $route) {
+            $client->request('GET', self::ENDPOINT.$route);
+            self::assertResponseStatusCodeSame(401);
+            self::assertTrue($client->getResponse()->headers->hasCacheControlDirective('no-store'));
+        }
 
         self::ensureKernelShutdown();
         $client = $this->authenticatedClient(['ROLE_EDITOR']);
         $history = $this->createMock(WordPressImportRunHistory::class);
         $history->expects(self::never())->method('latest');
         $history->expects(self::never())->method('report');
+        $history->expects(self::never())->method('sources');
         self::getContainer()->set(DoctrineWordPressImportRunHistory::class, $history);
-        foreach (['/runs', '/runs/'.self::RUN_ID] as $route) {
+        foreach ($routes as $route) {
             $client->request('GET', self::ENDPOINT.$route);
             self::assertResponseStatusCodeSame(403);
             self::assertTrue($client->getResponse()->headers->hasCacheControlDirective('no-store'));
@@ -545,6 +546,72 @@ final class WordPressImportControllerTest extends WebTestCase
         foreach (['invalid-id', self::RUN_ID] as $id) {
             $client->request('GET', self::ENDPOINT.'/runs/'.$id);
             self::assertResponseStatusCodeSame(404);
+            self::assertTrue($client->getResponse()->headers->hasCacheControlDirective('no-store'));
+        }
+    }
+
+    public function testSourcesPaginateSummariesWithAnOptionalPrefix(): void
+    {
+        $client = $this->authenticatedClient();
+        $summary = [
+            'source' => 'legacy-site',
+            'runCount' => 5,
+            'studioRuns' => 2,
+            'cliRuns' => 3,
+            'latestRun' => [
+                'id' => self::RUN_ID,
+                'source' => 'legacy-site',
+                'input' => 'rest',
+                'scope' => 'all',
+                'channel' => 'cli',
+                'completedAt' => '2026-11-20T12:13:14.000+00:00',
+                'counts' => (object) ['imported' => 1],
+            ],
+        ];
+        $history = $this->createMock(WordPressImportRunHistory::class);
+        $history->expects(self::exactly(2))->method('sources')->willReturnCallback(static function (int $offset, int $limit, ?string $prefix) use ($summary): array {
+            self::assertSame(21, $limit);
+            self::assertContains($offset, [0, 20]);
+            self::assertSame($offset === 0 ? null : 'legacy-', $prefix);
+
+            return $offset === 0 ? array_fill(0, 21, $summary) : [$summary];
+        });
+        $history->expects(self::never())->method('report');
+        self::getContainer()->set(DoctrineWordPressImportRunHistory::class, $history);
+
+        $client->request('GET', self::ENDPOINT.'/sources');
+        self::assertResponseIsSuccessful();
+        self::assertTrue($client->getResponse()->headers->hasCacheControlDirective('private'));
+        self::assertTrue($client->getResponse()->headers->hasCacheControlDirective('no-store'));
+        self::assertJsonStringEqualsJsonString(json_encode([
+            'items' => array_fill(0, 20, $summary),
+            'page' => 1,
+            'hasMore' => true,
+        ], JSON_THROW_ON_ERROR), (string) $client->getResponse()->getContent());
+
+        $client->request('GET', self::ENDPOINT.'/sources?page=2&prefix=legacy-');
+        self::assertResponseIsSuccessful();
+        self::assertJsonStringEqualsJsonString(json_encode([
+            'items' => [$summary],
+            'page' => 2,
+            'hasMore' => false,
+        ], JSON_THROW_ON_ERROR), (string) $client->getResponse()->getContent());
+    }
+
+    public function testSourcesRejectInvalidPagesAndPrefixesBeforeReadingHistory(): void
+    {
+        $client = $this->authenticatedClient();
+        $history = $this->createMock(WordPressImportRunHistory::class);
+        $history->expects(self::never())->method('sources');
+        self::getContainer()->set(DoctrineWordPressImportRunHistory::class, $history);
+
+        foreach ([
+            'page=', 'page=0', 'page=1000001', 'page=1.5', 'page[]=1',
+            'prefix=', 'prefix=Legacy-', 'prefix=-legacy', 'prefix=legacy--', 'prefix=legacy%25',
+            'prefix[]=legacy', 'prefix='.str_repeat('a', 81),
+        ] as $query) {
+            $client->request('GET', self::ENDPOINT.'/sources?'.$query);
+            self::assertResponseStatusCodeSame(422);
             self::assertTrue($client->getResponse()->headers->hasCacheControlDirective('no-store'));
         }
     }

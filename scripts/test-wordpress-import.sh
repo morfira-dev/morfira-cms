@@ -330,6 +330,18 @@ test "$(db_query "$history_page_query")" = 1
 test "$(db_query "$history_ledger_query")" = 1
 test "$(db_query "$history_query")" = "$((history_before + 2))"
 
+printf '%s\n' 'Verifying the source overview groups CLI and Studio runs.'
+compose exec -T app cat "$container_fixture" | request \
+    -H "X-CSRF-Token: $csrf" -F 'file=@-;filename=wordpress.xml;type=application/xml' \
+    -F 'source=wordpress-history-e2e' -F 'mode=apply' "$CMS_PUBLIC_SITE_URL/api/v1/admin/imports/wordpress" |
+    jq -e '.counts == {already_imported: 1, unsupported_status: 1}' >/dev/null
+request "$CMS_PUBLIC_SITE_URL/api/v1/admin/imports/wordpress/sources?prefix=wordpress-history-" | jq -e '
+    .page == 1 and .hasMore == false and (.items | length) == 1 and
+    (.items[0] | .source == "wordpress-history-e2e" and .runCount == 3 and .studioRuns == 1 and .cliRuns == 2 and
+    .latestRun.channel == "studio" and .latestRun.counts == {already_imported: 1, unsupported_status: 1})
+' >/dev/null
+test "$(db_query "$history_page_query")" = 1
+
 rest_import() {
     compose exec -T -e "CMS_REST_FIXTURE_EDITED=${CMS_REST_FIXTURE_EDITED:-0}" -e "CMS_REST_FIXTURE_MEDIA=${CMS_REST_FIXTURE_MEDIA:-}" \
         app php tests/Content/Fixtures/wordpress-rest-import.php \
@@ -567,5 +579,21 @@ for route in /restricted-rest-page /api/v1/content/pages/restricted-rest-page /c
     test "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' "$CMS_PUBLIC_SITE_URL$route")" = 404
 done
 
-test "$(db_query "$history_query")" = "$((history_before + 3))"
+test "$(db_query "$history_query")" = "$((history_before + 4))"
+printf '%s\n' 'Verifying source pagination and stable run selection in MariaDB.'
+db_query "INSERT INTO content_wordpress_import_runs (id, source_key, input_format, scope, channel, completed_at, counts_json, report_json)
+SELECT CONCAT('bbbbbbbb-bbbb-4bbb-8bbb-', LPAD(seq, 12, '0')),
+    CONCAT('directory-e2e-', LPAD(LEAST(seq, 21), 2, '0')), 'wxr', 'all', 'studio',
+    '2026-11-23 00:00:00.000000', JSON_OBJECT('imported', seq), JSON_OBJECT('mode', 'apply')
+FROM seq_1_to_22"
+sources_url="$CMS_PUBLIC_SITE_URL/api/v1/admin/imports/wordpress/sources"
+test "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' "$sources_url")" = 401
+request "$sources_url?prefix=directory-e2e-&page=1" | jq -e '
+    .page == 1 and .hasMore and (.items | length) == 20 and
+    .items[0].source == "directory-e2e-01" and .items[19].source == "directory-e2e-20"
+' >/dev/null
+request "$sources_url?prefix=directory-e2e-&page=2" | jq -e '
+    .page == 2 and .hasMore == false and (.items | length) == 1 and
+    .items[0].source == "directory-e2e-21" and .items[0].runCount == 2 and .items[0].latestRun.counts.imported == 22
+' >/dev/null
 printf '%s\n' 'WordPress import production CLI journey passed.'

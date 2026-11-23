@@ -833,6 +833,28 @@ paths:
         '401': { description: Authentication required, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
         '403': { description: Owner permission is required, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
         '422': { description: Invalid page or filter, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /api/v1/admin/imports/wordpress/sources:
+    get:
+      operationId: listWordPressImportSources
+      tags: [Admin Content]
+      summary: List WordPress migration sources recorded in history
+      description: Requires an owner session. Returns up to 20 sources per page, ordered by the latest run time descending and source key ascending.
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 1000000, default: 1 }
+        - name: prefix
+          in: query
+          description: Source key prefix applied before pagination.
+          schema: { type: string, minLength: 1, maxLength: 80, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*-?$' }
+      responses:
+        '200':
+          description: A page of migration sources with recorded batch counts and their latest run summaries.
+          content: { application/json: { schema: { $ref: '#/components/schemas/WordPressImportSourceCollection' } } }
+        '401': { description: Authentication required, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '403': { description: Owner permission is required, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '422': { description: Invalid page or source key prefix, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
   /api/v1/admin/imports/wordpress/runs/{id}:
     get:
       operationId: getWordPressImportRunReport
@@ -2577,7 +2599,30 @@ components:
         kind: { type: string, const: entry }
         id: { type: string, format: uuid }
         contentTypeId: { type: string, format: uuid }
+    WordPressImportRunSummary:
+      type: object
+      required: [id, source, input, scope, channel, completedAt, counts]
+      properties:
+        id: { type: string, format: uuid }
+        source: { type: string }
+        input: { type: string, enum: [wxr, rest] }
+        scope: { type: string, enum: [all, selection] }
+        channel: { type: string, enum: [studio, cli] }
+        completedAt: { type: string, format: date-time }
+        counts:
+          type: object
+          additionalProperties: { type: integer, minimum: 0 }
     WordPressImportRunCollection:
+      type: object
+      required: [items, page, hasMore]
+      properties:
+        items:
+          type: array
+          maxItems: 20
+          items: { $ref: '#/components/schemas/WordPressImportRunSummary' }
+        page: { type: integer, minimum: 1, maximum: 1000000 }
+        hasMore: { type: boolean }
+    WordPressImportSourceCollection:
       type: object
       required: [items, page, hasMore]
       properties:
@@ -2586,17 +2631,14 @@ components:
           maxItems: 20
           items:
             type: object
-            required: [id, source, input, scope, channel, completedAt, counts]
+            additionalProperties: false
+            required: [source, runCount, studioRuns, cliRuns, latestRun]
             properties:
-              id: { type: string, format: uuid }
               source: { type: string }
-              input: { type: string, enum: [wxr, rest] }
-              scope: { type: string, enum: [all, selection] }
-              channel: { type: string, enum: [studio, cli] }
-              completedAt: { type: string, format: date-time }
-              counts:
-                type: object
-                additionalProperties: { type: integer, minimum: 0 }
+              runCount: { type: integer, minimum: 1 }
+              studioRuns: { type: integer, minimum: 0 }
+              cliRuns: { type: integer, minimum: 0 }
+              latestRun: { $ref: '#/components/schemas/WordPressImportRunSummary' }
         page: { type: integer, minimum: 1, maximum: 1000000 }
         hasMore: { type: boolean }
     SetupStatus:

@@ -387,6 +387,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/imports/wordpress/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List WordPress migration sources recorded in history
+         * @description Requires an owner session. Returns up to 20 sources per page, ordered by the latest run time descending and source key ascending.
+         */
+        get: operations["listWordPressImportSources"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/imports/wordpress/runs/{id}": {
         parameters: {
             query?: never;
@@ -1120,22 +1140,34 @@ export interface components {
             /** Format: uuid */
             contentTypeId: string;
         };
+        WordPressImportRunSummary: {
+            /** Format: uuid */
+            id: string;
+            source: string;
+            /** @enum {string} */
+            input: "wxr" | "rest";
+            /** @enum {string} */
+            scope: "all" | "selection";
+            /** @enum {string} */
+            channel: "studio" | "cli";
+            /** Format: date-time */
+            completedAt: string;
+            counts: {
+                [key: string]: number;
+            };
+        };
         WordPressImportRunCollection: {
+            items: components["schemas"]["WordPressImportRunSummary"][];
+            page: number;
+            hasMore: boolean;
+        };
+        WordPressImportSourceCollection: {
             items: {
-                /** Format: uuid */
-                id: string;
                 source: string;
-                /** @enum {string} */
-                input: "wxr" | "rest";
-                /** @enum {string} */
-                scope: "all" | "selection";
-                /** @enum {string} */
-                channel: "studio" | "cli";
-                /** Format: date-time */
-                completedAt: string;
-                counts: {
-                    [key: string]: number;
-                };
+                runCount: number;
+                studioRuns: number;
+                cliRuns: number;
+                latestRun: components["schemas"]["WordPressImportRunSummary"];
             }[];
             page: number;
             hasMore: boolean;
@@ -3079,6 +3111,57 @@ export interface operations {
                 };
             };
             /** @description Invalid page or filter */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listWordPressImportSources: {
+        parameters: {
+            query?: {
+                page?: number;
+                /** @description Source key prefix applied before pagination. */
+                prefix?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of migration sources with recorded batch counts and their latest run summaries. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WordPressImportSourceCollection"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Owner permission is required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid page or source key prefix */
             422: {
                 headers: {
                     [name: string]: unknown;
