@@ -46,6 +46,8 @@ export const russianMessages = {
   'Related import details': 'Связанные данные',
   'Report section': 'Раздел отчёта',
   'Detail status': 'Статус в деталях',
+  'Search by identifier or reference': 'Поиск по идентификатору или связанному значению',
+  'No details match the selected filters.': 'Нет связанных данных по заданным фильтрам.',
   'Imported attachment details': 'Вложения',
   'Taxonomy term details': 'Термины таксономии',
   'Taxonomy assignment details': 'Связи с терминами',

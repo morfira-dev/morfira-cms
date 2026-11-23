@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useAdminLocale } from '../../i18n/AdminLocaleProvider'
 import type { MessageKey } from '../../i18n/messages'
 import {
-  MenuItem, Stack, Table, TableBody, TableCell, TableContainer,
+  Alert, Button, MenuItem, Stack, Table, TableBody, TableCell, TableContainer,
   TableHead, TablePagination, TableRow, TextField, Typography,
 } from '../../ui'
 import type { WordPressImportReport } from './api'
@@ -29,8 +29,16 @@ function detailStatusLabel(state: string, t: (key: MessageKey) => string) {
 export function WordPressImportDetails({ report }: { report: WordPressImportReport }) {
   const { t } = useAdminLocale()
   const [groupId, setGroupId] = useState('')
+  const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
   const [page, setPage] = useState(0)
+
+  function clearFilters() {
+    setSearch('')
+    setStatus('')
+    setPage(0)
+  }
+
   const groups: DetailGroup[] = [
     {
       id: 'media',
@@ -58,12 +66,16 @@ export function WordPressImportDetails({ report }: { report: WordPressImportRepo
   if (!group) return null
 
   const statuses = [...new Set(group.rows.map(({ state }) => state))]
-  const rows = status ? group.rows.filter(({ state }) => state === status) : group.rows
+  const query = search.trim().toLowerCase()
+  const rows = group.rows.filter(({ identifier, reference, state }) => (
+    (!status || state === status)
+    && (!query || identifier.toLowerCase().includes(query) || reference?.toLowerCase().includes(query))
+  ))
   const offset = page * IMPORT_REPORT_PAGE_SIZE
   return (
     <Stack spacing={2} component="section">
       <Typography component="h3" variant="subtitle1">{t('Related import details')}</Typography>
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
         <TextField
           select
           size="small"
@@ -71,8 +83,7 @@ export function WordPressImportDetails({ report }: { report: WordPressImportRepo
           value={group.id}
           onChange={(event) => {
             setGroupId(event.target.value)
-            setStatus('')
-            setPage(0)
+            clearFilters()
           }}
           sx={{ width: '100%', maxWidth: 384 }}
         >
@@ -80,6 +91,16 @@ export function WordPressImportDetails({ report }: { report: WordPressImportRepo
             <MenuItem key={id} value={id}>{t('{{label}} · {{count}}', { label: t(label), count: rows.length })}</MenuItem>
           ))}
         </TextField>
+        <TextField
+          size="small"
+          label={t('Search by identifier or reference')}
+          value={search}
+          onChange={(event) => {
+            setSearch(event.target.value)
+            setPage(0)
+          }}
+          sx={{ width: '100%', maxWidth: 384 }}
+        />
         <TextField
           select
           size="small"
@@ -97,8 +118,14 @@ export function WordPressImportDetails({ report }: { report: WordPressImportRepo
             <MenuItem key={state} value={state}>{detailStatusLabel(state, t)}</MenuItem>
           ))}
         </TextField>
+        {(search || status) && (
+          <Button size="small" onClick={clearFilters} sx={{ alignSelf: { xs: 'flex-start', md: 'center' }, flexShrink: 0 }}>
+            {t('Clear filters')}
+          </Button>
+        )}
       </Stack>
-      <TableContainer>
+      {rows.length === 0 && <Alert severity="info">{t('No details match the selected filters.')}</Alert>}
+      {rows.length > 0 && <TableContainer>
         <Table size="small" aria-label={t(group.label)}>
           <TableHead>
             <TableRow>
@@ -132,7 +159,7 @@ export function WordPressImportDetails({ report }: { report: WordPressImportRepo
             })}
           </TableBody>
         </Table>
-      </TableContainer>
+      </TableContainer>}
       {rows.length > IMPORT_REPORT_PAGE_SIZE && (
         <TablePagination
           component="div"
