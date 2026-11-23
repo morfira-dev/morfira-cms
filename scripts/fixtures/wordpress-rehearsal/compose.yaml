@@ -1,0 +1,46 @@
+name: morfira-wordpress-rehearsal
+
+services:
+  database:
+    image: mariadb:11.4@sha256:5e73baf8179b29f115101bb102763a47a017361f3e9792daccba6646c3ab1532
+    environment:
+      MARIADB_DATABASE: wordpress
+      MARIADB_USER: wordpress
+      MARIADB_PASSWORD: ${REHEARSAL_DB_PASSWORD:?Set the fixture database password}
+      MARIADB_ROOT_PASSWORD: ${REHEARSAL_DB_ROOT_PASSWORD:?Set the fixture database root password}
+    tmpfs:
+      - /var/lib/mysql:size=512m
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+
+  wordpress:
+    image: wordpress:7.1.5-php8.4-apache@sha256:9ad529b57c01fd71f161f331f638b83ef50ac7f095095d52bb222b7bc3b4d10b
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      WORDPRESS_DB_HOST: database:3306
+      WORDPRESS_DB_NAME: wordpress
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: ${REHEARSAL_DB_PASSWORD:?Set the fixture database password}
+      REHEARSAL_WORDPRESS_URL: http://localhost:${REHEARSAL_WORDPRESS_PORT:-18120}
+    ports:
+      - "127.0.0.1:${REHEARSAL_WORDPRESS_PORT:-18120}:80"
+    volumes:
+      - ./seed.php:/fixture/seed.php:ro
+    tmpfs:
+      - /var/www/html:size=256m
+    healthcheck:
+      test: ["CMD-SHELL", "test -r /var/www/html/wp-config.php && php -r 'exit(fsockopen(\"127.0.0.1\", 80) === false ? 1 : 0);'"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: ${REHEARSAL_WORDPRESS_SUBNET:-10.77.120.0/24}

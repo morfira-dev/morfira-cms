@@ -151,6 +151,8 @@ Studio owners can revisit completed imports in **Import history**, filter runs b
 
 In **Migration sources**, find a WordPress installation by source-key prefix, see its Studio and CLI batch counts, and open either its latest report or its full run history. See the [source overview specification](docs/specs/wordpress-migration-sources.md).
 
+Use the [migration rehearsal guide](docs/verification/wordpress-migration-rehearsal.md) to compare source IDs, review redirects and assets, and record exceptions before a cutover.
+
 After applying a batch, preview the same source again or open its filtered history from the result. A saved report can also start a new preview with its format and source key. Choose the export or enter the REST URL to continue. A fresh preview shows which materials remain eligible.
 
 Use **Material review** in a preview, result, or saved report to find drafts affected by missing images, missing author profiles or redirect problems. Its filters combine with the material search and leave the selected drafts and JSON export intact.

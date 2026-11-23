@@ -70,6 +70,8 @@ Container images combine an image definition, a language runtime, an operating-s
 
 Using the containers internally, in CI, or as separately operated services does not by itself impose a license on Morfira source code. Distribution is the important boundary: before publishing container images, an installer bundle, an offline archive, or an appliance, generate an image-level software bill of materials and notice bundle and have the exact artifact reviewed.
 
+The WordPress migration rehearsal pulls digest-pinned Docker Official Images for WordPress and MariaDB as separate test services. WordPress is GPL-2.0-or-later and MariaDB Server is GPL-2.0. The rehearsal keeps these images out of Morfira application builds and release artifacts. The license gate reviews their digests under a fixture-specific allow-list. [WordPress license](https://wordpress.org/about/license/), [official WordPress container](https://github.com/docker-library/wordpress), and [MariaDB licensing](https://mariadb.com/docs/general-resources/community/community/faq/licensing-questions/licensing-faq).
+
 ## Open-source and commercial editions
 
 Morfira CMS is licensed under the MIT License. The repository root contains the authoritative `LICENSE` file, and the JavaScript and Composer manifests declare the same SPDX identifier.

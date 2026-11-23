@@ -13,6 +13,10 @@ const reviewedContainerImages = new Map([
   ['composer:2.11.2@sha256:0c8e663f14c94d07b3c45b175c51f5a14718508f21fe4dd7e54f09488dd0ed71', 'Composer is MIT; PHP and Alpine components retain their own licenses'],
   ['node:22-bookworm-slim', 'Node.js is MIT; the image has no license OCI label and contains Debian components'],
 ]);
+const reviewedFixtureImages = new Map([
+  ['mariadb:11.4@sha256:5e73baf8179b29f115101bb102763a47a017361f3e9792daccba6646c3ab1532', 'GPL-2.0 database server; separate rehearsal service'],
+  ['wordpress:7.1.5-php8.4-apache@sha256:9ad529b57c01fd71f161f331f638b83ef50ac7f095095d52bb222b7bc3b4d10b', 'GPL-2.0-or-later WordPress; separate rehearsal service'],
+]);
 const reviewedGithubActions = new Map([
   ['actions/checkout@v5', 'MIT'],
   ['actions/setup-node@v6', 'MIT'],
@@ -124,14 +128,23 @@ summaries.push({ source: composerLockfile, packages: composerPackages, counts: c
 const composeFiles = await Promise.all(['compose.yaml', 'compose.prod.yaml', 'compose.e2e.yaml'].map((path) => readFile(path, 'utf8')));
 const dockerfiles = await Promise.all(['back/Dockerfile', 'Dockerfile', 'docker/Dockerfile.front', 'docker/Dockerfile.e2e'].map((path) => readFile(path, 'utf8')));
 const releaseWorkflow = await readFile('.github/workflows/release.yml', 'utf8');
+const fixtureCompose = await readFile('scripts/fixtures/wordpress-rehearsal/compose.yaml', 'utf8');
+const composeImages = (file) => [...file.matchAll(/^\s*image:\s*([^\s#]+).*$/gm)].map((match) => match[1]);
 const containerImages = [...new Set([
-  ...composeFiles.flatMap((file) => [...file.matchAll(/^\s*image:\s*([^\s#]+).*$/gm)].map((match) => match[1])),
+  ...composeFiles.flatMap(composeImages),
   ...dockerfiles.flatMap((file) => [...file.matchAll(/^FROM\s+([^\s]+).*$/gim)].map((match) => match[1])),
 ])];
 
 for (const image of containerImages) {
   if (!reviewedContainerImages.has(image)) {
     failures.push(`container images: ${image} has not received a license review.`);
+  }
+}
+
+const fixtureImages = [...new Set(composeImages(fixtureCompose))];
+for (const image of fixtureImages) {
+  if (!reviewedFixtureImages.has(image)) {
+    failures.push(`fixture container images: ${image} has not received a license review.`);
   }
 }
 
@@ -155,6 +168,10 @@ console.log('project manifests: MIT');
 
 for (const image of containerImages) {
   console.log(`container image ${image}: ${reviewedContainerImages.get(image) ?? 'UNREVIEWED'}`);
+}
+
+for (const image of fixtureImages) {
+  console.log(`fixture container image ${image}: ${reviewedFixtureImages.get(image) ?? 'UNREVIEWED'}`);
 }
 
 for (const action of githubActions) {
