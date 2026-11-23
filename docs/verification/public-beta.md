@@ -18,7 +18,7 @@ Report product defects through the [bug report form](https://github.com/morfira-
 
 ## Before announcing a candidate
 
-1. Record the passing GitHub Actions **Verify candidate** run for the candidate commit.
-2. Run the tester journey from the exact tagged release on a disposable installation. Record any blocking issue against that tag.
+1. Run `node scripts/verify-release-tag.mjs vX.Y.Z` with the release tag and its parent available in a local checkout. The output identifies the tagged commit and its candidate parent after checking the changelog and the OpenAPI version bump.
+2. Record the passing GitHub Actions **Verify candidate** run for the reported candidate commit. Run the tester journey from the exact tagged release on a disposable installation. Record any blocking issue against that tag.
 3. Review the [upgrade and restore rehearsal](upgrade-restore-rehearsal.md) and repeat it for the candidate when persistence or production startup changes.
 4. Confirm that the default branch serves the bug report form and that **Report a vulnerability** is available to a signed-in non-maintainer. GitHub provides a [private reporting setting](https://docs.github.com/en/code-security/how-tos/report-and-fix-vulnerabilities/configure-vulnerability-reporting/configure-for-a-repository) for public repositories.
