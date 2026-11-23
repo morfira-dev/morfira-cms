@@ -1,3 +1,22 @@
+## [1.14.0](https://github.com/morfira-dev/morfira-cms/compare/v1.13.0...v1.14.0) (2026-11-20)
+
+### Features
+
+* **editor:** enable the full Morfira WYSIWYG preset ([4131137](https://github.com/morfira-dev/morfira-cms/commit/4131137f754bd914d235e4ece5c7d1ce5796c4b8))
+* **import:** add run history and links to imported drafts ([9e192b5](https://github.com/morfira-dev/morfira-cms/commit/9e192b52e67713a1fdc0e2b9553f0eddb2cc730d))
+* **import:** add staged WordPress migration to Admin Studio ([a6d7644](https://github.com/morfira-dev/morfira-cms/commit/a6d7644f712ac0b76a01a449dbd68c77df9c714d))
+* **import:** expand WordPress migration support ([e0f09f7](https://github.com/morfira-dev/morfira-cms/commit/e0f09f7fee9c0fd06d1da851d341aa5790ad3a18))
+* **import:** filter WordPress import history in Studio ([437f452](https://github.com/morfira-dev/morfira-cms/commit/437f452e4352b392a00a69b8825fd642bf849a9e))
+* **import:** reset WordPress material report filters ([9ec6c1f](https://github.com/morfira-dev/morfira-cms/commit/9ec6c1fdf5fe96521adcc6d20cfa72eadb376dcf))
+* **import:** support WordPress REST and CDN media in Studio ([a8b8342](https://github.com/morfira-dev/morfira-cms/commit/a8b834219c38d93cf35bdfcbe9e8c5805e5fda5e))
+
+### Bug Fixes
+
+* **import:** clarify missing WordPress attachment files ([c55c94c](https://github.com/morfira-dev/morfira-cms/commit/c55c94cb1afea595fe180814370708c0729d9615))
+* **import:** localize WordPress attachment report reasons ([9edce3c](https://github.com/morfira-dev/morfira-cms/commit/9edce3c783d3c7fe79e3cb95acea3de85feced9c))
+* **import:** localize WordPress material report reasons ([1f0cb52](https://github.com/morfira-dev/morfira-cms/commit/1f0cb52e7789cd97be7328db96d6a1aeb62befba))
+* **studio:** stabilize admin routing and startup requests ([3e6a0a7](https://github.com/morfira-dev/morfira-cms/commit/3e6a0a7ff312600f2ae9d00fe2387f301c59d79d))
+
 ## [1.13.0](https://github.com/morfira-dev/morfira-cms/compare/v1.12.0...v1.13.0) (2026-11-19)
 
 ### Features
