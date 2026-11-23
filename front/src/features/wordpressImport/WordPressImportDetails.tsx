@@ -21,9 +21,15 @@ type DetailGroup = {
   rows: DetailRow[]
 }
 
+function detailStatusLabel(state: string, t: (key: MessageKey) => string) {
+  const key = state === 'imported' ? 'Import item completed' : importStatusKey(state)
+  return key ? t(key) : state
+}
+
 export function WordPressImportDetails({ report }: { report: WordPressImportReport }) {
   const { t } = useAdminLocale()
   const [groupId, setGroupId] = useState('')
+  const [status, setStatus] = useState('')
   const [page, setPage] = useState(0)
   const groups: DetailGroup[] = [
     {
@@ -51,25 +57,47 @@ export function WordPressImportDetails({ report }: { report: WordPressImportRepo
   const group = available.find(({ id }) => id === groupId) ?? available[0]
   if (!group) return null
 
+  const statuses = [...new Set(group.rows.map(({ state }) => state))]
+  const rows = status ? group.rows.filter(({ state }) => state === status) : group.rows
   const offset = page * IMPORT_REPORT_PAGE_SIZE
   return (
     <Stack spacing={2} component="section">
       <Typography component="h3" variant="subtitle1">{t('Related import details')}</Typography>
-      <TextField
-        select
-        size="small"
-        label={t('Report section')}
-        value={group.id}
-        onChange={(event) => {
-          setGroupId(event.target.value)
-          setPage(0)
-        }}
-        sx={{ maxWidth: 384 }}
-      >
-        {available.map(({ id, label, rows }) => (
-          <MenuItem key={id} value={id}>{t('{{label}} · {{count}}', { label: t(label), count: rows.length })}</MenuItem>
-        ))}
-      </TextField>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+        <TextField
+          select
+          size="small"
+          label={t('Report section')}
+          value={group.id}
+          onChange={(event) => {
+            setGroupId(event.target.value)
+            setStatus('')
+            setPage(0)
+          }}
+          sx={{ width: '100%', maxWidth: 384 }}
+        >
+          {available.map(({ id, label, rows }) => (
+            <MenuItem key={id} value={id}>{t('{{label}} · {{count}}', { label: t(label), count: rows.length })}</MenuItem>
+          ))}
+        </TextField>
+        <TextField
+          select
+          size="small"
+          label={t('Detail status')}
+          value={status}
+          onChange={(event) => {
+            setStatus(event.target.value)
+            setPage(0)
+          }}
+          slotProps={{ select: { displayEmpty: true }, inputLabel: { shrink: true } }}
+          sx={{ width: '100%', maxWidth: 384 }}
+        >
+          <MenuItem value="">{t('All import statuses')}</MenuItem>
+          {statuses.map((state) => (
+            <MenuItem key={state} value={state}>{detailStatusLabel(state, t)}</MenuItem>
+          ))}
+        </TextField>
+      </Stack>
       <TableContainer>
         <Table size="small" aria-label={t(group.label)}>
           <TableHead>
@@ -80,15 +108,14 @@ export function WordPressImportDetails({ report }: { report: WordPressImportRepo
             </TableRow>
           </TableHead>
           <TableBody>
-            {group.rows.slice(offset, offset + IMPORT_REPORT_PAGE_SIZE).map(({ identifier, reference, state, reason }, index) => {
-              const key = state === 'imported' ? 'Import item completed' : importStatusKey(state)
+            {rows.slice(offset, offset + IMPORT_REPORT_PAGE_SIZE).map(({ identifier, reference, state, reason }, index) => {
               const reasonKey = reason && importReasonKey(reason)
               return (
                 <TableRow key={offset + index}>
                   <TableCell sx={{ overflowWrap: 'anywhere' }}>{identifier}</TableCell>
                   <TableCell sx={{ overflowWrap: 'anywhere' }}>{reference ?? '—'}</TableCell>
                   <TableCell>
-                    <Typography variant="body2">{key ? t(key) : state}</Typography>
+                    <Typography variant="body2">{detailStatusLabel(state, t)}</Typography>
                     {reason && (
                       <Typography variant="caption" color="text.secondary" component="p">
                         {reasonKey ? t(reasonKey) : reason}
@@ -106,10 +133,10 @@ export function WordPressImportDetails({ report }: { report: WordPressImportRepo
           </TableBody>
         </Table>
       </TableContainer>
-      {group.rows.length > IMPORT_REPORT_PAGE_SIZE && (
+      {rows.length > IMPORT_REPORT_PAGE_SIZE && (
         <TablePagination
           component="div"
-          count={group.rows.length}
+          count={rows.length}
           rowsPerPage={IMPORT_REPORT_PAGE_SIZE}
           rowsPerPageOptions={[]}
           page={page}

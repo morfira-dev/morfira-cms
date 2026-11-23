@@ -45,6 +45,7 @@ export const russianMessages = {
   'Import item completed': 'Импортировано',
   'Related import details': 'Связанные данные',
   'Report section': 'Раздел отчёта',
+  'Detail status': 'Статус в деталях',
   'Imported attachment details': 'Вложения',
   'Taxonomy term details': 'Термины таксономии',
   'Taxonomy assignment details': 'Связи с терминами',

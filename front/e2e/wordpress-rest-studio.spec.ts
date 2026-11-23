@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import { expect, test } from '@playwright/test'
 import type { components, operations } from '../src/api/schema'
 
@@ -10,6 +11,7 @@ const source = 'legacy-rest'
 const runId = '4131137b-3f18-4bb0-a2bd-1d08b26cbaa9'
 const draftId = '2d1661fc-54a6-4a66-a123-3c8f006ee3db'
 const assetId = '099027af-2b3e-4fd2-88c1-25154789a0b3'
+const reusedAssetId = '9b41d025-6cf6-4a3f-ab1c-884d57998960'
 const cdnHost = 'cdn.example.test'
 const previewItems: Report['items'] = [
   { id: '141', type: 'page', title: 'REST welcome', status: 'publish', state: 'planned', sourcePath: '/welcome', targetPath: '/rest-welcome' },
@@ -46,7 +48,13 @@ test('previews, selects and reopens a public WordPress REST import', async ({ pa
         savedReport = {
           ...preview, mode: 'apply', scope: 'selection', counts: { imported: 1 },
           items: [{ ...previewItems[0], state: 'imported', draft: { kind: 'page', id: draftId } }],
-          media: [{ id: '143', state: 'imported', assetId }],
+          media: [
+            { id: '143', state: 'imported', assetId },
+            ...Array.from({ length: 25 }, (_, index) => ({
+              id: String(201 + index), state: 'already_imported', assetId: reusedAssetId,
+            })),
+          ],
+          taxonomy: { terms: [{ taxonomy: 'category', slug: 'studio-news', state: 'existing' }], assignments: [] },
         }
         await route.fulfill({ json: savedReport })
       }
@@ -141,9 +149,32 @@ test('previews, selects and reopens a public WordPress REST import', async ({ pa
   await page.getByRole('row', { name: /legacy-rest/ }).getByRole('button', { name: 'Открыть отчёт', exact: true }).click()
   await expect(draftLink).toHaveAttribute('href', `/admin/pages?draft=${draftId}`)
   await expect(media.getByRole('cell', { name: assetId })).toBeVisible()
+
+  const detailStatus = page.getByRole('combobox', { name: 'Статус в деталях', exact: true })
+  const detailSection = page.getByRole('combobox', { name: 'Раздел отчёта' })
+  const nextDetailPage = page.getByRole('button', { name: 'Следующая страница отчёта', exact: true })
+  await nextDetailPage.click()
+  await expect(media.getByRole('cell', { name: '225', exact: true })).toBeVisible()
+  await detailStatus.click()
+  await page.getByRole('option', { name: 'Импортировано', exact: true }).click()
+  await expect(media.getByRole('row')).toHaveCount(2)
+  await expect(media.getByRole('cell', { name: '143', exact: true })).toBeVisible()
+  await expect(nextDetailPage).toBeHidden()
+
+  await detailSection.click()
+  await page.getByRole('option', { name: 'Термины таксономии · 1', exact: true }).click()
+  await expect(page.getByRole('table', { name: 'Термины таксономии' }).getByText('studio-news')).toBeVisible()
+  await detailSection.click()
+  await page.getByRole('option', { name: 'Вложения · 26', exact: true }).click()
+  await expect(media.getByRole('cell', { name: '201', exact: true })).toBeVisible()
+  await expect(nextDetailPage).toBeEnabled()
+
+  await detailStatus.click()
+  await page.getByRole('option', { name: 'Импортировано', exact: true }).click()
   const [download] = await Promise.all([
     page.waitForEvent('download'),
     page.getByRole('button', { name: 'Скачать отчёт JSON', exact: true }).click(),
   ])
   expect(download.suggestedFilename()).toBe('wordpress-import-legacy-rest-rest-apply.json')
+  expect(JSON.parse(await readFile(await download.path(), 'utf8'))).toEqual(savedReport)
 })
