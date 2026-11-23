@@ -72,7 +72,7 @@ final class WordPressRestMapperTest extends TestCase
             ['taxonomy' => 'category', 'slug' => 'parent', 'name' => 'Parent', 'parent' => ''],
             ['taxonomy' => 'post_tag', 'slug' => 'migration', 'name' => 'Migration', 'parent' => ''],
         ], $export['terms']);
-        self::assertSame([['login' => 'rest-author-23', 'name' => 'Test & Writer']], $export['authors']);
+        self::assertSame([['login' => 'rest-author-23', 'name' => 'Test & Writer', 'externalId' => '23']], $export['authors']);
         self::assertSame('rest-author-23', (new WordPressRestMapper()('https://wordpress.example/blog', [
             'users' => [['id' => 23, 'slug' => 'changed', 'name' => 'Updated name']],
         ]))['authors'][0]['login']);

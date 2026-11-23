@@ -29,7 +29,7 @@ entry_query="SELECT COUNT(*) FROM content_entries WHERE slug IN ('wp-import-news
 ledger_query="SELECT COUNT(*) FROM content_wordpress_import_items WHERE source_key = 'wordpress-e2e'"
 media_query="SELECT COUNT(*) FROM media_assets WHERE original_name IN ('sample.png', 'sample-two.png')"
 taxonomy_query="SELECT COUNT(*) FROM taxonomy_vocabularies WHERE slug IN ('wordpress-categories', 'wordpress-tags')"
-author_query="SELECT COUNT(*) FROM content_wordpress_import_authors WHERE source_key = 'wordpress-e2e'"
+author_query="SELECT COUNT(DISTINCT entry_id) FROM content_wordpress_import_authors WHERE source_key = 'wordpress-e2e'"
 redirect_query="SELECT COUNT(*) FROM published_import_redirects"
 history_query="SELECT COUNT(*) FROM content_wordpress_import_runs"
 identity_before=$(db_query "SELECT COUNT(*) FROM identity_users")
@@ -350,7 +350,7 @@ rest_import() {
 rest_post_query="SELECT COUNT(*) FROM content_entries WHERE slug = 'imported-rest-post'"
 rest_page_query="SELECT COUNT(*) FROM content_pages WHERE slug = 'imported-rest-page'"
 rest_ledger_query="SELECT COUNT(*) FROM content_wordpress_import_items WHERE source_key = 'wordpress-rest-e2e'"
-rest_author_query="SELECT COUNT(*) FROM content_wordpress_import_authors WHERE source_key = 'wordpress-rest-e2e'"
+rest_author_query="SELECT COUNT(DISTINCT entry_id) FROM content_wordpress_import_authors WHERE source_key = 'wordpress-rest-e2e'"
 rest_media_query="SELECT COUNT(*) FROM media_assets WHERE original_name = 'rest-fixture.png'"
 
 if failure=$(rest_import '--media-host=*.wordpress.example' 2>&1); then

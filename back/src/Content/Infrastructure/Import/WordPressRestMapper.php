@@ -219,15 +219,16 @@ final class WordPressRestMapper
      */
     private function author(string $id, array $record): array
     {
-        $login = 'rest-author-'.substr($id, 1);
+        $externalId = substr($id, 1);
+        $login = 'rest-author-'.$externalId;
         foreach (['name', 'slug'] as $field) {
             $candidate = self::plain(self::string($record[$field] ?? null));
             if ($candidate !== '' && !str_contains($candidate, '@') && preg_match('/[\x00-\x1f\x7f]/', $candidate) !== 1) {
-                return ['login' => $login, 'name' => mb_substr($candidate, 0, 200)];
+                return ['login' => $login, 'name' => mb_substr($candidate, 0, 200), 'externalId' => $externalId];
             }
         }
 
-        return ['login' => $login, 'name' => $login];
+        return ['login' => $login, 'name' => $login, 'externalId' => $externalId];
     }
 
     private static function id(mixed $value): ?string

@@ -14,7 +14,7 @@ use Cms\Schema\Application\GetContentTypeDefinition;
 use Cms\Schema\Domain\ContentTypeNotFound;
 
 /**
- * @phpstan-type Author array{login:string,name:string}
+ * @phpstan-type Author array{login:string,name:string,externalId?:string}
  * @phpstan-type AuthorReference array{id:string,typeId:string,name:string}
  * @phpstan-type AuthorOutcome array{state:string,profileId?:string}
  */
@@ -60,12 +60,27 @@ final readonly class ImportWordPressAuthors
         $outcomes = [];
         $names = [];
         $conflicts = [];
+        $identityKeys = [];
+        $identityOwners = [];
+        $ambiguousIdentities = [];
         foreach ($authors as $author) {
             $key = self::key($author['login']);
             if (isset($names[$key]) && $names[$key] !== $author['name']) {
                 $conflicts[$key] = true;
             }
             $names[$key] ??= $author['name'];
+            $identity = isset($author['externalId']) ? self::identityKey($author['externalId']) : null;
+            if (array_key_exists($key, $identityKeys) && $identityKeys[$key] !== $identity) {
+                $identityKeys[$key] = null;
+            } else {
+                $identityKeys[$key] = $identity;
+            }
+            if ($identity !== null) {
+                if (isset($identityOwners[$identity]) && $identityOwners[$identity] !== $key) {
+                    $ambiguousIdentities[$identity] = true;
+                }
+                $identityOwners[$identity] ??= $key;
+            }
         }
         foreach ($referencedLogins as $login) {
             $names[self::key($login)] ??= null;
@@ -76,12 +91,24 @@ final readonly class ImportWordPressAuthors
                 $outcomes[] = ['state' => 'conflict'];
                 continue;
             }
-            $entryId = $this->ledger->authorEntryId($source, $key);
+            $identity = $identityKeys[$key] ?? null;
+            if ($identity !== null && isset($ambiguousIdentities[$identity])) {
+                $identity = null;
+            }
+            $legacyEntryId = $this->ledger->authorEntryId($source, $key);
+            $identityEntryId = $identity === null ? null : $this->ledger->authorEntryId($source, $identity);
+            $entryId = $identityEntryId ?? $legacyEntryId;
             if ($entryId !== null) {
                 $entry = $this->entries->get(EntryId::fromString($entryId));
                 if ($entry === null || $entry->contentTypeId !== $typeId) {
                     $outcomes[] = ['state' => 'unavailable'];
                     continue;
+                }
+                if ($apply && $legacyEntryId === null) {
+                    $this->ledger->recordAuthor($source, $key, $entryId);
+                }
+                if ($apply && $identity !== null && $identityEntryId === null) {
+                    $this->ledger->recordAuthor($source, $identity, $entryId);
                 }
                 $profiles[$key] = ['id' => $entryId, 'typeId' => $entry->contentTypeId, 'name' => $entry->title];
                 $outcomes[] = ['state' => 'already_imported', 'profileId' => $entryId];
@@ -91,7 +118,7 @@ final readonly class ImportWordPressAuthors
                 $outcomes[] = ['state' => 'missing_declaration'];
                 continue;
             }
-            $slug = 'wp-author-'.substr(hash('sha256', $source.':'.$key), 0, 40);
+            $slug = 'wp-author-'.substr(hash('sha256', $source.':'.($identity ?? $key)), 0, 40);
             if (!$compatible || isset($occupied[$slug])) {
                 $outcomes[] = ['state' => 'conflict'];
                 continue;
@@ -106,6 +133,9 @@ final readonly class ImportWordPressAuthors
                 $typeId ??= ($this->createType)('WordPress authors', self::TYPE, [])->id;
                 $entryId = ($this->createEntry)($typeId, $name, $slug, [])->id;
                 $this->ledger->recordAuthor($source, $key, $entryId);
+                if ($identity !== null) {
+                    $this->ledger->recordAuthor($source, $identity, $entryId);
+                }
                 $outcomes[] = ['state' => 'imported', 'profileId' => $entryId];
             } else {
                 $typeId ??= PageId::new()->value;
@@ -122,5 +152,10 @@ final readonly class ImportWordPressAuthors
     public static function key(string $login): string
     {
         return hash('sha256', mb_strtolower($login, 'UTF-8'));
+    }
+
+    private static function identityKey(string $externalId): string
+    {
+        return hash('sha256', "wordpress-author-id\0".$externalId);
     }
 }

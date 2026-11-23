@@ -192,12 +192,14 @@ final class WordPressExportReaderTest extends TestCase
               <link>https://network.example/</link>
               <wp:base_blog_url><![CDATA[https://Legacy.example/blog?private=hidden#anchor]]></wp:base_blog_url>
               <wp:author>
+                <wp:author_id>18446744073709551615</wp:author_id>
                 <wp:author_login><![CDATA[writer_1]]></wp:author_login>
                 <wp:author_email>hidden@example.test</wp:author_email>
                 <wp:author_display_name><![CDATA[Мария & Lee]]></wp:author_display_name>
                 <wp:author_first_name>Mary</wp:author_first_name>
               </wp:author>
               <wp:author>
+                <wp:author_id>0023</wp:author_id>
                 <wp:author_login>writer-2</wp:author_login>
                 <wp:author_display_name>another@example.test</wp:author_display_name>
                 <wp:author_first_name>Jo</wp:author_first_name>
@@ -212,12 +214,26 @@ final class WordPressExportReaderTest extends TestCase
             XML);
 
         self::assertSame([
-            ['login' => 'writer_1', 'name' => 'Мария & Lee'],
+            ['login' => 'writer_1', 'name' => 'Мария & Lee', 'externalId' => '18446744073709551615'],
             ['login' => 'writer-2', 'name' => 'Jo Doe'],
             ['login' => 'fallback', 'name' => 'fallback'],
         ], $export['authors']);
         self::assertSame(['writer_1', null, null], array_column($export['items'], 'authorLogin'));
         self::assertSame('https://legacy.example/blog', $export['sourceUrl']);
+    }
+
+    public function testConflictingDeclarationsKeepTheLoginWithoutANumericIdentity(): void
+    {
+        $export = $this->readXml(<<<'XML'
+            <rss xmlns:wp="http://wordpress.org/export/1.2/"><channel>
+              <wp:wxr_version>1.2</wp:wxr_version>
+              <wp:author><wp:author_login>writer</wp:author_login><wp:author_id>1</wp:author_id></wp:author>
+              <wp:author><wp:author_login>writer</wp:author_login><wp:author_id>2</wp:author_id></wp:author>
+              <wp:author><wp:author_login>writer</wp:author_login><wp:author_id>1</wp:author_id></wp:author>
+            </channel></rss>
+            XML);
+
+        self::assertSame([['login' => 'writer', 'name' => 'writer']], $export['authors']);
     }
 
     public function testFallsBackToChannelLinkForAnUnsafeBlogUrlAndToleratesAmbiguousAuthorMetadata(): void

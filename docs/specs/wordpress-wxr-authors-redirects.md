@@ -14,7 +14,9 @@ An operator runs the existing WXR command. Dry-run reports author and redirect o
 
 ## Data and contracts
 
-WordPress author declarations become ordinary entries in the `wordpress-authors` schema. A source key and a fingerprint of the WordPress login identify an author. The post records an optional `wordpressAuthor` relation and a readable `wordpressAuthorName` attribution. Replays preserve existing profile metadata and drafts.
+WordPress author declarations become ordinary entries in the `wordpress-authors` schema. When WXR and REST provide the same canonical author ID under the same source key, imports reuse the profile across formats. WXR uses `wp:author_id`, and REST uses the numeric user ID. A declaration with a missing, malformed or ambiguous ID falls back to the existing case-insensitive login fingerprint. The ledger keeps both the numeric identity and the format's login key as fingerprints. The post records an optional `wordpressAuthor` relation and a readable `wordpressAuthorName` attribution. Replays preserve existing profile metadata and drafts.
+
+For an earlier WXR import recorded by login alone, replay the full WXR source containing the exact login and its numeric ID to associate the existing profile before using REST. An earlier REST import can associate its exact synthetic login in a full REST replay with user metadata. When older imports already mapped the two formats to different profiles, new associations use the established numeric mapping. The old login mappings and existing draft relations retain their original targets. The importer does not infer identity from display names or public slugs.
 
 Old locations are accepted only for public WordPress items with an HTTP(S) link on the exported blog host and port. Native URLs take priority. Pending redirects target stable page or entry IDs and resolve directly to the destination's current published path. Publishing exposes the redirect, unpublishing makes it dormant, and renaming the target updates its destination automatically.
 
@@ -28,6 +30,7 @@ Profiles never grant login privileges. The importer ignores author email, passwo
 - [x] Apply creates public-facing attribution content and links posts by UUID without creating accounts.
 - [x] Old URLs return no redirect before publication, return a direct 301 after publication, and stop redirecting on unpublish.
 - [x] Repeat imports preserve author identity, ownership and draft content.
+- [x] WXR and REST can reuse the same numeric author through either order, with zero ledger writes in dry-run.
 
 ## Verification plan
 

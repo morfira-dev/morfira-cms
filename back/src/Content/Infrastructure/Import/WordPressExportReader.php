@@ -12,7 +12,7 @@ use DOMElement;
  * @phpstan-type Term array{taxonomy:string,slug:string,name:string,parent:string}
  * @phpstan-type TermReference array{taxonomy:string,slug:string}
  * @phpstan-type Attachment array{id:string,path:string,url:string,alt:string,eligible:bool,isPrivate?:bool}
- * @phpstan-type Author array{login:string,name:string}
+ * @phpstan-import-type Author from \Cms\Content\Application\Import\ImportWordPressAuthors
  * @phpstan-type ExportItem array{id: string, type: string, status: string, title: string, slug: string, html: string, link: string, passwordProtected: bool, terms:list<TermReference>, thumbnailId:?string, authorLogin:?string, restrictedSource?:bool}
  * @phpstan-import-type Export from WordPressExportSource
  */
@@ -77,7 +77,11 @@ final class WordPressExportReader implements WordPressExportSource
             if ($node instanceof DOMElement && $node->namespaceURI === $namespace && $node->localName === 'author') {
                 $author = $this->author($node, $namespace);
                 if ($author !== null) {
-                    $authors['author:'.$author['login']] ??= $author;
+                    $authorKey = 'author:'.$author['login'];
+                    if (isset($authors[$authorKey]) && ($authors[$authorKey]['externalId'] ?? null) !== ($author['externalId'] ?? null)) {
+                        unset($authors[$authorKey]['externalId']);
+                    }
+                    $authors[$authorKey] ??= $author;
                 }
                 continue;
             }
@@ -171,16 +175,18 @@ final class WordPressExportReader implements WordPressExportSource
             return null;
         }
 
+        $id = trim($this->optionalText($element, 'author_id', $namespace));
+        $identity = preg_match('/\A[1-9][0-9]{0,19}\z/', $id) === 1 ? ['externalId' => $id] : [];
         $display = $this->optionalText($element, 'author_display_name', $namespace);
         $parts = $this->optionalText($element, 'author_first_name', $namespace).' '.$this->optionalText($element, 'author_last_name', $namespace);
         foreach ([$display, $parts] as $candidate) {
             $name = trim(preg_replace('/\s+/u', ' ', strip_tags($candidate)) ?? '');
             if ($name !== '' && !str_contains($name, '@') && preg_match('/[\x00-\x1f\x7f]/', $name) !== 1) {
-                return ['login' => $login, 'name' => mb_substr($name, 0, 200)];
+                return ['login' => $login, 'name' => mb_substr($name, 0, 200)] + $identity;
             }
         }
 
-        return ['login' => $login, 'name' => $login];
+        return ['login' => $login, 'name' => $login] + $identity;
     }
 
     private function login(string $value): ?string
