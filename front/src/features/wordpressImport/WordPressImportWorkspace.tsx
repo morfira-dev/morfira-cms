@@ -3,7 +3,7 @@ import { useAdminLocale } from '../../i18n/AdminLocaleProvider'
 import {
   Alert, Box, Button, Card, CardContent, Checkbox, FormControlLabel, MenuItem, Stack, TextField, Typography,
 } from '../../ui'
-import { importWordPress, importWordPressRest, type WordPressImportMode, type WordPressImportReport } from './api'
+import { importWordPress, importWordPressRest, type WordPressImportMode, type WordPressImportReport, type WordPressImportRun } from './api'
 import { WordPressImportHistory } from './WordPressImportHistory'
 import { WordPressImportReportContent } from './WordPressImportReportContent'
 import { isWordPressRestNamespaceUrl, MAX_REST_URL_LENGTH, parseWordPressMediaHosts } from './restSource'
@@ -18,17 +18,23 @@ const restImportErrorKeys = [
   'WordPress media hosts must be exact public DNS hostnames.',
 ] as const
 
-function WordPressImportWizard({ onApplied }: { onApplied: () => void }) {
+type ResumeSource = Pick<WordPressImportRun, 'source' | 'input'>
+
+function WordPressImportWizard({ initialSource, pendingMode, onPendingModeChange, onViewSourceHistory }: {
+  initialSource?: ResumeSource
+  pendingMode: WordPressImportMode | null
+  onPendingModeChange: (mode: WordPressImportMode | null) => void
+  onViewSourceHistory: (source: string) => void
+}) {
   const { errorMessage, t } = useAdminLocale()
-  const [input, setInput] = useState<WordPressImportReport['input']>('wxr')
+  const [input, setInput] = useState<WordPressImportReport['input']>(initialSource?.input ?? 'wxr')
   const [file, setFile] = useState<File | null>(null)
   const [apiUrl, setApiUrl] = useState('')
   const [downloadMedia, setDownloadMedia] = useState(false)
   const [mediaHostInput, setMediaHostInput] = useState('')
-  const [source, setSource] = useState('')
+  const [source, setSource] = useState(initialSource?.source ?? '')
   const [report, setReport] = useState<WordPressImportReport | null>(null)
   const [excludedIds, setExcludedIds] = useState<ReadonlySet<string>>(new Set())
-  const [pendingMode, setPendingMode] = useState<WordPressImportMode | null>(null)
   const [error, setError] = useState<string | null>(null)
   const pending = useRef<AbortController | null>(null)
   const mediaHelpId = useId()
@@ -92,7 +98,7 @@ function WordPressImportWizard({ onApplied }: { onApplied: () => void }) {
 
     const controller = new AbortController()
     pending.current = controller
-    setPendingMode(mode)
+    onPendingModeChange(mode)
     setError(null)
     if (mode === 'dry-run') clearReport()
 
@@ -103,7 +109,6 @@ function WordPressImportWizard({ onApplied }: { onApplied: () => void }) {
       if (!controller.signal.aborted) {
         setReport(next)
         setExcludedIds(new Set())
-        if (mode === 'apply') onApplied()
       }
     } catch (reason) {
       if (!controller.signal.aborted) {
@@ -113,7 +118,7 @@ function WordPressImportWizard({ onApplied }: { onApplied: () => void }) {
       }
     } finally {
       pending.current = null
-      if (!controller.signal.aborted) setPendingMode(null)
+      if (!controller.signal.aborted) onPendingModeChange(null)
     }
   }
 
@@ -125,6 +130,13 @@ function WordPressImportWizard({ onApplied }: { onApplied: () => void }) {
   return (
     <Stack spacing={3}>
       {error && <Alert severity="error">{error}</Alert>}
+      {initialSource && (input === 'wxr' ? !file : !apiUrl) && (
+        <Alert severity="info">
+          {t(input === 'wxr'
+            ? 'Choose the WXR file and preview the source to continue.'
+            : 'Enter the WordPress REST API URL and preview the source to continue.')}
+        </Alert>
+      )}
 
       <Card variant="outlined">
         <CardContent>
@@ -245,11 +257,21 @@ function WordPressImportWizard({ onApplied }: { onApplied: () => void }) {
                 {t(report.mode === 'dry-run' ? 'Import preview' : 'Import result')}
               </Typography>
               {report.mode === 'apply' && (
-                <Alert severity="success">
-                  {t(report.scope === 'selection'
-                    ? 'Selected import completed. Preview again to import the remaining items.'
-                    : 'Import completed. Review the report for created and skipped items.')}
-                </Alert>
+                <>
+                  <Alert severity="success">
+                    {t(report.scope === 'selection'
+                      ? 'Selected import completed. Preview again to import the remaining items.'
+                      : 'Import completed. Review the report for created and skipped items.')}
+                  </Alert>
+                  <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+                    <Button variant="outlined" disabled={!canSubmit} onClick={() => void run('dry-run')}>
+                      {t('Preview source again')}
+                    </Button>
+                    <Button variant="outlined" disabled={pendingMode !== null} onClick={() => onViewSourceHistory(report.source)}>
+                      {t('View history for this source')}
+                    </Button>
+                  </Stack>
+                </>
               )}
               <WordPressImportReportContent
                 key={report.mode}
@@ -288,28 +310,40 @@ function WordPressImportWizard({ onApplied }: { onApplied: () => void }) {
 
 export function WordPressImportWorkspace() {
   const { t } = useAdminLocale()
-  const [historyOpen, setHistoryOpen] = useState(false)
-  const [historyVersion, setHistoryVersion] = useState(0)
+  const [history, setHistory] = useState<{ source?: string } | null>(null)
+  const [wizard, setWizard] = useState<{ revision: number; initialSource?: ResumeSource }>({ revision: 0 })
+  const [pendingMode, setPendingMode] = useState<WordPressImportMode | null>(null)
+
+  function resumeSource(run: ResumeSource) {
+    setWizard((current) => ({ revision: current.revision + 1, initialSource: run }))
+    setHistory(null)
+  }
 
   return (
     <Stack spacing={3}>
       <Stack direction="row" spacing={2} useFlexGap sx={{ alignItems: 'flex-start', flexWrap: 'wrap', justifyContent: 'space-between' }}>
         <div>
           <Typography component="h1" variant="h1">{t('WordPress import')}</Typography>
-          {!historyOpen && (
+          {!history && (
             <Typography color="text.secondary" sx={{ mt: 0.75 }}>
               {t('Preview a WordPress source and create drafts for review before publication.')}
             </Typography>
           )}
         </div>
-        <Button variant="outlined" onClick={() => setHistoryOpen((open) => !open)}>
-          {t(historyOpen ? 'Back to import' : 'Import history')}
+        <Button variant="outlined" disabled={pendingMode !== null} onClick={() => setHistory((current) => current ? null : {})}>
+          {t(history ? 'Back to import' : 'Import history')}
         </Button>
       </Stack>
-      <Box hidden={historyOpen}>
-        <WordPressImportWizard onApplied={() => setHistoryVersion((version) => version + 1)} />
+      <Box hidden={history !== null}>
+        <WordPressImportWizard
+          key={wizard.revision}
+          initialSource={wizard.initialSource}
+          pendingMode={pendingMode}
+          onPendingModeChange={setPendingMode}
+          onViewSourceHistory={(source) => setHistory({ source })}
+        />
       </Box>
-      {historyOpen && <WordPressImportHistory key={historyVersion} />}
+      {history && <WordPressImportHistory initialSource={history.source} onResume={resumeSource} />}
     </Stack>
   )
 }

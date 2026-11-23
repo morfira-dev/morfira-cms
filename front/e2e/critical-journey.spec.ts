@@ -298,7 +298,8 @@ test('owner creates, edits and publishes a page through the production surface',
   await expect(page.getByRole('heading', { name: 'Импорт WordPress', exact: true })).toBeVisible()
   const sourceKey = page.getByRole('textbox', { name: 'Ключ источника', exact: true })
   await sourceKey.fill('studio-e2e')
-  await page.getByLabel('Файл WXR', { exact: true }).setInputFiles({
+  const wxrUpload = page.getByLabel('Файл WXR', { exact: true })
+  const studioExport = {
     name: 'studio-export.xml',
     mimeType: 'application/xml',
     buffer: Buffer.from(`<rss xmlns:wp="http://wordpress.org/export/1.2/"
@@ -318,7 +319,8 @@ test('owner creates, edits and publishes a page through the production surface',
       <wp:post_type>page</wp:post_type><wp:status>publish</wp:status>
       <content:encoded><![CDATA[<p>Imported in the second batch. <a href="https://wordpress.example/legacy/studio-import-page/#intro">Read the first page</a></p>]]></content:encoded></item>
       </channel></rss>`),
-  })
+  }
+  await wxrUpload.setInputFiles(studioExport)
   const previewImport = page.getByRole('button', { name: 'Предпросмотр импорта', exact: true })
   const applyImport = page.getByRole('button', { name: 'Создать черновики', exact: true })
   const importResponse = () => page.waitForResponse((response) =>
@@ -429,7 +431,8 @@ test('owner creates, edits and publishes a page through the production surface',
   })])
   expect(firstDraft.blocks).toEqual(richTextWith(originalForwardLink))
 
-  const [remaining] = await Promise.all([importResponse(), previewImport.click()])
+  const previewAgain = page.getByRole('button', { name: 'Повторить предпросмотр', exact: true })
+  const [remaining] = await Promise.all([importResponse(), previewAgain.click()])
   expect(remaining.ok()).toBeTruthy()
   await expect(remaining.json()).resolves.toMatchObject({ mode: 'dry-run', counts: { already_imported: 1, planned: 1 } })
   await expect(reportRow.getByRole('checkbox')).toHaveCount(0)
@@ -446,7 +449,14 @@ test('owner creates, edits and publishes a page through the production surface',
   expect((await request.get('/studio-second-page')).status()).toBe(404)
   expect((await request.get('/api/v1/content/pages/studio-second-page')).status()).toBe(404)
 
-  const [replay] = await Promise.all([importResponse(), previewImport.click()])
+  const historyTable = page.getByRole('table', { name: 'История импорта', exact: true })
+  const runRows = historyTable.getByRole('row').filter({ hasText: 'studio-e2e' })
+  await page.getByRole('button', { name: 'История этого источника', exact: true }).click()
+  await expect(runRows).toHaveCount(2)
+  await expect(sourceKey).toHaveValue('studio-e2e')
+  await page.getByRole('button', { name: 'Вернуться к импорту', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Результат импорта', exact: true })).toBeVisible()
+  const [replay] = await Promise.all([importResponse(), previewAgain.click()])
   expect(replay.ok()).toBeTruthy()
   await expect(replay.json()).resolves.toMatchObject({ mode: 'dry-run', counts: { already_imported: 2 } })
   expect(await importedDrafts()).toEqual(['studio-import-page', 'studio-second-page'])
@@ -469,8 +479,6 @@ test('owner creates, edits and publishes a page through the production surface',
 
   await page.reload()
   await openImportHistory.click()
-  const historyTable = page.getByRole('table', { name: 'История импорта', exact: true })
-  const runRows = historyTable.getByRole('row').filter({ hasText: 'studio-e2e' })
   await expect(runRows).toHaveCount(2)
   await expect(runRows.first()).toContainText('Весь источник')
   await expect(runRows.getByRole('cell', { name: 'Файл WXR', exact: true })).toHaveCount(2)
@@ -494,7 +502,17 @@ test('owner creates, edits and publishes a page through the production surface',
   await page.getByRole('button', { name: 'Вернуться к истории', exact: true }).click()
   await expect(runRows).toHaveCount(2)
 
-  await page.getByRole('button', { name: 'Вернуться к импорту', exact: true }).click()
+  await selectiveRun.getByRole('button', { name: 'Открыть отчёт', exact: true }).click()
+  await page.getByRole('button', { name: 'Продолжить импорт из этого источника', exact: true }).click()
+  await expect(sourceKey).toHaveValue('studio-e2e')
+  await expect(previewImport).toBeDisabled()
+  await expect(applyImport).toHaveCount(0)
+  await wxrUpload.setInputFiles(studioExport)
+  const [resumed] = await Promise.all([importResponse(), previewImport.click()])
+  expect(resumed.ok()).toBeTruthy()
+  await expect(resumed.json()).resolves.toMatchObject({ mode: 'dry-run', counts: { already_imported: 2 } })
+  expect(await importedDrafts()).toEqual(['studio-import-page', 'studio-second-page'])
+
   await sourceKey.fill('studio-e2e-post')
   await page.getByLabel('Файл WXR', { exact: true }).setInputFiles({
     name: 'studio-post.xml',

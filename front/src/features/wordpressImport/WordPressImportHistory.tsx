@@ -10,6 +10,7 @@ import { WordPressImportOutcomeChips, WordPressImportReportContent } from './Wor
 
 type HistoryResult<T> = { data: T } | { error: unknown }
 type RunFilters = Omit<WordPressImportRunQuery, 'page'>
+type ImportRunSource = Pick<WordPressImportRun, 'source' | 'input'>
 
 const inputLabels = { wxr: 'WXR file', rest: 'WordPress REST API' } as const
 
@@ -164,15 +165,27 @@ function ImportRunsPage({ query, onPage, onOpen }: {
   )
 }
 
-function ImportRunReport({ run, onBack }: { run: WordPressImportRun; onBack: () => void }) {
+function ImportRunReport({ run, onBack, onResume }: {
+  run: WordPressImportRun
+  onBack: () => void
+  onResume: (source: ImportRunSource) => void
+}) {
   const { t, errorMessage, formatDateTime } = useAdminLocale()
   const { result, retry } = useHistoryResult(getWordPressImportRun, run.id)
+  const report = result && 'data' in result ? result.data : null
 
   return (
     <Stack spacing={2} component="section">
       <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
         <Typography component="h3" variant="subtitle1">{t('Import run report')}</Typography>
-        <Button onClick={onBack}>{t('Back to history')}</Button>
+        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+          <Button onClick={onBack}>{t('Back to history')}</Button>
+          {report && (
+            <Button variant="outlined" onClick={() => onResume({ source: run.source, input: run.input })}>
+              {t('Continue from this source')}
+            </Button>
+          )}
+        </Stack>
       </Stack>
       <Typography color="text.secondary">
         {run.source} · <time dateTime={run.completedAt}>{formatDateTime(run.completedAt)}</time> · {t(inputLabels[run.input])} · {t(run.scope === 'selection' ? 'Selected items' : 'Full source')}
@@ -183,14 +196,17 @@ function ImportRunReport({ run, onBack }: { run: WordPressImportRun; onBack: () 
           {errorMessage(result.error, 'Could not load this import report.')}
         </Alert>
       )}
-      {result && 'data' in result && <WordPressImportReportContent report={result.data} />}
+      {report && <WordPressImportReportContent report={report} />}
     </Stack>
   )
 }
 
-export function WordPressImportHistory() {
+export function WordPressImportHistory({ initialSource, onResume }: {
+  initialSource?: string
+  onResume: (source: ImportRunSource) => void
+}) {
   const { t } = useAdminLocale()
-  const [query, setQuery] = useState<WordPressImportRunQuery>({ page: 1 })
+  const [query, setQuery] = useState<WordPressImportRunQuery>({ page: 1, source: initialSource })
   const [run, setRun] = useState<WordPressImportRun | null>(null)
 
   function applyFilters({ source, input, scope }: RunFilters) {
@@ -207,7 +223,7 @@ export function WordPressImportHistory() {
         <Stack spacing={2}>
           <Typography component="h2" variant="h6">{t('Import history')}</Typography>
           {run
-            ? <ImportRunReport key={run.id} run={run} onBack={() => setRun(null)} />
+            ? <ImportRunReport key={run.id} run={run} onBack={() => setRun(null)} onResume={onResume} />
             : (
               <>
                 <ImportRunFilters applied={query} onApply={applyFilters} />
