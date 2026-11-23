@@ -6,7 +6,7 @@ Implemented
 
 ## Problem and goals
 
-Owners need to find a completed migration batch by source key, input format or import scope across the entire history. The list should show the format alongside the existing summary.
+Owners need to find a completed migration batch by source key, input format, import scope or execution channel across the entire history. The list shows both the input format and whether the batch was run from Studio or the CLI.
 
 ## Actors and permissions
 
@@ -14,11 +14,11 @@ The existing owner-only, private history surface serves all filtered requests.
 
 ## User and system flows
 
-An owner can enter an exact source key and choose WXR or REST and full source or selection. Applying or clearing filters starts on page one. Opening an individual report and returning to the list restores its filters and page. A valid filter combination with no matches displays a distinct empty state.
+An owner can enter an exact source key and choose WXR or REST, full source or selection, and Studio or CLI. Applying or clearing filters starts on page one. Opening an individual report and returning to the list restores its filters and page. A valid filter combination with no matches displays a distinct empty state.
 
 ## Contracts
 
-The existing list endpoint accepts optional `source`, `input` and `scope` query parameters. The source uses the same identifier rules as import. Input values are `wxr` and `rest`, and scope values are `all` and `selection`. Filters combine with AND before newest-first pagination. Invalid filter values return 422. Summaries include `input`. Saved reports retain their original shape and contents.
+The list endpoint accepts optional `source`, `input`, `scope` and `channel` query parameters. The source uses the same identifier rules as import. Input values are `wxr` and `rest`, scope values are `all` and `selection`, and channel values are `studio` and `cli`. Filters combine with AND before newest-first pagination. Invalid filter values return 422. Summaries include `input` and `channel`. Saved reports retain their original shape and contents.
 
 ## Data and invariants
 

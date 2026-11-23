@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cms\Content\Presentation\Console;
 
+use Cms\Content\Application\Import\ImportWordPressCli;
 use Cms\Content\Application\Import\ImportWordPressDrafts;
 use Cms\Content\Application\Import\WordPressImportClaimConflict;
 use Cms\Content\Application\Import\WordPressMediaHosts;
@@ -25,7 +26,7 @@ final class ImportWordPressCommand extends Command
     public function __construct(
         private readonly WordPressExportReader $reader,
         private readonly WordPressRestReader $restReader,
-        private readonly ImportWordPressDrafts $import,
+        private readonly ImportWordPressCli $import,
     ) {
         parent::__construct();
     }
@@ -38,6 +39,7 @@ final class ImportWordPressCommand extends Command
             ->addOption('media-dir', null, InputOption::VALUE_REQUIRED, 'Local WordPress uploads tree. REST downloads eligible images when omitted.')
             ->addOption('media-host', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Additional HTTPS attachment hostname for REST downloads. Repeat for each CDN host.')
             ->addOption('include-private', null, InputOption::VALUE_NONE, 'Use CMS_WORDPRESS_USERNAME and CMS_WORDPRESS_APPLICATION_PASSWORD to import restricted REST content.')
+            ->addOption('record-history', null, InputOption::VALUE_NONE, 'Save a public apply report in Admin Studio. Requires --apply.')
             ->addOption('apply', null, InputOption::VALUE_NONE, 'Create drafts. Omit to inspect the plan.');
     }
 
@@ -50,6 +52,7 @@ final class ImportWordPressCommand extends Command
         $mediaHosts = $input->getOption('media-host');
         $includePrivate = $input->getOption('include-private') === true;
         $apply = $input->getOption('apply') === true;
+        $recordHistory = $input->getOption('record-history') === true;
         if (!is_string($source) || !ImportWordPressDrafts::validSourceKey($source) || ($mediaDirectory !== null && !is_string($mediaDirectory))) {
             return $this->fail($output, 'A stable lowercase --source key is required.', Command::INVALID);
         }
@@ -66,6 +69,12 @@ final class ImportWordPressCommand extends Command
         if ($includePrivate && $apiUrl === null) {
             return $this->fail($output, '--include-private requires --api-url.', Command::INVALID);
         }
+        if ($recordHistory && !$apply) {
+            return $this->fail($output, '--record-history requires --apply.', Command::INVALID);
+        }
+        if ($recordHistory && $includePrivate) {
+            return $this->fail($output, '--record-history cannot be combined with --include-private.', Command::INVALID);
+        }
 
         try {
             $allowedMediaHosts = WordPressMediaHosts::normalize($hostNames);
@@ -78,10 +87,7 @@ final class ImportWordPressCommand extends Command
         }
 
         try {
-            $report = ($this->import)(
-                $source, $export['items'], $apply, $export['terms'], $export['attachments'],
-                $mediaDirectory, $export['authors'], $export['sourceUrl'], $apiUrl, $allowedMediaHosts, $credentials,
-            );
+            $report = ($this->import)($export, $source, $apply, $mediaDirectory, $apiUrl, $allowedMediaHosts, $credentials, $recordHistory);
         } catch (WordPressImportClaimConflict) {
             return $this->fail($output, 'Another import claimed an item. Apply was rolled back. Run the plan again.', Command::FAILURE);
         } catch (\InvalidArgumentException) {
@@ -92,18 +98,7 @@ final class ImportWordPressCommand extends Command
             return $this->fail($output, 'Import failed. Check migrations and database connectivity, then run the plan again.', Command::FAILURE);
         }
 
-        $counts = array_count_values(array_column($report['items'], 'state'));
-        $output->writeln(json_encode([
-            'mode' => $apply ? 'apply' : 'dry-run',
-            'input' => $apiUrl === null ? 'wxr' : 'rest',
-            'source' => $source,
-            'counts' => (object) $counts,
-            'skippedTypes' => (object) $export['skippedTypes'],
-            'items' => $report['items'],
-            'media' => $report['media'],
-            'taxonomy' => $report['taxonomy'],
-            'authors' => $report['authors'],
-        ], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES), OutputInterface::OUTPUT_RAW);
+        $output->writeln(json_encode($report, JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES), OutputInterface::OUTPUT_RAW);
 
         return Command::SUCCESS;
     }

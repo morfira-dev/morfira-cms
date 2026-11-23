@@ -805,7 +805,7 @@ paths:
     get:
       operationId: listWordPressImportRuns
       tags: [Admin Content]
-      summary: List completed Studio WordPress imports
+      summary: List completed WordPress imports recorded in history
       description: Requires an owner session. Filters are combined before pagination. Returns up to 20 matching runs per page, newest first.
       security: [{ sessionCookie: [] }]
       parameters:
@@ -822,6 +822,10 @@ paths:
         - name: scope
           in: query
           schema: { type: string, enum: [all, selection] }
+        - name: channel
+          in: query
+          description: Execution channel of the recorded import.
+          schema: { type: string, enum: [studio, cli] }
       responses:
         '200':
           description: A page of completed imports.
@@ -2582,12 +2586,13 @@ components:
           maxItems: 20
           items:
             type: object
-            required: [id, source, input, scope, completedAt, counts]
+            required: [id, source, input, scope, channel, completedAt, counts]
             properties:
               id: { type: string, format: uuid }
               source: { type: string }
               input: { type: string, enum: [wxr, rest] }
               scope: { type: string, enum: [all, selection] }
+              channel: { type: string, enum: [studio, cli] }
               completedAt: { type: string, format: date-time }
               counts:
                 type: object

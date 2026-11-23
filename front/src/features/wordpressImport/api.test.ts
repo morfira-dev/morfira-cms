@@ -110,7 +110,7 @@ describe('importWordPressRest', () => {
 describe('WordPress import history', () => {
   it('reads the requested history page and run without a CSRF request', async () => {
     const collection: WordPressImportRunCollection = {
-      items: [{ id: '0199b348-1d8f-7e2f-8672-9b8356792e42', source: 'old-site', input: 'wxr', scope: 'selection', completedAt: '2026-11-20T08:00:00Z', counts: { imported: 1 } }],
+      items: [{ id: '0199b348-1d8f-7e2f-8672-9b8356792e42', source: 'old-site', input: 'wxr', scope: 'selection', channel: 'studio', completedAt: '2026-11-20T08:00:00Z', counts: { imported: 1 } }],
       page: 2,
       hasMore: true,
     }
@@ -152,11 +152,11 @@ describe('WordPress import history', () => {
     vi.stubGlobal('fetch', fetchMock)
     const { signal } = new AbortController()
 
-    await listWordPressImportRuns({ page: 1, source: 'old-site', input: 'rest', scope: 'selection' }, signal)
+    await listWordPressImportRuns({ page: 1, source: 'old-site', input: 'rest', scope: 'all', channel: 'cli' }, signal)
     await listWordPressImportRuns({ page: 1, scope: 'all' }, signal)
 
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
-      '/api/v1/admin/imports/wordpress/runs?page=1&source=old-site&input=rest&scope=selection',
+      '/api/v1/admin/imports/wordpress/runs?page=1&source=old-site&input=rest&scope=all&channel=cli',
       '/api/v1/admin/imports/wordpress/runs?page=1&scope=all',
     ])
   })

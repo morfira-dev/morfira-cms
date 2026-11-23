@@ -375,7 +375,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List completed Studio WordPress imports
+         * List completed WordPress imports recorded in history
          * @description Requires an owner session. Filters are combined before pagination. Returns up to 20 matching runs per page, newest first.
          */
         get: operations["listWordPressImportRuns"];
@@ -1129,6 +1129,8 @@ export interface components {
                 input: "wxr" | "rest";
                 /** @enum {string} */
                 scope: "all" | "selection";
+                /** @enum {string} */
+                channel: "studio" | "cli";
                 /** Format: date-time */
                 completedAt: string;
                 counts: {
@@ -3040,6 +3042,8 @@ export interface operations {
                 source?: string;
                 input?: "wxr" | "rest";
                 scope?: "all" | "selection";
+                /** @description Execution channel of the recorded import. */
+                channel?: "studio" | "cli";
             };
             header?: never;
             path?: never;

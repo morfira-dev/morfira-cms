@@ -14,7 +14,7 @@ final readonly class DoctrineWordPressImportRunHistory implements WordPressImpor
     {
     }
 
-    public function record(array $report): void
+    public function record(array $report, string $channel = 'studio'): void
     {
         $utc = new \DateTimeZone('UTC');
         $this->connection->insert('content_wordpress_import_runs', [
@@ -22,18 +22,19 @@ final readonly class DoctrineWordPressImportRunHistory implements WordPressImpor
             'source_key' => $report['source'],
             'input_format' => $report['input'],
             'scope' => $report['scope'] ?? 'all',
+            'channel' => $channel,
             'completed_at' => new \DateTimeImmutable('now', $utc)->format('Y-m-d H:i:s.u'),
             'counts_json' => json_encode($report['counts'], JSON_THROW_ON_ERROR),
             'report_json' => json_encode($report, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
         ]);
     }
 
-    public function latest(int $offset, int $limit, ?string $source = null, ?string $input = null, ?string $scope = null): array
+    public function latest(int $offset, int $limit, ?string $source = null, ?string $input = null, ?string $scope = null, ?string $channel = null): array
     {
         $clauses = [];
         $values = [];
         $types = [];
-        foreach (['source_key' => $source, 'input_format' => $input, 'scope' => $scope] as $column => $value) {
+        foreach (['source_key' => $source, 'input_format' => $input, 'scope' => $scope, 'channel' => $channel] as $column => $value) {
             if ($value !== null) {
                 $clauses[] = $column.' = ?';
                 $values[] = $value;
@@ -42,7 +43,7 @@ final readonly class DoctrineWordPressImportRunHistory implements WordPressImpor
         }
         $where = $clauses === [] ? '' : ' WHERE '.implode(' AND ', $clauses);
         $rows = $this->connection->fetchAllAssociative(
-            'SELECT id, source_key, input_format, scope, completed_at, counts_json FROM content_wordpress_import_runs'.$where.' ORDER BY completed_at DESC, id DESC LIMIT ? OFFSET ?',
+            'SELECT id, source_key, input_format, scope, channel, completed_at, counts_json FROM content_wordpress_import_runs'.$where.' ORDER BY completed_at DESC, id DESC LIMIT ? OFFSET ?',
             [...$values, $limit, $offset],
             [...$types, ParameterType::INTEGER, ParameterType::INTEGER],
         );
@@ -53,9 +54,11 @@ final readonly class DoctrineWordPressImportRunHistory implements WordPressImpor
             $runSource = $row['source_key'];
             $runInput = $row['input_format'];
             $runScope = $row['scope'];
+            $runChannel = $row['channel'];
             $completedAt = $row['completed_at'];
             if (!is_string($id) || !is_string($runSource) || !in_array($runInput, ['wxr', 'rest'], true)
-                || !in_array($runScope, ['all', 'selection'], true) || !is_string($completedAt)) {
+                || !in_array($runScope, ['all', 'selection'], true) || !in_array($runChannel, ['studio', 'cli'], true)
+                || !is_string($completedAt)) {
                 throw new \UnexpectedValueException('Invalid WordPress import run summary.');
             }
             $runs[] = [
@@ -63,6 +66,7 @@ final readonly class DoctrineWordPressImportRunHistory implements WordPressImpor
                 'source' => $runSource,
                 'input' => $runInput,
                 'scope' => $runScope,
+                'channel' => $runChannel,
                 'completedAt' => new \DateTimeImmutable($completedAt, $utc)->format(DATE_RFC3339_EXTENDED),
                 'counts' => self::decodeObject($row['counts_json']),
             ];

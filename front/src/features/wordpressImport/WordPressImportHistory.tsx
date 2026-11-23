@@ -13,6 +13,7 @@ type RunFilters = Omit<WordPressImportRunQuery, 'page'>
 type ImportRunSource = Pick<WordPressImportRun, 'source' | 'input'>
 
 const inputLabels = { wxr: 'WXR file', rest: 'WordPress REST API' } as const
+const channelLabels = { studio: 'Admin Studio', cli: 'Command line (CLI)' } as const
 
 function useHistoryResult<Input, Result>(load: (input: Input, signal: AbortSignal) => Promise<Result>, input: Input) {
   const [result, setResult] = useState<HistoryResult<Result> | null>(null)
@@ -38,7 +39,7 @@ function ImportRunFilters({ applied, onApply }: {
   onApply: (filters: RunFilters) => void
 }) {
   const { t } = useAdminLocale()
-  const [draft, setDraft] = useState<RunFilters>({ source: applied.source, input: applied.input, scope: applied.scope })
+  const [draft, setDraft] = useState<RunFilters>({ source: applied.source, input: applied.input, scope: applied.scope, channel: applied.channel })
   const invalidSource = draft.source !== undefined && !isWordPressSourceKey(draft.source)
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -48,7 +49,7 @@ function ImportRunFilters({ applied, onApply }: {
 
   return (
     <Stack component="form" spacing={1.5} onSubmit={submit}>
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ '& > *': { flex: 1 } }}>
+      <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ '& > *': { flex: 1 } }}>
         <TextField
           label={t('Source key')}
           size="small"
@@ -86,6 +87,20 @@ function ImportRunFilters({ applied, onApply }: {
           <MenuItem value="all">{t('Full source')}</MenuItem>
           <MenuItem value="selection">{t('Selected items')}</MenuItem>
         </TextField>
+        <TextField
+          select
+          label={t('Import channel')}
+          size="small"
+          value={draft.channel ?? 'any'}
+          onChange={(event) => {
+            const channel = event.target.value
+            setDraft({ ...draft, channel: channel === 'studio' || channel === 'cli' ? channel : undefined })
+          }}
+        >
+          <MenuItem value="any">{t('All channels')}</MenuItem>
+          <MenuItem value="studio">{t(channelLabels.studio)}</MenuItem>
+          <MenuItem value="cli">{t(channelLabels.cli)}</MenuItem>
+        </TextField>
       </Stack>
       <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
         <Button type="submit" variant="contained" disabled={invalidSource}>{t('Apply filters')}</Button>
@@ -112,13 +127,13 @@ function ImportRunsPage({ query, onPage, onOpen }: {
     )
   }
   const { items, hasMore } = result.data
-  const { page, source, input, scope } = query
+  const { page, source, input, scope, channel } = query
 
   return (
     <>
       {items.length === 0 ? (
         <Alert severity="info">
-          {t(source || input || scope ? 'No completed imports match the selected filters.' : 'No completed imports yet.')}
+          {t(source || input || scope || channel ? 'No completed imports match the selected filters.' : 'No completed imports yet.')}
         </Alert>
       ) : (
         <TableContainer>
@@ -129,6 +144,7 @@ function ImportRunsPage({ query, onPage, onOpen }: {
                 <TableCell>{t('Source key')}</TableCell>
                 <TableCell>{t('Import format')}</TableCell>
                 <TableCell>{t('Import scope')}</TableCell>
+                <TableCell>{t('Import channel')}</TableCell>
                 <TableCell>{t('Import outcomes')}</TableCell>
                 <TableCell aria-label={t('View report')} />
               </TableRow>
@@ -140,6 +156,7 @@ function ImportRunsPage({ query, onPage, onOpen }: {
                   <TableCell component="th" scope="row" sx={{ overflowWrap: 'anywhere' }}>{run.source}</TableCell>
                   <TableCell>{t(inputLabels[run.input])}</TableCell>
                   <TableCell>{t(run.scope === 'selection' ? 'Selected items' : 'Full source')}</TableCell>
+                  <TableCell>{t(channelLabels[run.channel])}</TableCell>
                   <TableCell>
                     {Object.keys(run.counts).length === 0 ? '—' : (
                       <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
@@ -188,7 +205,7 @@ function ImportRunReport({ run, onBack, onResume }: {
         </Stack>
       </Stack>
       <Typography color="text.secondary">
-        {run.source} · <time dateTime={run.completedAt}>{formatDateTime(run.completedAt)}</time> · {t(inputLabels[run.input])} · {t(run.scope === 'selection' ? 'Selected items' : 'Full source')}
+        {run.source} · <time dateTime={run.completedAt}>{formatDateTime(run.completedAt)}</time> · {t(inputLabels[run.input])} · {t(run.scope === 'selection' ? 'Selected items' : 'Full source')} · {t(channelLabels[run.channel])}
       </Typography>
       {!result && <Typography role="status" color="text.secondary">{t('Loading import report…')}</Typography>}
       {result && 'error' in result && (
@@ -209,11 +226,11 @@ export function WordPressImportHistory({ initialSource, onResume }: {
   const [query, setQuery] = useState<WordPressImportRunQuery>({ page: 1, source: initialSource })
   const [run, setRun] = useState<WordPressImportRun | null>(null)
 
-  function applyFilters({ source, input, scope }: RunFilters) {
+  function applyFilters({ source, input, scope, channel }: RunFilters) {
     setQuery((current) =>
-      current.page === 1 && current.source === source && current.input === input && current.scope === scope
+      current.page === 1 && current.source === source && current.input === input && current.scope === scope && current.channel === channel
         ? current
-        : { page: 1, source, input, scope },
+        : { page: 1, source, input, scope, channel },
     )
   }
 

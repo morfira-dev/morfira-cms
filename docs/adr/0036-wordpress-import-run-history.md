@@ -12,6 +12,8 @@ The Studio report can describe thousands of source records and is tied to the re
 
 Store each successful Studio WordPress apply as a run with summary fields and its immutable report. Commit it in the same database transaction as the draft changes. Return summaries from the collection endpoint and load report data by run identity when requested. Store the input format with the summary fields so the list can filter before pagination without reading report payloads. Use the existing owner authorization boundary.
 
+Public CLI applies may opt into the same transactional history. Store the execution channel with each run so the Studio list can filter it. Authenticated private imports retain invocation-local reports. See the [CLI history specification](../specs/wordpress-cli-import-history.md).
+
 ## Alternatives and consequences
 
 Reconstructing reports from current drafts would change historical outcomes after edits. Storing reports in the browser would tie history to one session and device. The database stores bounded report metadata alongside the site backup. Successful repeats record administrative activity while ledger claims continue to govern draft creation.

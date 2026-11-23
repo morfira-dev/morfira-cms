@@ -17,7 +17,7 @@ const remainingPage: Report['items'][number] = {
 }
 
 function makeRun(input: Run['input'], source: string): Run {
-  return { id: fixtureId, source, input, scope: 'selection', completedAt: '2026-11-23T00:00:00Z', counts: { imported: 1 } }
+  return { id: fixtureId, source, input, scope: 'selection', channel: 'studio', completedAt: '2026-11-23T00:00:00Z', counts: { imported: 1 } }
 }
 
 function makeReport(run: Run, mode: Report['mode'], items: Report['items']): Report {

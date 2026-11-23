@@ -154,6 +154,7 @@ final readonly class WordPressImportController
         $source = $query['source'] ?? null;
         $input = $query['input'] ?? null;
         $scope = $query['scope'] ?? null;
+        $channel = $query['channel'] ?? null;
         if ($source !== null && (!is_string($source) || !ImportWordPressDrafts::validSourceKey($source))) {
             return self::json(['error' => 'Source must be a lowercase identifier of at most 80 characters.'], 422);
         }
@@ -163,8 +164,11 @@ final readonly class WordPressImportController
         if (!in_array($scope, [null, 'all', 'selection'], true)) {
             return self::json(['error' => 'Scope must be all or selection.'], 422);
         }
+        if (!in_array($channel, [null, 'studio', 'cli'], true)) {
+            return self::json(['error' => 'Channel must be studio or cli.'], 422);
+        }
         $page = (int) $page;
-        $runs = $this->history->latest(($page - 1) * self::RUNS_PAGE_SIZE, self::RUNS_PAGE_SIZE + 1, $source, $input, $scope);
+        $runs = $this->history->latest(($page - 1) * self::RUNS_PAGE_SIZE, self::RUNS_PAGE_SIZE + 1, $source, $input, $scope, $channel);
 
         return self::json([
             'items' => array_slice($runs, 0, self::RUNS_PAGE_SIZE),

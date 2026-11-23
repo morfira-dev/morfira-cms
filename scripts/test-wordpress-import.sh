@@ -189,6 +189,17 @@ trap 'rm -f -- "$session_cookie"' EXIT
 request() {
     curl --fail --silent --show-error -b "$session_cookie" -c "$session_cookie" "$@"
 }
+assert_cli_history() {
+    expected_report=$1
+    history_source=$2
+    history_input=$3
+    history_runs=$4
+    run_id=$(request "$CMS_PUBLIC_SITE_URL/api/v1/admin/imports/wordpress/runs?source=$history_source&input=$history_input&scope=all&channel=cli" | jq -er \
+        --arg source "$history_source" --arg input "$history_input" --argjson count "$history_runs" '
+        select((.items | length) == $count and all(.items[]; .source == $source and .input == $input and .scope == "all" and .channel == "cli")) | .items[0].id
+    ')
+    request "$CMS_PUBLIC_SITE_URL/api/v1/admin/imports/wordpress/runs/$run_id" | jq -e --argjson report "$expected_report" '. == $report' >/dev/null
+}
 csrf=$(request "$CMS_PUBLIC_SITE_URL/api/v1/auth/csrf" | jq -er .token)
 request -H "X-CSRF-Token: $csrf" -H 'Content-Type: application/json' \
     --data '{"email":"owner@morfira.test","password":"Morfira-beta-2026!"}' "$CMS_PUBLIC_SITE_URL/api/v1/auth/login" >/dev/null
@@ -257,6 +268,68 @@ test "$(db_query "SELECT COUNT(*) FROM content_entries AS entry
     WHERE entry.slug = 'wp-import-reused-asset' AND asset.original_name = 'sample-two.png'")" = 1
 test "$(compose exec -T app sh -c 'find public/media -type f | wc -l')" = "$media_after"
 
+printf '%s\n' 'Verifying opt-in WXR history, rollback and replay.'
+test "$(db_query "$history_query")" = "$history_before"
+if failure=$(compose exec -T app php bin/cms cms:import:wordpress /nonexistent-wordpress-export.xml --source=wordpress-history-e2e --record-history 2>&1); then
+    printf '%s\n' 'WordPress import unexpectedly accepted history recording during dry-run.' >&2
+    exit 1
+fi
+printf '%s\n' "$failure" | grep -F -- '--record-history' | grep -F -- '--apply' >/dev/null
+if failure=$(compose exec -T app php bin/cms cms:import:wordpress --api-url=not-a-wordpress-url --source=wordpress-history-e2e --apply --include-private --record-history 2>&1); then
+    printf '%s\n' 'WordPress import unexpectedly accepted history recording for restricted REST content.' >&2
+    exit 1
+fi
+printf '%s\n' "$failure" | grep -F -- '--record-history' | grep -F -- '--include-private' >/dev/null
+
+compose exec -T app php -r 'if (file_put_contents($argv[1], stream_get_contents(STDIN)) === false) exit(1);' "$container_fixture" <<'XML'
+<rss xmlns:wp="http://wordpress.org/export/1.2/" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel><wp:wxr_version>1.2</wp:wxr_version>
+    <item><title>Recorded WordPress page</title><wp:post_id>97701</wp:post_id><wp:post_name>wp-import-history-page</wp:post_name>
+    <wp:post_type>page</wp:post_type><wp:status>draft</wp:status>
+    <content:encoded><![CDATA[<p>Fixture body excluded from the report.</p>]]></content:encoded></item>
+    <item><title>Protected fixture title</title><wp:post_id>97702</wp:post_id><wp:post_name>wp-import-protected-history-page</wp:post_name>
+    <wp:post_type>page</wp:post_type><wp:status>publish</wp:status><wp:post_password>fixture-protected-password</wp:post_password></item>
+  </channel>
+</rss>
+XML
+history_page_query="SELECT COUNT(*) FROM content_pages WHERE slug = 'wp-import-history-page'"
+history_ledger_query="SELECT COUNT(*) FROM content_wordpress_import_items WHERE source_key = 'wordpress-history-e2e'"
+db_query "DELIMITER //
+CREATE TRIGGER wordpress_e2e_reject_history BEFORE INSERT ON content_wordpress_import_runs FOR EACH ROW
+BEGIN
+    IF NEW.source_key = 'wordpress-history-rollback' THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Synthetic history write failure';
+    END IF;
+END//
+DELIMITER ;"
+if import wordpress-history-rollback --apply --record-history >/dev/null 2>&1; then
+    printf '%s\n' 'WordPress import unexpectedly succeeded after an injected history write failure.' >&2
+    exit 1
+fi
+test "$(db_query "$history_query")" = "$history_before"
+test "$(db_query "$history_page_query")" = 0
+test "$(db_query "SELECT COUNT(*) FROM content_wordpress_import_items WHERE source_key = 'wordpress-history-rollback'")" = 0
+
+report=$(import wordpress-history-e2e --apply --record-history)
+printf '%s\n' "$report" | jq -e '
+    .mode == "apply" and .input == "wxr" and .counts == {imported: 1, unsupported_status: 1} and
+    any(.items[]; .id == "97701" and .title == "Recorded WordPress page" and .draft.kind == "page" and (.draft.id | type) == "string") and
+    any(.items[]; .id == "97702" and .state == "unsupported_status" and (has("title") | not) and (has("draft") | not))
+' >/dev/null
+if printf '%s\n' "$report" | grep -Eq 'Protected fixture title|fixture-protected-password|Fixture body excluded|/tmp/morfira-wordpress'; then
+    printf '%s\n' 'WordPress history contains source credentials, private titles, paths, or body content.' >&2
+    exit 1
+fi
+assert_cli_history "$report" wordpress-history-e2e wxr 1
+test "$(db_query "$history_page_query")" = 1
+test "$(db_query "$history_ledger_query")" = 1
+report=$(import wordpress-history-e2e --apply --record-history)
+printf '%s\n' "$report" | jq -e '.counts == {already_imported: 1, unsupported_status: 1} and all(.items[]; has("draft") | not)' >/dev/null
+assert_cli_history "$report" wordpress-history-e2e wxr 2
+test "$(db_query "$history_page_query")" = 1
+test "$(db_query "$history_ledger_query")" = 1
+test "$(db_query "$history_query")" = "$((history_before + 2))"
+
 rest_import() {
     compose exec -T -e "CMS_REST_FIXTURE_EDITED=${CMS_REST_FIXTURE_EDITED:-0}" -e "CMS_REST_FIXTURE_MEDIA=${CMS_REST_FIXTURE_MEDIA:-}" \
         app php tests/Content/Fixtures/wordpress-rest-import.php \
@@ -315,12 +388,15 @@ test "$(db_query "$rest_author_query")" = 0
 test "$(db_query "$rest_media_query")" = 0
 test "$(compose exec -T app sh -c 'find public/media -type f | wc -l')" = "$media_after"
 
-report=$(rest_import_with_cdn --apply)
+report=$(rest_import_with_cdn --apply --record-history)
 printf '%s\n' "$report" | jq -e '
     .items[0].state == "imported" and .authors[0].state == "imported" and
     .items[0].images == {"inline": 1, "missingInline": 0, "featured": "linked"} and
-    .media[0].state == "imported" and (.media[0].assetId | type) == "string"
+    .media[0].state == "imported" and (.media[0].assetId | type) == "string" and
+    any(.items[]; .title == "Imported REST post" and .draft.kind == "entry" and (.draft.contentTypeId | type) == "string") and
+    any(.items[]; .title == "Imported REST page" and .draft.kind == "page" and (.draft.id | type) == "string")
 ' >/dev/null
+assert_cli_history "$report" wordpress-rest-e2e rest 1
 rest_asset_id=$(printf '%s\n' "$report" | jq -er .media[0].assetId)
 test "$(db_query "$rest_post_query")" = 1
 test "$(db_query "$rest_page_query")" = 1
@@ -491,5 +567,5 @@ for route in /restricted-rest-page /api/v1/content/pages/restricted-rest-page /c
     test "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' "$CMS_PUBLIC_SITE_URL$route")" = 404
 done
 
-test "$(db_query "$history_query")" = "$history_before"
+test "$(db_query "$history_query")" = "$((history_before + 3))"
 printf '%s\n' 'WordPress import production CLI journey passed.'

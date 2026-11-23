@@ -16,7 +16,7 @@ An owner can list completed runs and retrieve their reports. Both reads use the 
 
 1. The owner previews a WordPress source and applies the whole source or a selection.
 2. A successful apply records its result and makes the run available in history.
-3. The owner browses runs newest first, filters by source key, input format or scope, opens a saved report and can download its JSON.
+3. The owner browses runs newest first, filters by source key, input format, scope or execution channel, opens a saved report and can download its JSON.
 4. The owner can return to the current import without losing its preview or selection.
 5. The owner can open a newly created page or entry from the live or saved report in a separate tab. The editor opens the referenced draft on direct entry or reload.
 6. From a live result the owner can preview the current source again with the same settings, or open the run history filtered to that source key. A fresh preview reads the source again and replaces the old report and selection before any apply is available.
@@ -24,7 +24,7 @@ An owner can list completed runs and retrieve their reports. Both reads use the 
 
 ## Contracts
 
-`GET /api/v1/admin/imports/wordpress/runs?page=1` returns `items`, `page` and `hasMore`. Each summary includes a run UUID, source key, input format, completion timestamp, scope and material outcome counts. Page size is 20. See the [history filter specification](wordpress-studio-history-filters.md).
+`GET /api/v1/admin/imports/wordpress/runs?page=1` returns `items`, `page` and `hasMore`. Each summary includes a run UUID, source key, input format, completion timestamp, scope, execution channel and material outcome counts. Page size is 20. See the [history filter specification](wordpress-studio-history-filters.md).
 
 `GET /api/v1/admin/imports/wordpress/runs/{id}` returns the saved `WordPressImportReport`. Report reads have the same shape as the apply response.
 
@@ -32,7 +32,7 @@ Newly imported rows can have a `draft` reference. Page references carry a draft 
 
 ## Data and invariants
 
-Each successful Studio apply is a run. A replay can be a distinct run with already-imported outcomes while the material ledger still prevents duplicate drafts. The report and corresponding content changes commit together. Dry-runs, unsuccessful requests and CLI imports have no history records. Reports are immutable and represent the outcome at the time of the request.
+Each successful Studio apply is a run. The CLI can record a public WXR or REST apply with `--record-history`. A replay can be a distinct run with already-imported outcomes while the material ledger still prevents duplicate drafts. The report and corresponding content changes commit together. Dry-runs and unsuccessful requests create no history records. Reports are immutable and represent the outcome at the time of the request. See the [CLI history specification](wordpress-cli-import-history.md).
 
 ## Failure modes and privacy
 

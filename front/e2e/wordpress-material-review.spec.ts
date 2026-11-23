@@ -63,7 +63,7 @@ test('reviews overlapping WordPress issues across preview, result and history', 
       await route.fulfill({ json: request.mode === 'dry-run' ? preview : applied })
     } else if (path === `${importPath}/runs`) {
       await route.fulfill({ json: { items: [{
-        id: runId, source, input: 'rest', scope: 'selection', completedAt: '2026-11-23T00:00:00Z', counts: applied.counts,
+        id: runId, source, input: 'rest', scope: 'selection', channel: 'studio', completedAt: '2026-11-23T00:00:00Z', counts: applied.counts,
       }], page: 1, hasMore: false } })
     } else if (path === `${importPath}/runs/${runId}`) await route.fulfill({ json: applied })
     else await route.abort()

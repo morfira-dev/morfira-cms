@@ -4,17 +4,10 @@ declare(strict_types=1);
 
 namespace Cms\Content\Application\Import;
 
-use Cms\Content\Domain\PageTitle;
-
 /**
- * @phpstan-import-type ReportItem from ImportWordPressDrafts
- * @phpstan-import-type TaxonomyOutcomes from ImportWordPressDrafts
- * @phpstan-import-type MediaOutcome from ImportWordPressMedia
- * @phpstan-import-type AuthorOutcome from ImportWordPressAuthors
  * @phpstan-import-type SourceItem from ImportWordPressDrafts
- * @phpstan-import-type ImportReport from ImportWordPressDrafts
  * @phpstan-import-type Export from WordPressExportSource
- * @phpstan-type Report array{mode:'apply'|'dry-run',input:'wxr'|'rest',source:string,scope?:'selection',counts:object,skippedTypes:object,items:list<ReportItem>,media:list<MediaOutcome>,taxonomy:TaxonomyOutcomes,authors:list<AuthorOutcome>}
+ * @phpstan-import-type Report from FormatWordPressImportReport
  */
 final readonly class ImportWordPressExport
 {
@@ -115,7 +108,7 @@ final readonly class ImportWordPressExport
             scopeDependencies: $selected,
             includeDraftReferences: true,
             complete: function (array $outcomes) use ($source, $export, $items, $apply, $selected, $input): array {
-                $report = $this->report($outcomes, $source, $export, $items, $apply, $selected, $input);
+                $report = FormatWordPressImportReport::create($outcomes, $source, $input, $apply, $export['skippedTypes'], $items, $selected);
                 if ($apply) {
                     $this->history->record($report);
                 }
@@ -124,36 +117,6 @@ final readonly class ImportWordPressExport
             },
             mediaBudget: $apply && $mediaApiUrl !== null ? new WordPressStudioMediaBudget() : null,
         );
-    }
-
-    /**
-     * @param ImportReport $report
-     * @param Export $export
-     * @param list<SourceItem> $items
-     * @param 'wxr'|'rest' $input
-     * @return Report
-     */
-    private function report(array $report, string $source, array $export, array $items, bool $apply, bool $selected, string $input): array
-    {
-        $titles = [];
-        foreach ($items as $item) {
-            if (!$item['passwordProtected'] && !($item['restrictedSource'] ?? false) && in_array($item['status'], ['publish', 'draft', 'pending', 'future'], true) && $item['title'] !== '') {
-                $titles[$item['id']] = mb_substr($item['title'], 0, PageTitle::MAX_LENGTH);
-            }
-        }
-        foreach ($report['items'] as $index => $item) {
-            if (isset($titles[$item['id']])) {
-                $report['items'][$index]['title'] = $titles[$item['id']];
-            }
-        }
-
-        return [
-            'mode' => $apply ? 'apply' : 'dry-run',
-            'input' => $input,
-            'source' => $source,
-            'counts' => (object) array_count_values(array_column($report['items'], 'state')),
-            'skippedTypes' => (object) ($selected ? [] : $export['skippedTypes']),
-        ] + ($selected ? ['scope' => 'selection'] : []) + $report;
     }
 
     /** @return array<int|string,true> */

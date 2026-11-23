@@ -60,7 +60,7 @@ test('previews, selects and reopens a public WordPress REST import', async ({ pa
       }
     } else if (path === `${basePath}/runs`) {
       await route.fulfill({ json: { items: [{
-        id: runId, source, input: 'rest', scope: 'selection', completedAt: '2026-11-20T00:00:00Z', counts: { imported: 1 },
+        id: runId, source, input: 'rest', scope: 'selection', channel: 'studio', completedAt: '2026-11-20T00:00:00Z', counts: { imported: 1 },
       }], page: 1, hasMore: false } })
     } else if (path === `${basePath}/runs/${runId}` && savedReport) await route.fulfill({ json: savedReport })
     else await route.abort()

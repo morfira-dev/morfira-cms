@@ -60,11 +60,12 @@ export async function importWordPressRest(
   return readImportResponse<WordPressImportReport>(response)
 }
 
-export async function listWordPressImportRuns({ page, source, input, scope }: WordPressImportRunQuery, signal: AbortSignal) {
+export async function listWordPressImportRuns({ page, source, input, scope, channel }: WordPressImportRunQuery, signal: AbortSignal) {
   const params = new URLSearchParams({ page: String(page) })
   if (source !== undefined) params.set('source', source)
   if (input !== undefined) params.set('input', input)
   if (scope !== undefined) params.set('scope', scope)
+  if (channel !== undefined) params.set('channel', channel)
   const response = await apiFetch(`${importPath}/runs?${params}`, { signal })
   return readImportResponse<WordPressImportRunCollection>(response)
 }

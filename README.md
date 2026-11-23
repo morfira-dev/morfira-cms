@@ -143,7 +143,7 @@ Remote theme/extension installation, live-linked sections and advanced editorial
 
 In Admin Studio, owners can open **WordPress import**, choose a WXR export or a public WordPress REST API, and preview the report before creating drafts. Search and filter materials, inspect media, taxonomy, author, and redirect outcomes, and select which drafts to create. Use the same source key to continue with the remaining materials. Download the current report as JSON before or after applying. The REST form can import a bounded batch of public images from the source host and [explicitly allowed CDN hosts](docs/specs/wordpress-studio-rest-cdn-media.md). The CLI supports larger REST sources and authenticated WordPress access. See the [WXR specification](docs/specs/wordpress-studio-import.md), [Studio REST specification](docs/specs/wordpress-studio-rest-import.md) and [Studio image import specification](docs/specs/wordpress-studio-rest-media.md).
 
-Studio owners can revisit completed imports in **Import history**, filter runs by source key, input format and import scope, download saved reports and open newly created drafts in a separate tab. See the [import history specification](docs/specs/wordpress-studio-import-history.md).
+Studio owners can revisit completed imports in **Import history**, filter runs by source key, input format, scope and execution channel, download saved reports and open newly created drafts in a separate tab. See the [import history specification](docs/specs/wordpress-studio-import-history.md).
 
 After applying a batch, preview the same source again or open its filtered history from the result. A saved report can also start a new preview with its format and source key. Choose the export or enter the REST URL to continue. A fresh preview shows which materials remain eligible.
 
@@ -158,6 +158,8 @@ docker compose exec -T app php bin/cms cms:import:wordpress /tmp/wordpress-expor
 ```
 
 For production, use `docker compose -f compose.prod.yaml` with the installation environment. The import without `--apply` produces a JSON report without writes. With `--apply`, eligible pages and posts are created as drafts, and built-in categories and tags are assigned to newly imported posts. Keep the same source key for every export from that WordPress installation.
+
+Add `--record-history` to `--apply` for a WXR or public REST import to save its report. Owners can find the run under **Import history** using the **Command line (CLI)** filter. Authenticated private imports keep their reports in the CLI. See the [CLI history specification](docs/specs/wordpress-cli-import-history.md).
 
 To read public content directly over WordPress REST, use the canonical HTTPS namespace:
 
