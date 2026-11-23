@@ -1,5 +1,5 @@
-#!/bin/sh
-set -eu
+#!/usr/bin/env bash
+set -euo pipefail
 
 if [ "$#" -ne 2 ] || [ "$1" != "--confirm-destructive-restore" ]; then
     printf 'Usage: %s --confirm-destructive-restore /absolute/backup-directory\n' "$0" >&2
@@ -14,6 +14,14 @@ esac
 
 test -f "$backup_directory/database.sql.gz"
 test -f "$backup_directory/media.tar.gz"
+if ! gzip -dc "$backup_directory/database.sql.gz" | awk 'NF { nonempty = 1 } END { exit !nonempty }'; then
+    printf '%s\n' 'Database backup is unreadable or empty.' >&2
+    exit 1
+fi
+tar -tzf "$backup_directory/media.tar.gz" >/dev/null
+if [ -f "$backup_directory/private-media.tar.gz" ]; then
+    tar -tzf "$backup_directory/private-media.tar.gz" >/dev/null
+fi
 
 docker compose -f compose.prod.yaml stop app
 gzip -dc "$backup_directory/database.sql.gz" | docker compose -f compose.prod.yaml exec -T database sh -c 'mariadb -ucms -p"$MARIADB_PASSWORD" cms'

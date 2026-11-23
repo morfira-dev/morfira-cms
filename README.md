@@ -33,7 +33,7 @@ docker compose -f compose.prod.yaml up -d --build
 
 Open `/admin`; `/health` is the dependency-free liveness endpoint and `/ready` includes database readiness. Startup applies pending migrations before accepting traffic. Set `CMS_MAINTENANCE_MODE=1` and recreate the app container to return controlled `503` responses while preserving health checks.
 
-Back up the database and both public and private media together to a new, access-restricted directory:
+Use Bash to back up the database and both public and private media together to a new, access-restricted directory:
 
 ```bash
 ./scripts/backup.sh /absolute/path/to/backup
@@ -41,9 +41,13 @@ Back up the database and both public and private media together to a new, access
 ./scripts/upgrade.sh
 ```
 
-Restore replaces the target installation's database and media and must be tested on a disposable environment before production use. Keep an off-host copy, encrypt archives containing private content, and verify the public and Admin Studio routes after every upgrade.
+Restore checks archive integrity before stopping the application. It then replaces the target installation's database and media and must be tested on a disposable environment before production use. Keep an off-host copy, encrypt archives containing private content, and verify the public and Admin Studio routes after every upgrade.
 
 The isolated production-browser journey can be run with `./scripts/test-e2e.sh`; it uses a dedicated Compose project and deletes only that project's disposable volumes.
+
+Run `bash scripts/test-backup-restore.sh` to verify how the backup and restore commands handle failed dumps, invalid archives, and SQL import errors.
+
+See the [release upgrade and restore rehearsal](docs/verification/upgrade-restore-rehearsal.md) for the `v1.14.0` compatibility checks and the evidence to capture on a disposable target.
 
 ## Project structure
 

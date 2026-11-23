@@ -32,6 +32,8 @@ Liveness alone cannot tell an orchestrator whether the database is ready, and th
 
 ## Failure modes
 - Database errors produce sanitized readiness output and structured server logs.
+- Backup reports a failed database dump or archive command and only moves archives to the destination after capture succeeds.
+- Restore checks archive integrity before stopping the application or changing installed data. SQL import errors stop the operation before media replacement.
 
 ## Security and privacy
 - Logs exclude request bodies, cookies and authorization headers.
