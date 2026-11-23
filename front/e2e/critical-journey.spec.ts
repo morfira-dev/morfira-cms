@@ -4,22 +4,24 @@ import type { components } from '../src/api/schema'
 
 test.setTimeout(90_000)
 
-test('owner creates, edits and publishes a page through the production surface', async ({ page, request }) => {
+test('owner creates, edits and publishes a page through the production surface', async ({ browser, page, request }) => {
+  const ownerEmail = 'owner@morfira.test'
+  const ownerPassword = 'Morfira-beta-2026!'
   await page.goto('/admin')
 
   await expect(page.getByRole('heading', { name: 'Create the CMS owner' })).toBeVisible()
   await page.getByRole('button', { name: 'Russian' }).click()
   await expect(page.getByRole('heading', { name: 'Создание владельца CMS' })).toBeVisible()
-  await page.getByLabel('Электронная почта').fill('owner@morfira.test')
-  await page.locator('input[type="password"]').first().fill('Morfira-beta-2026!')
-  await page.getByLabel('Подтвердите пароль').fill('Morfira-beta-2026!')
+  await page.getByLabel('Электронная почта').fill(ownerEmail)
+  await page.locator('input[type="password"]').first().fill(ownerPassword)
+  await page.getByLabel('Подтвердите пароль').fill(ownerPassword)
   const [loginResponse] = await Promise.all([
     page.waitForResponse((response) => response.url().endsWith('/api/v1/auth/login') && response.request().method() === 'POST'),
     page.getByRole('button', { name: 'Создать владельца' }).click(),
   ])
   expect(loginResponse.ok()).toBeTruthy()
 
-  await expect(page.getByText('owner@morfira.test')).toBeVisible()
+  await expect(page.getByText(ownerEmail)).toBeVisible()
   await page.getByRole('button', { name: 'Interface language' }).click()
   await expect(page.getByRole('link', { name: 'Страницы' })).toBeVisible()
   await page.reload()
@@ -79,10 +81,14 @@ test('owner creates, edits and publishes a page through the production surface',
   await expect(pageRichText.locator('em')).toHaveText('Styled page copy')
   await expect(table.locator('td')).toHaveCount(4)
   await expect(table.locator('td').first()).toHaveText('Editor table cell')
+  const publicPagePath = '/beta-home'
+  const headlessPagePath = '/api/v1/content/pages/beta-home'
+  expect((await request.get(publicPagePath)).status()).toBe(404)
+  expect((await request.get(headlessPagePath)).status()).toBe(404)
   await page.getByRole('button', { name: 'Опубликовать', exact: true }).click()
   await expect(page.getByText(/Ревизия 2 опубликована/)).toBeVisible()
 
-  const publicPage = await request.get('/beta-home')
+  const publicPage = await request.get(publicPagePath)
   expect(publicPage.status()).toBe(200)
   const publicPageHtml = await publicPage.text()
   expect(publicPageHtml).toContain('Morfira beta is live')
@@ -90,12 +96,60 @@ test('owner creates, edits and publishes a page through the production surface',
   const publishedTable = /<table\b[\s\S]*?Editor table cell[\s\S]*?<\/table>/
   expect(publicPageHtml).toMatch(publishedTable)
 
-  const headlessPage = await request.get('/api/v1/content/pages/beta-home')
+  const headlessPage = await request.get(headlessPagePath)
   expect(headlessPage.status()).toBe(200)
   await expect(headlessPage.json()).resolves.toMatchObject({
     slug: 'beta-home', locale: 'en', sourceRevision: 2, layout: { theme: 'atelier', template: 'editorial' },
     blocks: expect.arrayContaining([expect.objectContaining({
       type: 'richText', data: { content: expect.stringMatching(publishedTable) },
+    })]),
+  })
+
+  const updatedHero = 'Morfira beta has an updated heading'
+  await page.getByLabel('Заголовок блока').fill(updatedHero)
+  await page.getByRole('button', { name: 'Сохранить ревизию' }).click()
+  await expect(page.getByText('Ревизия черновика 3')).toBeVisible()
+  const unchangedPublicPage = await request.get(publicPagePath)
+  expect(unchangedPublicPage.status()).toBe(200)
+  const unchangedPublicHtml = await unchangedPublicPage.text()
+  expect(unchangedPublicHtml).toContain('Morfira beta is live')
+  expect(unchangedPublicHtml).not.toContain(updatedHero)
+  const unchangedHeadlessPage = await request.get(headlessPagePath)
+  expect(unchangedHeadlessPage.status()).toBe(200)
+  await expect(unchangedHeadlessPage.json()).resolves.toMatchObject({
+    sourceRevision: 2,
+    blocks: expect.arrayContaining([expect.objectContaining({
+      type: 'hero', data: expect.objectContaining({ heading: 'Morfira beta is live' }),
+    })]),
+  })
+  await page.getByRole('button', { name: 'Опубликовать', exact: true }).click()
+  await expect(page.getByText(/Ревизия 3 опубликована/)).toBeVisible()
+
+  const secondBrowser = await browser.newContext()
+  try {
+    const secondPage = await secondBrowser.newPage()
+    await secondPage.goto(publicPagePath)
+    await expect(secondPage.getByRole('heading', { name: updatedHero })).toBeVisible()
+
+    await secondPage.goto('/admin/')
+    await expect(secondPage.getByRole('heading', { name: 'Welcome back' })).toBeVisible()
+    await secondPage.getByLabel('Email').fill(ownerEmail)
+    await secondPage.getByLabel('Password').fill(ownerPassword)
+    await secondPage.getByRole('button', { name: 'Sign in', exact: true }).click()
+    await expect(secondPage.getByRole('link', { name: 'Страницы', exact: true })).toBeVisible()
+
+    await secondPage.goto(publicPagePath)
+    await expect(secondPage.locator('html')).toHaveAttribute('lang', 'en')
+    await expect(secondPage.getByRole('heading', { name: updatedHero })).toBeVisible()
+  } finally {
+    await secondBrowser.close()
+  }
+  const republishedHeadlessPage = await request.get(headlessPagePath)
+  expect(republishedHeadlessPage.status()).toBe(200)
+  await expect(republishedHeadlessPage.json()).resolves.toMatchObject({
+    locale: 'en', sourceRevision: 3,
+    blocks: expect.arrayContaining([expect.objectContaining({
+      type: 'hero', data: expect.objectContaining({ heading: updatedHero }),
     })]),
   })
 
@@ -181,10 +235,12 @@ test('owner creates, edits and publishes a page through the production surface',
   await page.getByRole('textbox', { name: 'Заголовок', exact: true }).fill('Author One')
   await page.getByLabel('Slug').fill('author-one')
   await page.getByRole('button', { name: 'Сохранить', exact: true }).click()
+  await expect(page.getByRole('button', { name: /Author One/ })).toBeVisible()
   await page.getByRole('button', { name: 'Новый' }).click()
   await page.getByRole('textbox', { name: 'Заголовок', exact: true }).fill('Author Two')
   await page.getByLabel('Slug').fill('author-two')
   await page.getByRole('button', { name: 'Сохранить', exact: true }).click()
+  await expect(page.getByRole('button', { name: /Author Two/ })).toBeVisible()
 
   await page.goto('/admin/content-types')
   await page.getByRole('button', { name: /Articles/ }).click()

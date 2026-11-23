@@ -8,6 +8,7 @@ Unit and HTTP tests do not prove that a browser can complete the critical setup,
 
 ## Goals
 - Verify setup, login, dashboard, page creation, revision save and public publication in Chromium.
+- Verify that a fresh login loads the account's Studio language while the published page retains its content locale.
 - Run against the production same-origin `/admin` deployment.
 - Keep test credentials ephemeral and isolated to the E2E database.
 
@@ -21,7 +22,8 @@ Unit and HTTP tests do not prove that a browser can complete the critical setup,
 1. Playwright opens `/admin` on a clean database.
 2. It creates the first owner and signs in.
 3. It creates, edits and publishes a page.
-4. It verifies public HTML and the headless API.
+4. It checks that anonymous HTML and API requests return 404 before the first publication, serve the published revision during further editing, and switch to the new revision after republication.
+5. It signs in from a fresh browser context and checks that Studio loads the saved interface language. It opens the published page and checks its content language.
 
 ## Contracts
 - `pnpm run test:e2e` runs the suite. `pnpm run test:e2e:install` installs Chromium dependencies.

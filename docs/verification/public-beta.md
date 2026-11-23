@@ -4,6 +4,8 @@ Use a tagged build and a disposable installation with synthetic content. Record 
 
 ## Tester journey
 
+The [Chromium production journey](../../front/e2e/critical-journey.spec.ts) exercises setup, draft isolation, republication, Studio language persistence and WordPress import in CI.
+
 | Task | Expected result |
 | --- | --- |
 | Start the [production stack](../../README.md#production-deployment) and open `/admin/`. | `/ready` returns HTTP 200 and Studio offers initial owner setup on a fresh database. |
