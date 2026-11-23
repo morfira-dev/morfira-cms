@@ -128,7 +128,10 @@ summaries.push({ source: composerLockfile, packages: composerPackages, counts: c
 const composeFiles = await Promise.all(['compose.yaml', 'compose.prod.yaml', 'compose.e2e.yaml'].map((path) => readFile(path, 'utf8')));
 const dockerfiles = await Promise.all(['back/Dockerfile', 'Dockerfile', 'docker/Dockerfile.front', 'docker/Dockerfile.e2e'].map((path) => readFile(path, 'utf8')));
 const releaseWorkflow = await readFile('.github/workflows/release.yml', 'utf8');
-const fixtureCompose = await readFile('scripts/fixtures/wordpress-rehearsal/compose.yaml', 'utf8');
+const fixtureCompose = await Promise.all([
+  'scripts/fixtures/wordpress-rehearsal/compose.yaml',
+  'scripts/benchmark/compose.yaml',
+].map((path) => readFile(path, 'utf8')));
 const composeImages = (file) => [...file.matchAll(/^\s*image:\s*([^\s#]+).*$/gm)].map((match) => match[1]);
 const containerImages = [...new Set([
   ...composeFiles.flatMap(composeImages),
@@ -141,7 +144,7 @@ for (const image of containerImages) {
   }
 }
 
-const fixtureImages = [...new Set(composeImages(fixtureCompose))];
+const fixtureImages = [...new Set(fixtureCompose.flatMap(composeImages))];
 for (const image of fixtureImages) {
   if (!reviewedFixtureImages.has(image)) {
     failures.push(`fixture container images: ${image} has not received a license review.`);

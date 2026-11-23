@@ -1,0 +1,11 @@
+services:
+  app:
+    cpus: 1
+    mem_limit: 512m
+    memswap_limit: 512m
+
+  database:
+    image: mariadb:11.4@sha256:5e73baf8179b29f115101bb102763a47a017361f3e9792daccba6646c3ab1532
+    cpus: 1
+    mem_limit: 512m
+    memswap_limit: 512m

@@ -153,6 +153,8 @@ In **Migration sources**, find a WordPress installation by source-key prefix, se
 
 Use the [migration rehearsal guide](docs/verification/wordpress-migration-rehearsal.md) to compare source IDs, review redirects and assets, and record exceptions before a cutover.
 
+The [public HTML benchmark](docs/verification/html-benchmark.md) describes how to reproduce a local WordPress comparison using the same fixture and resource limits.
+
 After applying a batch, preview the same source again or open its filtered history from the result. A saved report can also start a new preview with its format and source key. Choose the export or enter the REST URL to continue. A fresh preview shows which materials remain eligible.
 
 Use **Material review** in a preview, result, or saved report to find drafts affected by missing images, missing author profiles or redirect problems. Its filters combine with the material search and leave the selected drafts and JSON export intact.
