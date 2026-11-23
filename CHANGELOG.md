@@ -1,3 +1,20 @@
+## [1.15.0](https://github.com/morfira-dev/morfira-cms/compare/v1.14.0...v1.15.0) (2026-11-23)
+
+### Features
+
+* **import:** add WordPress material review filters ([c7f4faf](https://github.com/morfira-dev/morfira-cms/commit/c7f4fafbebee42500c490667d2014a1c6d3f0c0c))
+* **import:** add WordPress migration source overview ([7c7294e](https://github.com/morfira-dev/morfira-cms/commit/7c7294eaf2fa8c9b5f2ee2cdd2c1e56e839e401b))
+* **import:** filter WordPress report details by status ([0f5dec5](https://github.com/morfira-dev/morfira-cms/commit/0f5dec5ba7924d7595678d80967dc105df20d260))
+* **import:** record WordPress CLI runs in Studio history ([6d70b3a](https://github.com/morfira-dev/morfira-cms/commit/6d70b3a34c03160a7d9a4e41c35832478dde927e))
+* **import:** resume WordPress migration from history ([fb54c84](https://github.com/morfira-dev/morfira-cms/commit/fb54c843c5fe91c7a7b9cc7d9be5f3bfdc0bd516))
+* **import:** search WordPress report details ([b5f1d1b](https://github.com/morfira-dev/morfira-cms/commit/b5f1d1bb0c82c7da765b2305575373c3fea50592))
+
+### Bug Fixes
+
+* **import:** preserve WordPress ID links and heading anchors ([0c202ce](https://github.com/morfira-dev/morfira-cms/commit/0c202ce81bfd4ff694789cf7f940f27d45637fd9))
+* **import:** reuse WordPress authors across WXR and REST ([5967205](https://github.com/morfira-dev/morfira-cms/commit/5967205e6b8f37f27bde4266ce9fc162814de0dd))
+* **ops:** reject failed backups and invalid restore archives ([7282ce0](https://github.com/morfira-dev/morfira-cms/commit/7282ce0661ac1ac57a3cfe10404e0f146997ef22))
+
 ## [1.14.0](https://github.com/morfira-dev/morfira-cms/compare/v1.13.0...v1.14.0) (2026-11-20)
 
 ### Features
