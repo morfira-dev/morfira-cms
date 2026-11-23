@@ -22,3 +22,54 @@ Report product defects through the [bug report form](https://github.com/morfira-
 2. Record the passing GitHub Actions **Verify candidate** run for the reported candidate commit. Run the tester journey from the exact tagged release on a disposable installation. Record any blocking issue against that tag.
 3. Review the [upgrade and restore rehearsal](upgrade-restore-rehearsal.md) and repeat it for the candidate when persistence or production startup changes.
 4. Confirm that the default branch serves the bug report form and that **Report a vulnerability** is available to a signed-in non-maintainer. GitHub provides a [private reporting setting](https://docs.github.com/en/code-security/how-tos/report-and-fix-vulnerabilities/configure-vulnerability-reporting/configure-for-a-repository) for public repositories.
+
+## Rehearse an exact tag
+
+Run these commands from the repository root in Bash. The temporary directory holds the source and browser reports. The temporary Compose project listens on loopback. Choose a free port and use it in both environment values. The commands stop the stack and retain its isolated volumes for inspection.
+
+```bash
+set -e -o pipefail
+release_tag=v1.14.0
+release_commit=$(git rev-parse --verify "refs/tags/${release_tag}^{commit}")
+release_tree=$(mktemp -d)
+node scripts/verify-release-tag.mjs "$release_tag" > "$release_tree/release-identity.json"
+git archive "$release_commit" | tar -xf - -C "$release_tree"
+
+(
+  cd "$release_tree"
+  project_name="morfira-tagged-$(openssl rand -hex 4)"
+  export CMS_APP_SECRET="$(openssl rand -hex 32)"
+  export CMS_DATABASE_PASSWORD="$(openssl rand -hex 24)"
+  export CMS_DATABASE_ROOT_PASSWORD="$(openssl rand -hex 24)"
+  export CMS_PUBLIC_SITE_URL=http://localhost:18183 CMS_PORT=127.0.0.1:18183
+  compose() {
+    docker compose -p "$project_name" -f compose.prod.yaml -f compose.e2e.yaml "$@"
+  }
+  trap 'compose stop app database' EXIT
+
+  mkdir -p front/test-results front/playwright-report
+  compose build app e2e
+  compose up -d --no-build --wait app
+  curl -fsS "$CMS_PUBLIC_SITE_URL/ready" > ready.json
+  curl -fsS "$CMS_PUBLIC_SITE_URL/api/openapi.yaml" > served-openapi.yaml
+  cmp back/openapi/openapi.yaml served-openapi.yaml
+  curl -fsS "$CMS_PUBLIC_SITE_URL/api/v1/setup" > initial-setup.json
+  jq -e '.required == true' initial-setup.json >/dev/null
+  compose run --rm -T --no-deps e2e pnpm run test:e2e --workers=1
+)
+```
+
+The tag determines which browser scenarios are available. Use the tester journey above for checks introduced after that tag. Report a clean image build separately from a runtime rehearsal that used prebuilt base images or mounted assets.
+
+## Recorded release rehearsal
+
+On 2026-11-23, `v1.14.0` at `5ce249e` was exported with `git archive`. The production and Chromium images were built from its Dockerfiles on a clean arm64 Docker installation. The stack used PHP 8.4.28 and MariaDB 11.4.13.
+
+| Check | Result |
+| --- | --- |
+| Production and Chromium images built from the tag | Passed |
+| `/ready` and initial setup on a fresh database | Passed |
+| Served OpenAPI matched the tagged file byte for byte | Passed |
+| Tagged Chromium suite | 5 passed |
+
+The suite exercised Admin Studio entry and draft links, the initial request flow, page editing and publication through HTML and the headless API, and WordPress import and history in Studio. This result applies to the tests and product code shipped in `v1.14.0`.
