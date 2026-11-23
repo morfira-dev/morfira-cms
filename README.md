@@ -95,6 +95,10 @@ pnpm install --frozen-lockfile
 pnpm run release:dry-run --no-ci
 ```
 
+## Testing the beta
+
+Use the [public beta tester journey](docs/verification/public-beta.md) to check a tagged build and report a reproducible defect. Use the [security policy](SECURITY.md) for suspected vulnerabilities.
+
 ## Current scope
 
 The initial foundation contains:

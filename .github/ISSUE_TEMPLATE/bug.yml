@@ -1,0 +1,47 @@
+name: Bug report
+description: Report a reproducible problem in Morfira CMS.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This report is public. Use synthetic content and redact secrets and personal data from logs, URLs and screenshots.
+        For suspected vulnerabilities, follow the [security policy](https://github.com/morfira-dev/morfira-cms/security/policy).
+  - type: input
+    id: version
+    attributes:
+      label: Morfira version or commit
+      placeholder: Release tag or commit SHA
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - Installation or upgrade
+        - Admin Studio
+        - Public website
+        - Headless API
+        - WordPress migration
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Include the route or command and the smallest synthetic example that triggers the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Expected and actual behavior
+      description: Include the HTTP status or error message if relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment and diagnostics
+      description: Add the deployment type, browser or WordPress version, and sanitized logs if relevant.
