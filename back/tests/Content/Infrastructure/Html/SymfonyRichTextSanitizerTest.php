@@ -53,4 +53,15 @@ final class SymfonyRichTextSanitizerTest extends TestCase
 
         self::assertSame('<p style="color: teal">Preview</p><span>Unsafe metadata</span><ul><li>Plain item</li></ul><img src="'.$public.'" />', $html);
     }
+
+    public function testRetainsOnlyBoundedHeadingFragmentIdentifiers(): void
+    {
+        $sanitizer = new SymfonyRichTextSanitizer();
+        $html = $sanitizer->sanitize('<h2 id="read-more">Guide</h2><h3 id="раздел.2">Part</h3>'
+            .'<p id="not-a-heading">Text</p><h4 id="has whitespace">Invalid</h4>'
+            .'<h5 id="'.str_repeat('a', 129).'">Too long</h5>');
+
+        self::assertSame('<h2 id="read-more">Guide</h2><h3 id="раздел.2">Part</h3><p>Text</p><h4>Invalid</h4><h5>Too long</h5>', $html);
+        self::assertSame($html, $sanitizer->sanitize($html));
+    }
 }

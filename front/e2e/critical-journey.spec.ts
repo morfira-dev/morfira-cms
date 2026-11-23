@@ -310,14 +310,14 @@ test('owner creates, edits and publishes a page through the production surface',
       <wp:post_id>99001</wp:post_id><wp:post_name>studio-import-page</wp:post_name>
       <wp:post_type>page</wp:post_type><wp:status>publish</wp:status>
       <wp:postmeta><wp:meta_key>_thumbnail_id</wp:meta_key><wp:meta_value>99002</wp:meta_value></wp:postmeta>
-      <content:encoded><![CDATA[<p>Imported through Studio. <a href="https://wordpress.example/legacy/studio-second-page/">Read the second page</a></p>]]></content:encoded></item>
+      <content:encoded><![CDATA[<h1 class="wp-block-heading" id="intro">Introduction</h1><p>Imported through Studio. <a href="https://wordpress.example/legacy/studio-second-page/">Read the second page</a></p>]]></content:encoded></item>
       <item><title>Studio attachment</title><wp:post_id>99002</wp:post_id>
       <wp:post_type>attachment</wp:post_type><wp:status>inherit</wp:status>
       <wp:attachment_url>https://wordpress.example/wp-content/uploads/studio.png</wp:attachment_url></item>
       <item><title>Studio second page</title><link>https://wordpress.example/legacy/studio-second-page/</link>
       <wp:post_id>99003</wp:post_id><wp:post_name>studio-second-page</wp:post_name>
       <wp:post_type>page</wp:post_type><wp:status>publish</wp:status>
-      <content:encoded><![CDATA[<p>Imported in the second batch. <a href="https://wordpress.example/legacy/studio-import-page/#intro">Read the first page</a></p>]]></content:encoded></item>
+      <content:encoded><![CDATA[<p>Imported in the second batch. <a href="https://wordpress.example/?page_id=99001#intro">Read the first page</a></p>]]></content:encoded></item>
       </channel></rss>`),
   }
   await wxrUpload.setInputFiles(studioExport)
@@ -430,6 +430,7 @@ test('owner creates, edits and publishes a page through the production surface',
     type: 'richText', data: { content: expect.stringContaining(href) },
   })])
   expect(firstDraft.blocks).toEqual(richTextWith(originalForwardLink))
+  expect(firstDraft.blocks).toEqual(richTextWith('<h2 id="intro">Introduction</h2>'))
 
   const previewAgain = page.getByRole('button', { name: 'Повторить предпросмотр', exact: true })
   const [remaining] = await Promise.all([importResponse(), previewAgain.click()])
@@ -469,6 +470,14 @@ test('owner creates, edits and publishes a page through the production surface',
     headers: { 'X-CSRF-Token': token },
   })
   expect(publish.ok()).toBeTruthy()
+  const publishTarget = await page.request.post(`/api/v1/admin/pages/${firstDraft.id}/publish`, {
+    data: { version: firstDraft.version },
+    headers: { 'X-CSRF-Token': token },
+  })
+  expect(publishTarget.ok()).toBeTruthy()
+  const fragmentTarget = await request.get('/studio-import-page')
+  expect(fragmentTarget.status()).toBe(200)
+  expect(await fragmentTarget.text()).toContain('<h2 id="intro">Introduction</h2>')
 
   const publicImportedPage = await request.get('/studio-second-page')
   expect(publicImportedPage.status()).toBe(200)
@@ -497,6 +506,15 @@ test('owner creates, edits and publishes a page through the production surface',
   await expect(pageEditor.locator('input[value="Studio import page"]')).toBeVisible()
   await pageEditor.reload()
   await expect(pageEditor.locator('input[value="Studio import page"]')).toBeVisible()
+  const importedHeading = pageEditor.locator('.mw-content h2', { hasText: 'Introduction' })
+  await expect(importedHeading).toHaveAttribute('data-morfira-heading-anchor', 'intro')
+  await importedHeading.click()
+  await pageEditor.keyboard.press('End')
+  await pageEditor.keyboard.insertText(' updated')
+  await pageEditor.getByRole('button', { name: 'Сохранить ревизию', exact: true }).click()
+  await expect.poll(async () => (await getDraft('studio-import-page')).blocks).toEqual(
+    richTextWith('<h2 id="intro">Introduction updated</h2>'),
+  )
   await pageEditor.close()
   await expect(reportRow).toBeVisible()
   await page.getByRole('button', { name: 'Вернуться к истории', exact: true }).click()

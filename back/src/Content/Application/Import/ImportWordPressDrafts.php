@@ -188,7 +188,12 @@ final readonly class ImportWordPressDrafts
                 $path = $draft !== null && self::isPublicLinkTarget($item)
                     ? $row['targetPath']
                     : null;
-                $permalinks[$item['id']] = ['url' => $item['link'], 'path' => $path === '/home' ? '/' : $path];
+                $permalinks[$item['id']] = [
+                    'url' => $item['link'],
+                    'path' => $path === '/home' ? '/' : $path,
+                    'externalId' => $item['id'],
+                    'kind' => $item['type'] === 'page' ? 'page' : 'post',
+                ];
             }
         }
 
@@ -227,7 +232,7 @@ final readonly class ImportWordPressDrafts
 
     /**
      * @param list<SourceItem> $items
-     * @param array<array-key,array{url:string,path:?string}> $permalinks
+     * @param array<array-key,array{url:string,path:?string,externalId:string,kind:'page'|'post'}> $permalinks
      * @param array{page:array<string,string>,post:array<string,string>} $targetPaths
      * @return array<string,string>
      */
@@ -248,7 +253,7 @@ final readonly class ImportWordPressDrafts
             $path = $current === null || ($current['type'] === $record['kind'] && self::isPublicLinkTarget($current))
                 ? ($targetPaths[$record['kind']][$record['targetId']] ?? null)
                 : null;
-            $historical[] = ['url' => $record['url'], 'path' => $path];
+            $historical[] = ['url' => $record['url'], 'path' => $path, 'externalId' => $record['externalId'], 'kind' => $record['kind']];
         }
 
         return WordPressInternalLinks::index($sourceUrl, array_merge($historical, array_values($permalinks)));

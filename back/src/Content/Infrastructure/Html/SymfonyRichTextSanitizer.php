@@ -58,6 +58,7 @@ final readonly class SymfonyRichTextSanitizer implements RichTextSanitizer
             ->allowElement('td', ['colspan', 'rowspan'])
             ->allowAttribute('style', ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'pre', 'span', 'ul', 'ol', 'li', 'img', 'table', 'col', 'td', 'th'])
             ->allowAttribute('dir', ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'pre', 'ul', 'ol', 'li', 'td', 'th'])
+            ->allowAttribute('id', ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
             ->allowElement('a', ['href', 'title', 'target'])
             ->allowLinkSchemes(['http', 'https', 'mailto', 'tel'])
             ->allowRelativeLinks()

@@ -9,7 +9,7 @@ final class WordPressInternalLinks
     private const int MAX_RICH_TEXT_CHARACTERS = 20_000;
 
     /**
-     * @param list<array{url:string,path:?string}> $items
+     * @param list<array{url:string,path:?string,externalId?:string,kind?:'page'|'post'}> $items
      * @return array<string,string>
      */
     public static function index(?string $sourceUrl, array $items): array
@@ -26,15 +26,26 @@ final class WordPressInternalLinks
             if ($key === null) {
                 continue;
             }
-            if (isset($seen[$key])) {
-                unset($links[$key]);
-                continue;
+            $target = $item['path'];
+            $validTarget = $target !== null && preg_match('~\A/(?:[a-z0-9-]+(?:/[a-z0-9-]+)*)?\z~', $target) === 1;
+            $keys = [$key];
+            if ($validTarget && isset($item['externalId'], $item['kind']) && preg_match('/\A[1-9][0-9]{0,19}\z/', $item['externalId']) === 1) {
+                $query = ($item['kind'] === 'page' ? 'page_id=' : 'p=').$item['externalId'];
+                $alias = self::permalinkKey(['path' => '/', 'query' => $query] + $source);
+                if ($alias !== null && $alias !== $key) {
+                    $keys[] = $alias;
+                }
             }
 
-            $seen[$key] = true;
-            $target = $item['path'];
-            if ($target !== null && preg_match('~\A/(?:[a-z0-9-]+(?:/[a-z0-9-]+)*)?\z~', $target) === 1) {
-                $links[$key] = $target;
+            foreach ($keys as $candidate) {
+                if (isset($seen[$candidate])) {
+                    unset($links[$candidate]);
+                    continue;
+                }
+                $seen[$candidate] = true;
+                if ($validTarget) {
+                    $links[$candidate] = $target;
+                }
             }
         }
 

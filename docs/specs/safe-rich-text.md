@@ -36,6 +36,7 @@ The RichText page block stores plain text in a multiline input. Editors need hea
 
 - The existing `richText.data.content` string becomes sanitized HTML without changing its JSON shape.
 - The HTML subset includes headings, lists, tables, checklists, separators, images and captions, mentions, and basic inline formatting. CSS properties and values are restricted by an explicit server allowlist.
+- Heading IDs use a bounded fragment identifier format. Studio preserves these identifiers through its editor while the server remains responsible for validating the stored HTML.
 - Links allow safe HTTP(S), mail, telephone and relative targets. Inline images can use public CMS media variants or explicit HTTPS URLs. Editing by upload uses the existing image pipeline, and inline references prevent CMS asset deletion while referenced by content or revisions.
 - Admin Studio uses the official Morfira WYSIWYG Extended preset and its UI. Markdown, autolink, search, statistics, and suggestions run in Studio. Slash commands include tables, checklists and separators. Mentions search the editor's existing page catalog and insert only the selected page label and identifier.
 - Existing HTML is loaded and changes still submit HTML. Protocol-relative links resolve to the current HTTP(S) scheme when opened for editing. The editor represents link targets with the default browsing context or a new tab.

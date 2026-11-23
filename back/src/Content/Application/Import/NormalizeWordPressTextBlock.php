@@ -27,7 +27,10 @@ final class NormalizeWordPressTextBlock
                 default => null,
             };
             if ($level !== null) {
-                self::replaceTag($document, $block, $level);
+                $heading = self::replaceTag($document, $block, $level);
+                if ($block->hasAttribute('id')) {
+                    $heading->setAttribute('id', $block->getAttribute('id'));
+                }
             }
         } elseif ($block->tagName === 'div' && in_array('wp-block-button', $classes, true)) {
             $children = self::significantChildren($block);

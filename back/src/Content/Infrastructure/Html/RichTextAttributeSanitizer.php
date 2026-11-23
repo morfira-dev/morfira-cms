@@ -20,7 +20,7 @@ final class RichTextAttributeSanitizer implements AttributeSanitizerInterface
 
     public function getSupportedAttributes(): array
     {
-        return ['src', 'style', 'dir', 'start', 'reversed', 'scope', 'width', 'height', 'span', 'colspan', 'rowspan',
+        return ['src', 'style', 'dir', 'id', 'start', 'reversed', 'scope', 'width', 'height', 'span', 'colspan', 'rowspan',
             'data-checklist-checked', 'data-mw-node', 'data-mention-id'];
     }
 
@@ -30,6 +30,7 @@ final class RichTextAttributeSanitizer implements AttributeSanitizerInterface
             'src' => $element === 'img' && $this->allowsImageSource($value) ? $value : null,
             'style' => $this->sanitizeStyle($element, $value),
             'dir' => in_array($value, ['ltr', 'rtl'], true) ? $value : null,
+            'id' => preg_match('/\A[\pL\pN_-][\pL\pN_.:-]{0,127}\z/u', $value) === 1 ? $value : null,
             'start' => preg_match('/\A[+-]?[0-9]{1,10}\z/', $value) === 1 && (int) $value >= -2147483648 && (int) $value <= 2147483647 ? (string) (int) $value : null,
             'reversed' => '',
             'scope' => in_array($value, ['row', 'col', 'rowgroup', 'colgroup'], true) ? $value : null,

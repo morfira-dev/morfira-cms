@@ -198,6 +198,8 @@ final readonly class SegmentWordPressImages
                     $attributes .= ' '.$attribute.'="'.self::escape($element->getAttribute($attribute)).'"';
                 }
             }
+        } elseif (in_array($tag, ['h2', 'h3', 'h4'], true) && $element->hasAttribute('id') && $element->getElementsByTagName('img')->length === 0) {
+            $attributes = ' id="'.self::escape($element->getAttribute('id')).'"';
         }
 
         return '<'.$tag.$attributes.'>';

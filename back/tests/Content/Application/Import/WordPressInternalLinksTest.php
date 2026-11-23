@@ -81,4 +81,26 @@ final class WordPressInternalLinksTest extends TestCase
         self::assertSame($fullHtml, WordPressInternalLinks::rewrite($fullHtml, $links));
         self::assertSame([], WordPressInternalLinks::index(null, [['url' => 'https://wp.test/a', 'path' => '/article']]));
     }
+
+    public function testMatchesExactWordPressIdAliasesWithoutBroadeningEligibility(): void
+    {
+        $links = WordPressInternalLinks::index('https://wp.test:8443', [
+            ['url' => 'https://wp.test:8443/guide/', 'path' => '/guide', 'externalId' => '5', 'kind' => 'page'],
+            ['url' => 'https://wp.test:8443/?p=8', 'path' => '/content/news', 'externalId' => '8', 'kind' => 'post'],
+            ['url' => 'https://wp.test:8443/private/', 'path' => null, 'externalId' => '9', 'kind' => 'page'],
+            ['url' => 'https://other.test:8443/post/', 'path' => '/foreign', 'externalId' => '10', 'kind' => 'post'],
+            ['url' => 'https://wp.test:8443/colliding/', 'path' => '/colliding', 'externalId' => '11', 'kind' => 'page'],
+            ['url' => 'https://wp.test:8443/?page_id=11', 'path' => null, 'externalId' => '12', 'kind' => 'page'],
+        ]);
+
+        self::assertSame([
+            'wp.test:8443/guide' => '/guide',
+            'wp.test:8443/?page_id=5' => '/guide',
+            'wp.test:8443/?p=8' => '/content/news',
+            'wp.test:8443/colliding' => '/colliding',
+        ], $links);
+        self::assertSame('<a href="/guide#read-more">Guide</a>', WordPressInternalLinks::rewrite(
+            '<a href="https://wp.test:8443/?page_id=5#read-more">Guide</a>', $links,
+        ));
+    }
 }

@@ -32,7 +32,11 @@ The [rehearsal fixture](../../scripts/fixtures/wordpress-rehearsal/README.md) pr
 | Publication | Three representative legacy paths returned direct `301` responses to destinations returning `200`. The page and post headless payloads resolved. The unpublished post stayed `404`. The image URL responded with `200`, and the rendered image caption, alt text and Gutenberg quotation were present. |
 | Internal links and fragments | The WXR item's canonical path and the body’s `?page_id=` alias differed. The imported body retained the WordPress alias links. The target heading text survived while `id="read-more"` was absent in Morfira HTML. |
 
-The first remediation is to reconcile WXR and REST author identities for the same installation while preserving existing author relations. The other remediation is to resolve exact WordPress ID aliases alongside canonical permalinks and retain safe heading fragments. These findings apply to the native fixture and remain candidates for verification on the first pilot site.
+### Rehearsal after the fixes
+
+Re-running the same export on a fresh MariaDB target imported seven materials. WXR replay reused all seven. Replay of the five public materials from REST reused the image and the same two author profile IDs as WXR. After publication, the About page linked to `/rehearsal-guide#read-more`, which resolved to the retained heading ID. The Guide and News items linked back to `/rehearsal-about`. The three legacy paths still returned direct `301` responses. The Studio browser journey also verified the heading ID after editing and saving a new revision.
+
+Existing draft revisions and author profile records retain their content and associations. Replaying an older WXR export with author IDs can establish the shared mapping for previously imported authors. The original migration and its remediation both used synthetic source content. Verify the same cases on the first pilot site.
 
 The [REST replay helper](../../scripts/fixtures/wordpress-rehearsal/replay-rest.php) reads the captured first page of each public collection in a disposable Morfira container. Copy `inventory.json`, `rest/` and `uploads/` into a local container directory and copy the helper into the container. For example, from the application working directory:
 

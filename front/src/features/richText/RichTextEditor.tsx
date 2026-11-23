@@ -5,6 +5,7 @@ import '@morfira-dev/wysiwyg-plugins/tables.css'
 import '@morfira-dev/wysiwyg-plugins/ui/editor.css'
 import '@morfira-dev/wysiwyg-plugins/ui/forms.css'
 import '@morfira-dev/wysiwyg-plugins/ui/search-highlights.css'
+import type { EditorPlugin } from '@morfira-dev/wysiwyg-core'
 import { checklists, checklistCommands } from '@morfira-dev/wysiwyg-plugins/checklists'
 import { horizontalRuleCommands } from '@morfira-dev/wysiwyg-plugins/horizontal-rule'
 import { createExtendedPreset } from '@morfira-dev/wysiwyg-plugins/presets/extended'
@@ -34,6 +35,19 @@ const slashOptions = [
   ['checklist', 'Checklist'], ['horizontalRule', 'Horizontal rule'],
 ] as const
 
+const headings = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'] as const
+const headingAnchorAttribute = 'data-morfira-heading-anchor'
+const headingAnchors: EditorPlugin = {
+  name: 'morfira-heading-anchors',
+  schema: headings.map((tag) => ({
+    name: `morfira:heading-anchor:${tag}`,
+    kind: 'attributes',
+    tag,
+    attributes: { [headingAnchorAttribute]: { type: 'text', maxLength: 256, singleLine: true } },
+  })),
+  setup() {},
+}
+
 export function RichTextEditor({ value, onChange, label, required = false }: RichTextEditorProps) {
   const { locale, t } = useAdminLocale()
   const translate = useRef(t)
@@ -42,7 +56,7 @@ export function RichTextEditor({ value, onChange, label, required = false }: Ric
   const toolbarRef = useRef<HTMLDivElement>(null)
   const accessibleLabel = label ?? t('Rich text content')
   const placeholder = t('Start writing useful content…')
-  const html = useMemo(() => normalizeLegacyLinks(value), [value])
+  const html = useMemo(() => convertHeadingAnchors(normalizeLegacyLinks(value), 'id', headingAnchorAttribute), [value])
   const preset = useMemo(() => createExtendedPreset({
     images: {
       maxFileSize: 10 * 1024 * 1024,
@@ -78,7 +92,7 @@ export function RichTextEditor({ value, onChange, label, required = false }: Ric
           .slice(0, limit)
       },
     },
-    plugins: [checklists()],
+    plugins: [checklists(), headingAnchors],
   }), [])
 
   useLayoutEffect(() => {
@@ -117,10 +131,25 @@ export function RichTextEditor({ value, onChange, label, required = false }: Ric
         label={accessibleLabel}
         locale={locale}
         placeholder={placeholder}
-        onChange={({ html: nextHtml }) => onChange(nextHtml)}
+        onChange={({ html: nextHtml }) => onChange(convertHeadingAnchors(nextHtml, headingAnchorAttribute, 'id'))}
       />
     </Stack>
   )
+}
+
+function convertHeadingAnchors(html: string, from: string, to: string): string {
+  if (!html.includes(` ${from}=`)) return html
+
+  const template = document.createElement('template')
+  template.innerHTML = html
+  const selector = headings.map((tag) => `${tag}[${from}]`).join(',')
+  for (const heading of template.content.querySelectorAll(selector)) {
+    const fragment = heading.getAttribute(from) ?? ''
+    heading.removeAttribute(from)
+    if (/^[\p{L}\p{N}_-][\p{L}\p{N}_.:-]{0,127}$/u.test(fragment)) heading.setAttribute(to, fragment)
+  }
+
+  return template.innerHTML
 }
 
 function normalizeLegacyLinks(html: string): string {

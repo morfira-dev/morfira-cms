@@ -21,7 +21,7 @@ final class NormalizeWordPressTextBlockTest extends TestCase
             .'<div class="wp-block-button"><a href="javascript:bad()" onclick="bad()">Unsafe target</a></div>',
         );
 
-        self::assertStringContainsString('<h2>An <em>article</em></h2><h4>Section</h4><h4>Subsection</h4>', $html);
+        self::assertStringContainsString('<h2 id="article">An <em>article</em></h2><h4>Section</h4><h4>Subsection</h4>', $html);
         self::assertStringContainsString('<p><a href="/article" rel="noopener noreferrer">Read the article</a></p>', $html);
         self::assertStringContainsString('Unsafe target</a></p>', $html);
         self::assertStringNotContainsString('bad()', $html);

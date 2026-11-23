@@ -84,14 +84,14 @@ final class SegmentWordPressImagesTest extends TestCase
     {
         $segment = new SegmentWordPressImages(new SymfonyRichTextSanitizer());
         $result = $segment(
-            '<h1 class="wp-block-heading">Imported heading</h1>'
+            '<h1 class="wp-block-heading" id="intro">Imported heading</h1>'
                 .'<template><h1 class="wp-block-heading">Discarded heading</h1></template>'
                 .'<p class="wp-block-paragraph">Imported paragraph</p>',
             static fn (string $source, ?string $wordpressId): never => throw new \LogicException('Text blocks do not resolve images.'),
         );
 
         self::assertSame([
-            'segments' => [['type' => 'richText', 'html' => '<h2>Imported heading</h2><p>Imported paragraph</p>']],
+            'segments' => [['type' => 'richText', 'html' => '<h2 id="intro">Imported heading</h2><p>Imported paragraph</p>']],
             'missingImages' => 0,
         ], $result);
     }
