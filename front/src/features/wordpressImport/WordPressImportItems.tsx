@@ -1,11 +1,14 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useAdminLocale } from '../../i18n/AdminLocaleProvider'
 import type { MessageKey } from '../../i18n/messages'
 import {
   Alert, Button, Checkbox, MenuItem, Stack, Table, TableBody, TableCell, TableContainer,
   TableHead, TablePagination, TableRow, TextField, Typography,
 } from '../../ui'
-import { filterImportItems, type WordPressImportItem } from './filterImportItems'
+import {
+  countImportReviewIssues, filterImportItems, importReviewIssues,
+  type ImportReviewFilter, type WordPressImportItem,
+} from './filterImportItems'
 import type { WordPressImportReport } from './api'
 import { IMPORT_REPORT_PAGE_SIZE, importPaginationLabels, importReasonKey, importStatusKey } from './reportPresentation'
 
@@ -21,6 +24,16 @@ const redirectLabels = new Map<string, MessageKey>([
   ['conflict', 'Redirect conflict'],
   ['unsupported', 'Redirect URL is unsupported'],
 ])
+
+const reviewFilters = ['any', ...importReviewIssues] as const
+
+const reviewLabels: Record<(typeof reviewFilters)[number], MessageKey> = {
+  any: 'Materials with issues',
+  inlineImages: 'Missing inline images',
+  featuredImage: 'Missing featured images',
+  author: 'Missing author profiles',
+  redirect: 'Redirect issues',
+}
 
 function ItemStatus({ item }: { item: WordPressImportItem }) {
   const { t } = useAdminLocale()
@@ -80,15 +93,18 @@ export function WordPressImportItems({ items, input, selection }: {
   selection?: ImportItemSelection
 }) {
   const { t } = useAdminLocale()
+  const reviewHeadingId = useId()
   const [search, setSearch] = useState('')
   const [type, setType] = useState('')
   const [state, setState] = useState('')
+  const [issue, setIssue] = useState<ImportReviewFilter>('')
   const [page, setPage] = useState(0)
 
   function clearFilters() {
     setSearch('')
     setType('')
     setState('')
+    setIssue('')
     setPage(0)
   }
 
@@ -99,12 +115,34 @@ export function WordPressImportItems({ items, input, selection }: {
   }
 
   const states = [...new Set(items.map((item) => item.state))]
-  const matches = filterImportItems(items, { search, type, state })
+  const issueCounts = countImportReviewIssues(items)
+  const matches = filterImportItems(items, { search, type, state, issue })
   const matchingPlannedIds = selection ? matches.filter((item) => item.state === 'planned').map((item) => item.id) : []
   const offset = page * IMPORT_REPORT_PAGE_SIZE
 
   return (
     <Stack spacing={2}>
+      {issueCounts.any > 0 && (
+        <Stack component="section" aria-labelledby={reviewHeadingId} spacing={1}>
+          <Typography id={reviewHeadingId} component="h3" variant="subtitle1">{t('Material review')}</Typography>
+          <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+            {reviewFilters.filter((filter) => issueCounts[filter] > 0).map((filter) => (
+              <Button
+                key={filter}
+                size="small"
+                variant={issue === filter ? 'contained' : 'outlined'}
+                aria-pressed={issue === filter}
+                onClick={() => {
+                  setIssue((current) => current === filter ? '' : filter)
+                  setPage(0)
+                }}
+              >
+                {t('{{label}} · {{count}}', { label: t(reviewLabels[filter]), count: issueCounts[filter] })}
+              </Button>
+            ))}
+          </Stack>
+        </Stack>
+      )}
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
         <TextField
           size="small"
@@ -148,7 +186,7 @@ export function WordPressImportItems({ items, input, selection }: {
             return <MenuItem key={value} value={value}>{key ? t(key) : value}</MenuItem>
           })}
         </TextField>
-        {(search || type || state) && (
+        {(search || type || state || issue) && (
           <Button size="small" onClick={clearFilters} sx={{ alignSelf: { xs: 'flex-start', md: 'center' }, flexShrink: 0 }}>
             {t('Clear filters')}
           </Button>

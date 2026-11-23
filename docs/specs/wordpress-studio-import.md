@@ -18,6 +18,7 @@ Site owners need to import WordPress pages and posts without shell access. Admin
 6. Owners can download the complete current report as JSON, including rows outside the active filters.
 7. Planned rows are selected by default. Owners can change the selection row by row or across the current filter results and apply a subset. Changing filters preserves the selection.
 8. Owners can preview the source again with the same key and continue with materials that remain eligible.
+9. In a preview, apply result, or saved report, owners can use the material review summary to find missing inline images, missing featured images, missing author profiles, and conflicting or unsupported redirect URLs. Each category counts affected materials across the report. The combined count includes each affected material once.
 
 ## Contract and limits
 
@@ -37,6 +38,8 @@ Malformed selections, unknown page or post IDs, and selections supplied with dry
 
 Report search, filtering and download run in the current browser page. Studio does not retain a report after navigation or a source change. The JSON omits raw WXR, WordPress logins and protected item titles.
 
+The material review summary uses the diagnostics already present on report items. It displays only categories with affected materials and is hidden when none are present. Choosing a category or all affected materials applies a filter before pagination and returns the table to the first page. This filter combines with title, ID, path, type and import status filters. Clearing the table filters restores all materials. Review filters preserve the staged import selection and leave the downloaded report complete. A diagnostic flags a row for review without changing its import eligibility.
+
 ## Acceptance criteria and verification
 
 - [x] A site owner can upload WXR, review its report, and explicitly apply it through Studio.
@@ -47,3 +50,4 @@ Report search, filtering and download run in the current browser page. Studio do
 - [x] The browser can export a complete report in both modes independently of the current filters.
 - [x] Owners can import selected planned rows across filters and return for the remaining drafts.
 - [x] The API rejects malformed or unknown selections and only imports selected drafts and their associated data.
+- [x] Owners can filter all three report views by reported migration issues, observe accurate counts when issues overlap, and clear the filter without changing selected drafts or the complete JSON export. Covered by [unit tests](../../front/src/features/wordpressImport/filterImportItems.test.ts) and a [Chromium scenario](../../front/e2e/wordpress-material-review.spec.ts).

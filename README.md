@@ -145,6 +145,8 @@ In Admin Studio, owners can open **WordPress import**, choose a WXR export or a 
 
 Studio owners can revisit completed imports in **Import history**, filter runs by source key, input format and import scope, download saved reports and open newly created drafts in a separate tab. See the [import history specification](docs/specs/wordpress-studio-import-history.md).
 
+Use **Material review** in a preview, result, or saved report to find drafts affected by missing images, missing author profiles or redirect problems. Its filters combine with the material search and leave the selected drafts and JSON export intact.
+
 Export a WXR file (1.0–1.2, up to 8 MiB and 5,000 items) from WordPress. Start the Morfira stack and apply pending migrations before using the importer. For the development stack, run:
 
 ```bash
