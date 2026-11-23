@@ -74,7 +74,9 @@ docker compose run --rm --no-deps front pnpm run check
 
 ## Releases
 
-Releases are created automatically from Conventional Commits after a verified push to `main`.
+The **Verify candidate** job runs dependency license checks, backend and frontend checks, and the production browser and WordPress import rehearsal for pull requests targeting `main` and pushes to `main`. Pull-request verification uses read-only repository permissions.
+
+The **Publish release** job runs semantic-release after successful verification on a push to `main` or a manual run from `main`. Releases are created automatically from Conventional Commits.
 
 - `feat` creates a minor release;
 - `fix`, `perf` and `refactor` create a patch release;
