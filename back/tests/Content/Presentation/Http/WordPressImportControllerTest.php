@@ -670,7 +670,7 @@ final class WordPressImportControllerTest extends WebTestCase
         });
         $ledger->expects(self::once())->method('recordAuthor');
         $ledger->expects(self::never())->method('recordMediaAsset');
-        $ledger->method('mediaAssetId')->with('legacy-site', '20')->willReturn($assetId->value);
+        $ledger->expects(self::atLeastOnce())->method('mediaAssetId')->with('legacy-site', '20')->willReturn($assetId->value);
         $transactionDepth = 0;
         $ledger->method('transactional')->willReturnCallback(static function (\Closure $operation) use (&$transactionDepth): mixed {
             ++$transactionDepth;

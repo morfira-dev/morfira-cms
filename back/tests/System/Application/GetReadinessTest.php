@@ -14,11 +14,11 @@ final class GetReadinessTest extends TestCase
     #[Test]
     public function it_reports_database_availability_without_exposing_errors(): void
     {
-        $readyConnection = $this->createMock(Connection::class);
+        $readyConnection = $this->createStub(Connection::class);
         $readyConnection->method('fetchOne')->willReturn(1);
         self::assertTrue((new GetReadiness($readyConnection))()->ready);
 
-        $failedConnection = $this->createMock(Connection::class);
+        $failedConnection = $this->createStub(Connection::class);
         $failedConnection->method('fetchOne')->willThrowException(new \RuntimeException('secret connection details'));
         self::assertFalse((new GetReadiness($failedConnection))()->ready);
     }

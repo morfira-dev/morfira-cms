@@ -16,7 +16,7 @@ final class MaintenanceModeSubscriberTest extends TestCase
     #[Test]
     public function it_blocks_application_traffic_but_preserves_health_checks(): void
     {
-        $kernel = $this->createMock(HttpKernelInterface::class);
+        $kernel = $this->createStub(HttpKernelInterface::class);
         $subscriber = new MaintenanceModeSubscriber(true);
         $apiEvent = new RequestEvent($kernel, Request::create('/api/v1/content/pages/home'), HttpKernelInterface::MAIN_REQUEST);
         $subscriber->onRequest($apiEvent);
