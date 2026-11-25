@@ -555,6 +555,136 @@ test('owner creates, edits and publishes a page through the production surface',
     })
   })
 
+  await test.step('applies an owner decision to the exact submitted page revision', async () => {
+    const title = 'Editorial review target'
+    const slug = 'editorial-review-target'
+    const publishedHeading = 'Public edition before editorial review'
+    const submittedHeading = 'Submitted editorial revision'
+    const laterHeading = 'Later draft outside the editorial review'
+    const editorEmail = 'editorial-review-editor@morfira.test'
+    const editorPassword = randomUUID()
+
+    const [csrf, ownerIdentity] = await Promise.all([
+      page.request.get('/api/v1/auth/csrf'),
+      page.request.get('/api/v1/auth/me'),
+    ])
+    expect(csrf.status()).toBe(200)
+    expect(ownerIdentity.status()).toBe(200)
+    const { token } = await csrf.json() as components['schemas']['CsrfToken']
+    const { id: ownerId } = await ownerIdentity.json() as components['schemas']['AuthenticatedUser']
+    const headers = { 'X-CSRF-Token': token }
+    const createEditor = await page.request.post('/api/v1/admin/users', {
+      headers, data: { email: editorEmail, password: editorPassword, role: 'editor' },
+    })
+    expect(createEditor.status()).toBe(201)
+    const { id: editorId } = await createEditor.json() as components['schemas']['UserSummary']
+    const createDraft = await page.request.post('/api/v1/admin/pages', {
+      headers, data: { title, slug, locale: 'en' },
+    })
+    expect(createDraft.status()).toBe(201)
+    const draft = await createDraft.json() as components['schemas']['Page']
+    const firstSave = await page.request.put(`/api/v1/admin/pages/${draft.id}`, {
+      headers,
+      data: {
+        title, slug, version: draft.version, seo: draft.seo, layout: draft.layout, locale: draft.locale,
+        translationGroupId: draft.translationGroupId,
+        blocks: [{ id: randomUUID(), type: 'hero', data: { heading: publishedHeading } }],
+      } satisfies components['schemas']['UpdatePageRequest'],
+    })
+    expect(firstSave.status()).toBe(200)
+    const baseline = await firstSave.json() as components['schemas']['Page']
+    const publish = await page.request.post(`/api/v1/admin/pages/${draft.id}/publish`, {
+      headers, data: { version: baseline.version },
+    })
+    expect(publish.status()).toBe(200)
+    const submittedVersion = baseline.version + 1
+
+    const editorContext = await browser.newContext()
+    try {
+      const editor = await editorContext.newPage()
+      await editor.goto(`/admin/pages?draft=${draft.id}`)
+      await editor.getByLabel('Email').fill(editorEmail)
+      await editor.getByLabel('Password').fill(editorPassword)
+      await editor.getByRole('button', { name: 'Sign in', exact: true }).click()
+      await editor.getByRole('button', { name: 'Interface language' }).click()
+      await expect(editor.getByRole('heading', { name: 'Изменение страницы', exact: true })).toBeVisible()
+
+      const heading = editor.getByLabel('Заголовок блока')
+      const save = editor.getByRole('button', { name: 'Сохранить ревизию', exact: true })
+      const submit = editor.getByRole('button', { name: 'Отправить на проверку', exact: true })
+      await expect(heading).toHaveValue(publishedHeading)
+      await heading.fill(submittedHeading)
+      await expect(submit).toBeDisabled()
+      await save.click()
+      await expect(editor.getByText(`Ревизия черновика ${submittedVersion}`, { exact: true })).toBeVisible()
+      const [submission] = await Promise.all([
+        editor.waitForResponse((response) => response.url().endsWith(`/api/v1/admin/pages/${draft.id}/reviews`)
+          && response.request().method() === 'POST'),
+        submit.click(),
+      ])
+      expect(submission.status()).toBe(201)
+      expect(submission.request().postDataJSON()).toEqual({ revision: submittedVersion })
+      const review = await submission.json() as components['schemas']['PageReview']
+      expect(review).toMatchObject({ revision: submittedVersion, status: 'pending', submittedBy: editorId })
+      await editor.getByRole('dialog').getByRole('button', { name: 'Закрыть', exact: true }).click()
+      await heading.fill(laterHeading)
+      await save.click()
+      await expect(editor.getByText(`Ревизия черновика ${submittedVersion + 1}`, { exact: true })).toBeVisible()
+
+      const editorCsrf = await editor.request.get('/api/v1/auth/csrf')
+      expect(editorCsrf.status()).toBe(200)
+      const { token: editorToken } = await editorCsrf.json() as components['schemas']['CsrfToken']
+      const denied = await editor.request.patch(`/api/v1/admin/page-reviews/${review.id}`, {
+        headers: { 'X-CSRF-Token': editorToken },
+        data: { status: 'approved' },
+      })
+      expect(denied.status()).toBe(403)
+
+      await page.goto('/admin/pages')
+      await page.getByRole('button', { name: 'Очередь согласований', exact: true }).click()
+      const queue = page.getByRole('dialog', { name: 'Очередь согласований', exact: true })
+      const reviewRow = queue.getByRole('row').filter({ hasText: title })
+      await expect(reviewRow.getByRole('cell', { name: String(submittedVersion), exact: true })).toBeVisible()
+      await expect(reviewRow.getByRole('cell', { name: 'На проверке', exact: true })).toBeVisible()
+      const [decision] = await Promise.all([
+        page.waitForResponse((response) => response.url().endsWith(`/api/v1/admin/page-reviews/${review.id}`)
+          && response.request().method() === 'PATCH'),
+        reviewRow.getByRole('button', { name: 'Одобрить', exact: true }).click(),
+      ])
+      expect(decision.status()).toBe(200)
+      await expect(decision.json()).resolves.toMatchObject({
+        id: review.id, revision: submittedVersion, status: 'approved', decidedBy: ownerId,
+      })
+      await queue.getByRole('combobox', { name: 'Статус согласования', exact: true }).click()
+      await page.getByRole('option', { name: 'Все статусы', exact: true }).click()
+      await expect(reviewRow.getByRole('cell', { name: String(submittedVersion), exact: true })).toBeVisible()
+      await expect(reviewRow.getByRole('cell', { name: 'Одобрено', exact: true })).toBeVisible()
+
+      const [latest, liveHtml, liveApi] = await Promise.all([
+        page.request.get(`/api/v1/admin/pages/${draft.id}`),
+        request.get(`/${slug}`),
+        request.get(`/api/v1/content/pages/${slug}`),
+      ])
+      expect(latest.status()).toBe(200)
+      await expect(latest.json()).resolves.toMatchObject({
+        version: submittedVersion + 1,
+        blocks: [{ type: 'hero', data: { heading: laterHeading } }],
+      })
+      expect(liveHtml.status()).toBe(200)
+      const body = await liveHtml.text()
+      expect(body).toContain(publishedHeading)
+      expect(body).not.toContain(submittedHeading)
+      expect(body).not.toContain(laterHeading)
+      expect(liveApi.status()).toBe(200)
+      await expect(liveApi.json()).resolves.toMatchObject({
+        sourceRevision: baseline.version,
+        blocks: [{ type: 'hero', data: { heading: publishedHeading } }],
+      })
+    } finally {
+      await editorContext.close()
+    }
+  })
+
   await page.goto('/admin/content-types')
   await expect(page.getByRole('heading', { name: 'Типы контента' })).toBeVisible()
   await page.getByLabel('Название').first().fill('Articles')

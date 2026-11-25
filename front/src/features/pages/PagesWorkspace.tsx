@@ -46,6 +46,8 @@ import { RichTextEditor } from '../richText/RichTextEditor'
 import { createUuid } from '../../utils/createUuid'
 import { getReusableSections, getThemes, type ReusableSection, type Theme } from './catalogApi'
 import { PageSectionsPanel } from './PageSectionsPanel'
+import { PageReviewActions } from './PageReviewActions'
+import { PageReviewDialog } from './PageReviewDialog'
 import { duplicatePageBlock, movePageBlock, removePageBlock, richTextPreview, type PageComposition } from './pageBuilder'
 import { getSiteSettings } from '../settings/api'
 import { useAdminLocale } from '../../i18n/AdminLocaleProvider'
@@ -56,11 +58,12 @@ import { scheduleAbortableLoad } from '../../utils/scheduleAbortableLoad'
 const publicSiteUrl = import.meta.env.VITE_PUBLIC_SITE_URL || window.location.origin
 
 interface PagesWorkspaceProps {
+  isOwner: boolean
   mediaAssets: MediaAsset[]
   navigationMenus: NavigationMenu[]
 }
 
-export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceProps) {
+export function PagesWorkspace({ isOwner, mediaAssets, navigationMenus }: PagesWorkspaceProps) {
   const { formatDateTime, locale: adminLocale, t } = useAdminLocale()
   const [pages, setPages] = useState<PageSummary[]>([])
   const [loading, setLoading] = useState(true)
@@ -77,6 +80,7 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
   const [translationSourceId, setTranslationSourceId] = useState('')
   const [editing, setEditing] = useState<PageSummary | null>(null)
   const [editingDirty, setEditingDirty] = useState(false)
+  const [reviewQueueOpen, setReviewQueueOpen] = useState(false)
   const [publication, setPublication] = useState<PublishedPage | null>(null)
   const [redirects, setRedirects] = useState<PublishedRedirect[]>([])
   const [redirectSlug, setRedirectSlug] = useState('')
@@ -418,14 +422,18 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
 
   return (
     <Stack spacing={3}>
-      <div>
-        <Typography component="h1" variant="h1">
-          {t('Pages')}
-        </Typography>
-        <Typography color="text.secondary" sx={{ mt: 0.75 }}>
-          {t('Create the first draft. Blocks, preview and publishing will build on this content contract.')}
-        </Typography>
-      </div>
+      <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ gap: 2, alignItems: { xs: 'flex-start', sm: 'center' }, justifyContent: 'space-between' }}>
+        <div>
+          <Typography component="h1" variant="h1">
+            {t('Pages')}
+          </Typography>
+          <Typography color="text.secondary" sx={{ mt: 0.75 }}>
+            {t('Create the first draft. Blocks, preview and publishing will build on this content contract.')}
+          </Typography>
+        </div>
+        <Button variant="outlined" onClick={() => setReviewQueueOpen(true)}>{t('Review queue')}</Button>
+      </Stack>
+      {reviewQueueOpen && <PageReviewDialog isOwner={isOwner} onClose={() => setReviewQueueOpen(false)} />}
 
       {draftLinkError && <Alert severity="error">{t(draftLinkError)}</Alert>}
       {error && <Alert severity="error">{error}</Alert>}
@@ -545,8 +553,15 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
               {editingDirty && (
                 <Alert severity="warning">{t('Save this revision before publishing it.')}</Alert>
               )}
+              <PageReviewActions
+                key={`reviews-${editorAttempt}`}
+                pageId={editing.id}
+                revision={editing.version}
+                isOwner={isOwner}
+                disabled={editingDirty || saving || deleting || restoringRevision !== null}
+              />
 
-              {publication && (
+              {publication && publication.pageId === editing.id && (
                 <Alert severity="success">
                   {t('Revision {{revision}} is live at', { revision: publication.sourceRevision })}{' '}
                   <a href={`${publicSiteUrl}${publication.url}`} target="_blank" rel="noreferrer">{publication.url}</a>
@@ -752,7 +767,7 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
               </Stack>
 
               <PageSectionsPanel
-                key={editorAttempt}
+                key={`sections-${editorAttempt}`}
                 page={{ blocks: editing.blocks, sectionLinks: editing.sectionLinks ?? [] }}
                 editingPageId={editing.id}
                 pageLocale={editing.locale}

@@ -136,6 +136,7 @@ The initial foundation contains:
 - manually managed direct permanent redirects for active page routes;
 - owner-managed site identity and regional defaults with optimistic locking;
 - visible immutable page revision history and append-only draft restoration;
+- [editorial reviews](docs/specs/page-editorial-review.md) for saved page revisions, with a Studio queue, owner decisions, and per-page history;
 - locale-aware page variants grouped as translations, with stable default and prefixed public URLs, canonical links and `hreflang` alternates;
 - a visual page canvas with selection, drag-and-drop ordering, keyboard move controls, duplication and removal;
 - deployment-trusted theme packages with catalog-backed template selection and two bundled themes;
@@ -147,7 +148,7 @@ The initial foundation contains:
 - versioned `/api/v1` contracts with frontend types generated from OpenAPI 3.1;
 - architectural decision records.
 
-Remote theme/extension installation, live-linked sections and advanced editorial workflows are intentionally deferred. They will be introduced through vertical slices and explicit ADRs.
+Remote theme and extension installation, automatic synchronization of linked sections, historical review previews, and approval policies remain planned.
 
 ## Import drafts from WordPress
 

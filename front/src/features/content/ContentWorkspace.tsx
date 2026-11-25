@@ -92,7 +92,7 @@ export function ContentWorkspace({ route, isOwner, currentUserId, currentAdminLo
   }, [route])
 
   let workspace
-  if (route === 'pages') workspace = <PagesWorkspace mediaAssets={assets} navigationMenus={navigationMenus} />
+  if (route === 'pages') workspace = <PagesWorkspace isOwner={isOwner} mediaAssets={assets} navigationMenus={navigationMenus} />
   else if (route === 'media') workspace = <MediaLibrary assets={assets} loading={loadingMedia} onChange={setAssets} />
   else if (route === 'navigation') workspace = <NavigationWorkspace />
   else if (route === 'content-types') workspace = <ContentTypesWorkspace contentTypes={contentTypes} loading={loadingContentTypes} onChange={setContentTypes} />

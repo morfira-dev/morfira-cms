@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 use Cms\Content\Domain\PageRepository;
+use Cms\Content\Domain\PageReviewRepository;
 use Cms\Content\Infrastructure\Persistence\DoctrinePageRepository;
+use Cms\Content\Infrastructure\Persistence\DoctrinePageReviewRepository;
 use Cms\Publishing\Domain\PublishedPageRepository;
 use Cms\Publishing\Domain\ImportedRedirectRepository;
 use Cms\Publishing\Infrastructure\Persistence\DoctrineImportedRedirectRepository;
@@ -84,6 +86,7 @@ return static function (ContainerConfigurator $container): void {
         ]);
 
     $services->alias(PageRepository::class, DoctrinePageRepository::class);
+    $services->alias(PageReviewRepository::class, DoctrinePageReviewRepository::class);
     $services->alias(PublishedPageRepository::class, DoctrinePublishedPageRepository::class);
     $services->alias(ImportedRedirectRepository::class, DoctrineImportedRedirectRepository::class);
     $services->alias(UserRepository::class, DoctrineUserRepository::class);

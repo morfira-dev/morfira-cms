@@ -1058,6 +1058,79 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /api/v1/admin/page-reviews:
+    get:
+      operationId: listPageReviews
+      tags: [Admin Content]
+      summary: List editorial reviews for saved page revisions
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - { name: pageId, in: query, schema: { type: string, format: uuid } }
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/PageReviewStatus' } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 100 } }
+      responses:
+        '200':
+          description: Reviews in newest-first submission order.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PageReviewCollection' }
+        '401': { description: Authentication required. }
+        '403': { description: Editor role required. }
+        '422': { description: Invalid filter. }
+  /api/v1/admin/pages/{id}/reviews:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: createPageReview
+      tags: [Admin Content]
+      summary: Submit a saved page revision for review
+      security: [{ sessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/CsrfTokenHeader' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreatePageReviewRequest' }
+      responses:
+        '200':
+          description: Review already exists for this exact revision.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PageReview' }
+        '201':
+          description: Review created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PageReview' }
+        '401': { description: Authentication required. }
+        '403': { description: Editor role or valid CSRF token required. }
+        '404': { description: Page revision not found. }
+        '422': { description: Invalid page identifier or revision. }
+  /api/v1/admin/page-reviews/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      operationId: decidePageReview
+      tags: [Admin Content]
+      summary: Decide a pending page review as an owner
+      security: [{ sessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/CsrfTokenHeader' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DecidePageReviewRequest' }
+      responses:
+        '200':
+          description: The recorded decision and its actor.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PageReview' }
+        '401': { description: Authentication required. }
+        '403': { description: Owner role or valid CSRF token required. }
+        '404': { description: Review not found. }
+        '409': { description: The review has already been decided. }
+        '422': { description: Invalid decision or absent changes-requested comment. }
   /api/v1/admin/pages/{id}/revisions:
     parameters:
       - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
@@ -3801,6 +3874,48 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Page'
+    PageReviewStatus:
+      type: string
+      enum: [pending, approved, changes_requested]
+    PageReview:
+      type: object
+      additionalProperties: false
+      required: [id, pageId, pageTitle, pageSlug, locale, revision, status, submittedBy, submittedAt, decidedBy, decidedAt, comment]
+      properties:
+        id: { type: string, format: uuid }
+        pageId: { type: string, format: uuid }
+        pageTitle: { type: string }
+        pageSlug: { type: string }
+        locale: { $ref: '#/components/schemas/Locale' }
+        revision: { type: integer, minimum: 1 }
+        status: { $ref: '#/components/schemas/PageReviewStatus' }
+        submittedBy: { type: string, format: uuid }
+        submittedAt: { type: string, format: date-time }
+        decidedBy: { type: [string, 'null'], format: uuid }
+        decidedAt: { type: [string, 'null'], format: date-time }
+        comment: { type: [string, 'null'], maxLength: 1000 }
+    PageReviewCollection:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/PageReview' } }
+    CreatePageReviewRequest:
+      type: object
+      additionalProperties: false
+      required: [revision]
+      properties:
+        revision: { type: integer, minimum: 1 }
+    DecidePageReviewRequest:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: { type: string, enum: [approved, changes_requested] }
+        comment:
+          type: [string, 'null']
+          maxLength: 1000
+          description: A nonblank comment is required when requesting changes.
     PageRevision:
       type: object
       additionalProperties: false

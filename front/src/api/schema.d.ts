@@ -507,6 +507,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/page-reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List editorial reviews for saved page revisions */
+        get: operations["listPageReviews"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/pages/{id}/reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit a saved page revision for review */
+        post: operations["createPageReview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/page-reviews/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Decide a pending page review as an owner */
+        patch: operations["decidePageReview"];
+        trace?: never;
+    };
     "/api/v1/admin/pages/{id}/revisions": {
         parameters: {
             query?: never;
@@ -1715,6 +1770,40 @@ export interface components {
         };
         PageCollection: {
             items: components["schemas"]["Page"][];
+        };
+        /** @enum {string} */
+        PageReviewStatus: "pending" | "approved" | "changes_requested";
+        PageReview: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            pageId: string;
+            pageTitle: string;
+            pageSlug: string;
+            locale: components["schemas"]["Locale"];
+            revision: number;
+            status: components["schemas"]["PageReviewStatus"];
+            /** Format: uuid */
+            submittedBy: string;
+            /** Format: date-time */
+            submittedAt: string;
+            /** Format: uuid */
+            decidedBy: string | null;
+            /** Format: date-time */
+            decidedAt: string | null;
+            comment: string | null;
+        };
+        PageReviewCollection: {
+            items: components["schemas"]["PageReview"][];
+        };
+        CreatePageReviewRequest: {
+            revision: number;
+        };
+        DecidePageReviewRequest: {
+            /** @enum {string} */
+            status: "approved" | "changes_requested";
+            /** @description A nonblank comment is required when requesting changes. */
+            comment?: string | null;
         };
         PageRevision: {
             revision: number;
@@ -3635,6 +3724,181 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Error"];
                 };
+            };
+        };
+    };
+    listPageReviews: {
+        parameters: {
+            query?: {
+                pageId?: string;
+                status?: components["schemas"]["PageReviewStatus"];
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reviews in newest-first submission order. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageReviewCollection"];
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Editor role required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid filter. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createPageReview: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Session-bound token obtained from `/api/v1/auth/csrf`. */
+                "X-CSRF-Token": components["parameters"]["CsrfTokenHeader"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePageReviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Review already exists for this exact revision. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageReview"];
+                };
+            };
+            /** @description Review created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageReview"];
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Editor role or valid CSRF token required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Page revision not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid page identifier or revision. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    decidePageReview: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Session-bound token obtained from `/api/v1/auth/csrf`. */
+                "X-CSRF-Token": components["parameters"]["CsrfTokenHeader"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecidePageReviewRequest"];
+            };
+        };
+        responses: {
+            /** @description The recorded decision and its actor. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageReview"];
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Owner role or valid CSRF token required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Review not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The review has already been decided. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid decision or absent changes-requested comment. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
