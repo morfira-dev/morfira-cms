@@ -1,5 +1,7 @@
 # ADR 0029: Reusable sections use copy-on-insert
 
+Copy-on-insert remains available. [ADR 0038](0038-versioned-section-placements.md) adds opt-in linked placements with explicit refresh.
+
 ## Context
 Live shared sections would make old revisions and published pages change without an explicit page revision.
 

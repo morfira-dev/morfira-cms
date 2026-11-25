@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Cms\Content\Application;
 
 use Cms\Content\Domain\PageRevision;
+use Cms\Content\Domain\PageSectionLinks;
 
+/** @phpstan-import-type SectionLink from PageSectionLinks */
 final readonly class PageRevisionView
 {
     public function __construct(
@@ -21,6 +23,8 @@ final readonly class PageRevisionView
         public string $createdAt,
         public string $locale,
         public string $translationGroupId,
+        /** @var list<SectionLink> */
+        public array $sectionLinks = [],
     ) {
     }
 
@@ -36,12 +40,13 @@ final readonly class PageRevisionView
             $revision->createdAt->format(DATE_ATOM),
             $revision->locale,
             $revision->resolvedTranslationGroupId(),
+            $revision->sectionLinks,
         );
     }
 
-    /** @return array{revision: int, title: string, slug: string, blocks: list<array{id: string, type: string, data: array<string, string>}>, seo: array{title: string, description: string, noIndex: bool, openGraphImageAssetId: ?string}, layout: array{theme: string, template: string, headerNavigationCode: ?string, footerNavigationCode: ?string}, createdAt: string, locale: string, translationGroupId: string} */
+    /** @return array{revision: int, title: string, slug: string, blocks: list<array{id: string, type: string, data: array<string, string>}>, seo: array{title: string, description: string, noIndex: bool, openGraphImageAssetId: ?string}, layout: array{theme: string, template: string, headerNavigationCode: ?string, footerNavigationCode: ?string}, createdAt: string, locale: string, translationGroupId: string, sectionLinks?: list<SectionLink>} */
     public function toArray(): array
     {
-        return ['revision' => $this->revision, 'title' => $this->title, 'slug' => $this->slug, 'blocks' => $this->blocks, 'seo' => $this->seo, 'layout' => $this->layout, 'createdAt' => $this->createdAt, 'locale' => $this->locale, 'translationGroupId' => $this->translationGroupId];
+        return ['revision' => $this->revision, 'title' => $this->title, 'slug' => $this->slug, 'blocks' => $this->blocks, 'seo' => $this->seo, 'layout' => $this->layout, 'createdAt' => $this->createdAt, 'locale' => $this->locale, 'translationGroupId' => $this->translationGroupId, ...($this->sectionLinks === [] ? [] : ['sectionLinks' => $this->sectionLinks])];
     }
 }

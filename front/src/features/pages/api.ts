@@ -3,6 +3,7 @@ import { apiFetch, readApiError } from '../../api/http'
 
 type PageCollection = components['schemas']['PageCollection']
 export type PageBlock = components['schemas']['PageBlock']
+export type PageSectionLink = components['schemas']['PageSectionLink']
 export type PageSummary = components['schemas']['Page']
 export type PageUpdate = components['schemas']['UpdatePageRequest']
 export type PublishedPage = components['schemas']['PublishedPage']

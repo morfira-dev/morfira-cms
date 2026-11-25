@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Cms\Content\Application;
 
 use Cms\Content\Domain\Page;
+use Cms\Content\Domain\PageSectionLinks;
 
+/** @phpstan-import-type SectionLink from PageSectionLinks */
 final readonly class PageView
 {
     public function __construct(
@@ -24,6 +26,8 @@ final readonly class PageView
         public string $updatedAt,
         public string $locale,
         public string $translationGroupId,
+        /** @var list<SectionLink> */
+        public array $sectionLinks = [],
     ) {
     }
 
@@ -42,10 +46,11 @@ final readonly class PageView
             $page->updatedAt->format(DATE_ATOM),
             $page->locale,
             $page->translationGroupId,
+            $page->sectionLinks,
         );
     }
 
-    /** @return array{id: string, title: string, slug: string, status: string, blocks: list<array{id: string, type: string, data: array<string, string>}>, seo: array{title: string, description: string, noIndex: bool, openGraphImageAssetId: ?string}, layout: array{theme: string, template: string, headerNavigationCode: ?string, footerNavigationCode: ?string}, version: int, createdAt: string, updatedAt: string, locale: string, translationGroupId: string} */
+    /** @return array{id: string, title: string, slug: string, status: string, blocks: list<array{id: string, type: string, data: array<string, string>}>, seo: array{title: string, description: string, noIndex: bool, openGraphImageAssetId: ?string}, layout: array{theme: string, template: string, headerNavigationCode: ?string, footerNavigationCode: ?string}, version: int, createdAt: string, updatedAt: string, locale: string, translationGroupId: string, sectionLinks?: list<SectionLink>} */
     public function toArray(): array
     {
         return [
@@ -61,6 +66,7 @@ final readonly class PageView
             'updatedAt' => $this->updatedAt,
             'locale' => $this->locale,
             'translationGroupId' => $this->translationGroupId,
+            ...($this->sectionLinks === [] ? [] : ['sectionLinks' => $this->sectionLinks]),
         ];
     }
 }

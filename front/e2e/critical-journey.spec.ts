@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { expect, test } from '@playwright/test'
 import type { components } from '../src/api/schema'
 
-test.setTimeout(90_000)
+test.setTimeout(120_000)
 
 test('owner creates, edits and publishes a page through the production surface', async ({ browser, page, request }) => {
   const ownerEmail = 'owner@morfira.test'
@@ -175,6 +175,140 @@ test('owner creates, edits and publishes a page through the production surface',
   const localizedApi = await request.get('/api/v1/content/pages/ru-RU/russkaya-versiya')
   expect(localizedApi.status()).toBe(200)
   await expect(localizedApi.json()).resolves.toMatchObject({ locale: 'ru-RU', url: '/ru-RU/russkaya-versiya' })
+
+  await test.step('refreshes a linked section without changing its published snapshot', async () => {
+    const name = 'Shared promotion'
+    const originalHeading = 'Morfira говорит по-русски'
+    const replacementHeading = 'Updated shared promotion'
+    const independentHeading = 'Keep this page heading'
+    const targetTitle = 'Linked section target'
+    const targetSlug = 'linked-section-target'
+    const sourceLibraryRow = page.getByRole('group', { name, exact: true })
+    await page.getByLabel('Сохранить текущий холст как').fill(name)
+    const [libraryCreate] = await Promise.all([
+      page.waitForResponse((response) => response.url().endsWith('/api/v1/admin/sections')
+        && response.request().method() === 'POST'),
+      page.getByRole('button', { name: 'Сохранить секцию', exact: true }).click(),
+    ])
+    expect(libraryCreate.status()).toBe(201)
+    const { id: sourceId } = await libraryCreate.json() as components['schemas']['ReusableSection']
+    await expect(sourceLibraryRow).toBeVisible()
+
+    const target = await page.context().newPage()
+    try {
+      const targetRow = target.getByRole('row', { name: new RegExp(targetTitle) })
+      const placement = target.getByRole('group', { name: `Связанная секция: ${name}`, exact: true })
+      const targetHeadings = target.getByLabel('Заголовок блока')
+      const save = target.getByRole('button', { name: 'Сохранить ревизию', exact: true })
+      const publish = target.getByRole('button', { name: 'Опубликовать', exact: true })
+      const openTarget = () => targetRow.getByRole('button', { name: 'Изменить', exact: true }).click()
+
+      async function expectSavedPlacement(version: number | null) {
+        const response = await target.request.get('/api/v1/admin/pages')
+        expect(response.status()).toBe(200)
+        const { items } = await response.json() as components['schemas']['PageCollection']
+        const draft = items.find((item) => item.slug === targetSlug)
+        if (!draft) throw new Error('The linked section target draft is missing.')
+        expect(draft.blocks).toHaveLength(2)
+        if (version === null) {
+          expect(draft.sectionLinks ?? []).toHaveLength(0)
+          return
+        }
+        expect(draft.sectionLinks).toEqual([
+          { sectionId: sourceId, version, blockIds: [draft.blocks[1].id] },
+        ])
+      }
+
+      async function expectPublished(revision: number, heading: string, absentHeading: string) {
+        const html = await request.get(`/${targetSlug}`)
+        expect(html.status()).toBe(200)
+        const body = await html.text()
+        expect(body).toContain(independentHeading)
+        expect(body).toContain(heading)
+        expect(body).not.toContain(absentHeading)
+        const api = await request.get(`/api/v1/content/pages/${targetSlug}`)
+        expect(api.status()).toBe(200)
+        const snapshot = await api.json()
+        expect(snapshot).toMatchObject({
+          sourceRevision: revision,
+          blocks: [
+            { type: 'hero', data: { heading: independentHeading } },
+            { type: 'hero', data: { heading } },
+          ],
+        })
+        expect(snapshot).not.toHaveProperty('sectionLinks')
+      }
+
+      await target.goto('/admin/pages')
+      await target.getByRole('textbox', { name: 'Заголовок', exact: true }).fill(targetTitle)
+      await target.getByRole('textbox', { name: 'Slug', exact: true }).fill(targetSlug)
+      await target.getByRole('button', { name: 'Создать черновик', exact: true }).click()
+      await openTarget()
+      await target.getByRole('button', { name: 'Добавить Hero', exact: true }).click()
+      await targetHeadings.first().fill(independentHeading)
+      await target.getByRole('group', { name, exact: true })
+        .getByRole('button', { name: 'Вставить связанную секцию', exact: true }).click()
+      await expect(placement).toBeVisible()
+      await expect(targetHeadings).toHaveCount(2)
+      await expect(targetHeadings.nth(1)).toHaveValue(originalHeading)
+      await save.click()
+      await expect(target.getByText('Ревизия черновика 2', { exact: true })).toBeVisible()
+      await target.reload()
+      await openTarget()
+      await expect(placement).toBeVisible()
+      await expect(targetHeadings.nth(1)).toHaveValue(originalHeading)
+      await expectSavedPlacement(1)
+      await publish.click()
+      await expect(target.getByText(/Ревизия 2 опубликована/)).toBeVisible()
+
+      await page.getByLabel('Заголовок блока').fill(replacementHeading)
+      page.once('dialog', (dialog) => dialog.accept())
+      const [libraryUpdate] = await Promise.all([
+        page.waitForResponse((response) => response.url().endsWith(`/api/v1/admin/sections/${sourceId}`)
+          && response.request().method() === 'PUT'),
+        sourceLibraryRow.getByRole('button', { name: 'Заменить секцию блоками страницы', exact: true }).click(),
+      ])
+      expect(libraryUpdate.ok()).toBeTruthy()
+      await expect(libraryUpdate.json()).resolves.toMatchObject({ version: 2 })
+      await expect(targetHeadings.nth(1)).toHaveValue(originalHeading)
+      await expectPublished(2, originalHeading, replacementHeading)
+
+      await placement.getByRole('button', { name: 'Проверить обновление секции', exact: true }).click()
+      await target.getByRole('button', { name: 'Применить обновление секции', exact: true }).click()
+      await expect(targetHeadings.first()).toHaveValue(independentHeading)
+      await expect(targetHeadings.nth(1)).toHaveValue(replacementHeading)
+      await expect(publish).toBeDisabled()
+      await save.click()
+      await expect(target.getByText('Ревизия черновика 3', { exact: true })).toBeVisible()
+      await expectSavedPlacement(2)
+      await expectPublished(2, originalHeading, replacementHeading)
+      await publish.click()
+      await expect(target.getByText(/Ревизия 3 опубликована/)).toBeVisible()
+      await expectPublished(3, replacementHeading, originalHeading)
+
+      await placement.getByRole('button', { name: 'Отвязать секцию', exact: true }).click()
+      await expect(placement).toHaveCount(0)
+      await expect(targetHeadings.nth(1)).toHaveValue(replacementHeading)
+      await save.click()
+      await expect(target.getByText('Ревизия черновика 4', { exact: true })).toBeVisible()
+      await target.reload()
+      await openTarget()
+      await expect(targetHeadings.nth(1)).toHaveValue(replacementHeading)
+      await expect(placement).toHaveCount(0)
+      await expectSavedPlacement(null)
+
+      target.once('dialog', (dialog) => dialog.accept())
+      await target.getByText(`Ревизия 2 · ${targetTitle}`, { exact: true }).locator('xpath=../..')
+        .getByRole('button', { name: 'Восстановить', exact: true }).click()
+      await expect(target.getByText('Ревизия 2 восстановлена как ревизия 5.')).toBeVisible()
+      await expect(placement).toBeVisible()
+      await expect(targetHeadings.nth(1)).toHaveValue(originalHeading)
+      await expectSavedPlacement(1)
+      await expectPublished(3, replacementHeading, originalHeading)
+    } finally {
+      await target.close()
+    }
+  })
 
   await page.goto('/admin/content-types')
   await expect(page.getByRole('heading', { name: 'Типы контента' })).toBeVisible()

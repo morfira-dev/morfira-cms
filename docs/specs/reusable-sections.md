@@ -3,6 +3,8 @@
 ## Status
 Implemented
 
+See [Linked reusable sections](linked-sections.md) for placements that retain their source and can be refreshed explicitly.
+
 ## Problem
 Editors must recreate common block compositions for every page.
 

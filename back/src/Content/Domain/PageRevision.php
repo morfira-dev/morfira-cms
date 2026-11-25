@@ -4,9 +4,16 @@ declare(strict_types=1);
 
 namespace Cms\Content\Domain;
 
+/** @phpstan-import-type SectionLink from PageSectionLinks */
 final readonly class PageRevision
 {
-    /** @param list<PageBlock> $blocks */
+    /** @var list<SectionLink> */
+    public array $sectionLinks;
+
+    /**
+     * @param list<PageBlock> $blocks
+     * @param list<mixed> $sectionLinks
+     */
     public function __construct(
         public int $revision,
         public PageTitle $title,
@@ -17,10 +24,13 @@ final readonly class PageRevision
         public ?PageLayout $layout = null,
         public string $locale = 'en',
         public ?string $translationGroupId = null,
+        array $sectionLinks = [],
     ) {
         if ($revision < 1) {
             throw new \InvalidArgumentException('Page revision number must be positive.');
         }
+
+        $this->sectionLinks = PageSectionLinks::validate($sectionLinks, $blocks);
     }
 
     public function resolvedLayout(): PageLayout

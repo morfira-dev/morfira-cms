@@ -44,8 +44,9 @@ import {
 } from './api'
 import { RichTextEditor } from '../richText/RichTextEditor'
 import { createUuid } from '../../utils/createUuid'
-import { createReusableSection, deleteReusableSection, getReusableSections, getThemes, type ReusableSection, type Theme } from './catalogApi'
-import { copySectionBlocks, duplicatePageBlock, movePageBlock } from './pageBuilder'
+import { getReusableSections, getThemes, type ReusableSection, type Theme } from './catalogApi'
+import { PageSectionsPanel } from './PageSectionsPanel'
+import { duplicatePageBlock, movePageBlock, removePageBlock, richTextPreview, type PageComposition } from './pageBuilder'
 import { getSiteSettings } from '../settings/api'
 import { useAdminLocale } from '../../i18n/AdminLocaleProvider'
 import type { MessageKey } from '../../i18n/messages'
@@ -53,10 +54,6 @@ import { readDraftLink } from '../../routing/draftLink'
 import { scheduleAbortableLoad } from '../../utils/scheduleAbortableLoad'
 
 const publicSiteUrl = import.meta.env.VITE_PUBLIC_SITE_URL || window.location.origin
-
-function richTextPreview(content: string): string {
-  return content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
-}
 
 interface PagesWorkspaceProps {
   mediaAssets: MediaAsset[]
@@ -88,7 +85,6 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
   const [restoringRevision, setRestoringRevision] = useState<number | null>(null)
   const [themes, setThemes] = useState<Theme[]>([])
   const [sections, setSections] = useState<ReusableSection[]>([])
-  const [sectionName, setSectionName] = useState('')
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null)
   const [draggedBlockId, setDraggedBlockId] = useState<string | null>(null)
   const [builderViewport, setBuilderViewport] = useState<'desktop' | 'tablet' | 'mobile'>('desktop')
@@ -180,6 +176,7 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
         title: editing.title,
         slug: editing.slug,
         blocks: editing.blocks,
+        sectionLinks: editing.sectionLinks,
         seo: editing.seo,
         layout: editing.layout,
         locale: editing.locale,
@@ -369,9 +366,7 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
 
   function removeBlock(id: string) {
     if (!editing) return
-    setEditing({ ...editing, blocks: editing.blocks.filter((block) => block.id !== id) })
-    setEditingDirty(true)
-    if (selectedBlockId === id) setSelectedBlockId(null)
+    updateComposition(removePageBlock({ blocks: editing.blocks, sectionLinks: editing.sectionLinks ?? [] }, id))
   }
 
   function moveBlock(id: string, offset: -1 | 1) {
@@ -399,24 +394,13 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
     setEditing({ ...editing, blocks }); setEditingDirty(true); setDraggedBlockId(null)
   }
 
-  function insertSection(section: ReusableSection) {
+  function updateComposition(composition: PageComposition) {
     if (!editing) return
-    const copies = copySectionBlocks(section.blocks)
-    setEditing({ ...editing, blocks: [...editing.blocks, ...copies] }); setEditingDirty(true)
-  }
-
-  async function saveSection() {
-    if (!editing || !sectionName.trim() || editing.blocks.length === 0) return
-    try {
-      const section = await createReusableSection(sectionName.trim(), editing.blocks)
-      setSections((current) => [...current, section].sort((left, right) => left.name.localeCompare(right.name)))
-      setSectionName(''); setSuccess(t('Reusable section created.'))
-    } catch (reason) { setError(localizedError(adminLocale, reason, t('Could not create reusable section.'))) }
-  }
-
-  async function removeSection(section: ReusableSection) {
-    try { await deleteReusableSection(section.id); setSections((current) => current.filter((item) => item.id !== section.id)) }
-    catch (reason) { setError(localizedError(adminLocale, reason, t('Could not delete reusable section.'))) }
+    setEditing({ ...editing, ...composition })
+    setEditingDirty(true)
+    if (selectedBlockId && !composition.blocks.some((block) => block.id === selectedBlockId)) {
+      setSelectedBlockId(null)
+    }
   }
 
   return (
@@ -754,11 +738,14 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
                 </Button>
               </Stack>
 
-              <Card variant="outlined"><CardContent><Stack spacing={2}>
-                <div><Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{t('Reusable sections')}</Typography><Typography variant="body2" color="text.secondary">{t('Insertion copies blocks with fresh IDs, so later section changes never rewrite this page.')}</Typography></div>
-                <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}><TextField size="small" label={t('Save current canvas as')} value={sectionName} onChange={(event) => setSectionName(event.target.value)} /><Button variant="outlined" disabled={!sectionName.trim() || editing.blocks.length === 0} onClick={() => void saveSection()}>{t('Save section')}</Button></Stack>
-                <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>{sections.map((section) => <Chip key={section.id} label={t('{{name}} · {{count}} blocks', { name: section.name, count: section.blocks.length })} onClick={() => insertSection(section)} onDelete={() => void removeSection(section)} />)}</Stack>
-              </Stack></CardContent></Card>
+              <PageSectionsPanel
+                key={editorAttempt}
+                page={{ blocks: editing.blocks, sectionLinks: editing.sectionLinks ?? [] }}
+                sections={sections}
+                setSections={setSections}
+                onChange={updateComposition}
+                disabled={saving || publishing || deleting || restoringRevision !== null}
+              />
 
               <Card variant="outlined">
                 <CardContent>

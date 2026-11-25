@@ -25,8 +25,10 @@ final readonly class UpdatePage
     ) {
     }
 
-    /** @param list<array<string, mixed>> $blocks */
-    public function __invoke(string $id, string $title, string $slug, array $blocks, PageSeo $seo, int $version, ?PageLayout $layout = null, ?string $locale = null, ?string $translationGroupId = null): PageView
+    /** @param list<array<string, mixed>> $blocks
+     *  @param list<mixed>|null $sectionLinks
+     */
+    public function __invoke(string $id, string $title, string $slug, array $blocks, PageSeo $seo, int $version, ?PageLayout $layout = null, ?string $locale = null, ?string $translationGroupId = null, ?array $sectionLinks = null): PageView
     {
         $page = $this->pages->get(PageId::fromString($id));
 
@@ -52,6 +54,7 @@ final readonly class UpdatePage
             $resolvedLayout,
             $locale,
             $translationGroupId,
+            $sectionLinks,
         );
 
         $this->pages->save($revised, $version);

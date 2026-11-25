@@ -1512,6 +1512,8 @@ export interface components {
             title: string;
             slug: string;
             blocks: components["schemas"]["PageBlock"][];
+            /** @description Omit to retain placements whose blocks still exist. Send an empty list to detach all placements. */
+            sectionLinks?: components["schemas"]["PageSectionLink"][];
             seo: components["schemas"]["PageSeo"];
             layout: components["schemas"]["PageLayout"];
             version: number;
@@ -1657,6 +1659,8 @@ export interface components {
             /** @enum {string} */
             status: "draft";
             blocks: components["schemas"]["PageBlock"][];
+            /** @description Linked reusable section placements captured with this authored revision. */
+            sectionLinks?: components["schemas"]["PageSectionLink"][];
             seo: components["schemas"]["PageSeo"];
             layout: components["schemas"]["PageLayout"];
             version: number;
@@ -1676,6 +1680,8 @@ export interface components {
             title: string;
             slug: string;
             blocks: components["schemas"]["PageBlock"][];
+            /** @description Linked reusable section placements captured with this authored revision. */
+            sectionLinks?: components["schemas"]["PageSectionLink"][];
             seo: components["schemas"]["PageSeo"];
             layout: components["schemas"]["PageLayout"];
             /** Format: date-time */
@@ -1683,6 +1689,13 @@ export interface components {
             locale: components["schemas"]["Locale"];
             /** Format: uuid */
             translationGroupId: string;
+        };
+        PageSectionLink: {
+            /** Format: uuid */
+            sectionId: string;
+            /** @description Source section version last materialized into the page. */
+            version: number;
+            blockIds: string[];
         };
         PageRevisionCollection: {
             items: components["schemas"]["PageRevision"][];

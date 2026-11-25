@@ -3399,6 +3399,11 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PageBlock'
+        sectionLinks:
+          type: array
+          description: Omit to retain placements whose blocks still exist. Send an empty list to detach all placements.
+          items:
+            $ref: '#/components/schemas/PageSectionLink'
         seo:
           $ref: '#/components/schemas/PageSeo'
         layout:
@@ -3717,6 +3722,11 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PageBlock'
+        sectionLinks:
+          type: array
+          description: Linked reusable section placements captured with this authored revision.
+          items:
+            $ref: '#/components/schemas/PageSectionLink'
         seo:
           $ref: '#/components/schemas/PageSeo'
         layout:
@@ -3755,6 +3765,11 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PageBlock'
+        sectionLinks:
+          type: array
+          description: Linked reusable section placements captured with this authored revision.
+          items:
+            $ref: '#/components/schemas/PageSectionLink'
         seo:
           $ref: '#/components/schemas/PageSeo'
         layout:
@@ -3762,6 +3777,25 @@ components:
         createdAt: { type: string, format: date-time }
         locale: { $ref: '#/components/schemas/Locale' }
         translationGroupId: { type: string, format: uuid }
+    PageSectionLink:
+      type: object
+      additionalProperties: false
+      required: [sectionId, version, blockIds]
+      properties:
+        sectionId:
+          type: string
+          format: uuid
+        version:
+          type: integer
+          minimum: 1
+          description: Source section version last materialized into the page.
+        blockIds:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            format: uuid
     PageRevisionCollection:
       type: object
       additionalProperties: false

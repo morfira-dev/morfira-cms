@@ -98,7 +98,7 @@ final readonly class DoctrinePageRepository implements PageRepository
         return $row === false ? null : $this->hydrateRevision($row);
     }
 
-    /** @return array<string, int|string> */
+    /** @return array<string, int|string|null> */
     private function row(Page $page): array
     {
         return [
@@ -114,6 +114,7 @@ final readonly class DoctrinePageRepository implements PageRepository
             'updated_at' => $page->updatedAt->format('Y-m-d H:i:s.u'),
             'locale' => $page->locale,
             'translation_group_id' => $page->translationGroupId,
+            'section_links' => $page->sectionLinks === [] ? null : json_encode($page->sectionLinks, JSON_THROW_ON_ERROR),
         ];
     }
 
@@ -130,6 +131,7 @@ final readonly class DoctrinePageRepository implements PageRepository
             'created_at' => $page->updatedAt->format('Y-m-d H:i:s.u'),
             'locale' => $page->locale,
             'translation_group_id' => $page->translationGroupId,
+            'section_links' => $page->sectionLinks === [] ? null : json_encode($page->sectionLinks, JSON_THROW_ON_ERROR),
         ]);
     }
 
@@ -178,6 +180,7 @@ final readonly class DoctrinePageRepository implements PageRepository
             PageLayout::fromArray($layout),
             self::stringValue($row, 'locale'),
             self::stringValue($row, 'translation_group_id'),
+            self::sectionLinks($row),
         );
     }
 
@@ -208,7 +211,26 @@ final readonly class DoctrinePageRepository implements PageRepository
             PageLayout::fromArray($layout),
             self::stringValue($row, 'locale'),
             self::stringValue($row, 'translation_group_id'),
+            self::sectionLinks($row),
         );
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @return list<mixed>
+     */
+    private static function sectionLinks(array $row): array
+    {
+        if (($row['section_links'] ?? null) === null) {
+            return [];
+        }
+
+        $links = json_decode(self::stringValue($row, 'section_links'), true, flags: JSON_THROW_ON_ERROR);
+        if (!is_array($links) || !array_is_list($links)) {
+            throw new \UnexpectedValueException('Page section links must be a JSON list.');
+        }
+
+        return $links;
     }
 
     /** @param array<string, mixed> $row

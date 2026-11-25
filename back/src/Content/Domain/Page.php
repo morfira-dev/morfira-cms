@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cms\Content\Domain;
 
+/** @phpstan-import-type SectionLink from PageSectionLinks */
 final readonly class Page
 {
     /** @param list<PageBlock> $blocks */
@@ -20,6 +21,8 @@ final readonly class Page
         public \DateTimeImmutable $updatedAt,
         public string $locale,
         public string $translationGroupId,
+        /** @var list<SectionLink> */
+        public array $sectionLinks = [],
     ) {
         self::assertLocale($locale);
         self::assertTranslationGroupId($translationGroupId);
@@ -30,7 +33,9 @@ final readonly class Page
         return new self($id, $title, $slug, PageStatus::Draft, [], PageSeo::defaults(), PageLayout::defaults(), 1, $createdAt, $createdAt, $locale, $translationGroupId ?? $id->value);
     }
 
-    /** @param list<PageBlock> $blocks */
+    /** @param list<PageBlock> $blocks
+     *  @param list<mixed> $sectionLinks
+     */
     public static function reconstitute(
         PageId $id,
         PageTitle $title,
@@ -44,12 +49,15 @@ final readonly class Page
         ?PageLayout $layout = null,
         string $locale = 'en',
         ?string $translationGroupId = null,
+        array $sectionLinks = [],
     ): self {
-        return new self($id, $title, $slug, $status, $blocks, $seo, $layout ?? PageLayout::defaults(), $version, $createdAt, $updatedAt, $locale, $translationGroupId ?? $id->value);
+        return new self($id, $title, $slug, $status, $blocks, $seo, $layout ?? PageLayout::defaults(), $version, $createdAt, $updatedAt, $locale, $translationGroupId ?? $id->value, PageSectionLinks::validate($sectionLinks, $blocks));
     }
 
-    /** @param list<PageBlock> $blocks */
-    public function revise(PageTitle $title, PageSlug $slug, array $blocks, PageSeo $seo, \DateTimeImmutable $updatedAt, ?PageLayout $layout = null, ?string $locale = null, ?string $translationGroupId = null): self
+    /** @param list<PageBlock> $blocks
+     *  @param list<mixed>|null $sectionLinks
+     */
+    public function revise(PageTitle $title, PageSlug $slug, array $blocks, PageSeo $seo, \DateTimeImmutable $updatedAt, ?PageLayout $layout = null, ?string $locale = null, ?string $translationGroupId = null, ?array $sectionLinks = null): self
     {
         return new self(
             $this->id,
@@ -64,6 +72,7 @@ final readonly class Page
             $updatedAt,
             $locale ?? $this->locale,
             $translationGroupId ?? $this->translationGroupId,
+            $sectionLinks === null ? PageSectionLinks::retain($this->sectionLinks, $blocks) : PageSectionLinks::validate($sectionLinks, $blocks),
         );
     }
 

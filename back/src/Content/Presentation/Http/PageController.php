@@ -87,6 +87,17 @@ final readonly class PageController
         $version = $payload['version'] ?? null;
         $locale = $payload['locale'] ?? null;
         $translationGroupId = $payload['translationGroupId'] ?? null;
+        $sectionLinks = null;
+        if (array_key_exists('sectionLinks', $payload)) {
+            $sectionLinks = $payload['sectionLinks'];
+            // Associative decoding cannot distinguish an empty JSON object from an empty list.
+            $raw = json_decode($request->getContent(), flags: JSON_THROW_ON_ERROR);
+            if (!$raw instanceof \stdClass || !is_array($raw->sectionLinks)
+                || !is_array($sectionLinks) || !array_is_list($sectionLinks)
+                || !array_all($raw->sectionLinks, static fn (mixed $link): bool => $link instanceof \stdClass && is_array($link->blockIds ?? null))) {
+                return new JsonResponse(['error' => 'Linked section placements must be a list.'], 422);
+            }
+        }
 
         if (!is_string($title) || !is_string($slug) || !is_array($blocks) || !array_is_list($blocks) || !is_array($seo) || array_is_list($seo) || !is_array($layout) || array_is_list($layout) || !is_int($version) || ($locale !== null && !is_string($locale)) || ($translationGroupId !== null && !is_string($translationGroupId))) {
             return new JsonResponse(['error' => 'Invalid page revision payload.'], 422);
@@ -104,7 +115,7 @@ final readonly class PageController
         try {
             /** @var array<string, mixed> $seo */
             /** @var array<string, mixed> $layout */
-            $page = ($this->updatePage)($id, $title, $slug, $blockPayloads, PageSeo::fromArray($seo), $version, PageLayout::fromArray($layout), $locale, $translationGroupId);
+            $page = ($this->updatePage)($id, $title, $slug, $blockPayloads, PageSeo::fromArray($seo), $version, PageLayout::fromArray($layout), $locale, $translationGroupId, $sectionLinks);
         } catch (PageNotFound) {
             return new JsonResponse(['error' => 'Page not found.'], 404);
         } catch (PageSlugAlreadyExists|PageTranslationAlreadyExists|PageVersionConflict $exception) {

@@ -40,6 +40,11 @@ final class PublishPageTest extends TestCase
             new PageSeo('Landing SEO', 'An immutable description.', false, null),
             1,
             new PageLayout('morfira', 'wide', 'main', 'footer'),
+            sectionLinks: [[
+                'sectionId' => '1493b983-ea69-44b0-a173-ae6f9006ecb5',
+                'version' => 1,
+                'blockIds' => ['cf49b538-07ee-4b53-a6a3-6b25cbfa22ae'],
+            ]],
         );
 
         $published = (new PublishPage($drafts, $delivery))($draft->id, 2);
@@ -50,6 +55,8 @@ final class PublishPageTest extends TestCase
         self::assertNotNull($publicPage);
         self::assertSame('Landing', $publicPage->title);
         self::assertCount(1, $publicPage->blocks);
+        self::assertArrayNotHasKey('sectionLinks', $publicPage->toArray());
+        self::assertSame($draft->blocks, $publicPage->blocks);
         self::assertSame('Landing SEO', $publicPage->seo['title']);
         self::assertSame(['theme' => 'morfira', 'template' => 'wide', 'headerNavigationCode' => 'main', 'footerNavigationCode' => 'footer'], $publicPage->layout);
     }
