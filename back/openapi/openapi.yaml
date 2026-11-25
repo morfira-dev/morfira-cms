@@ -711,6 +711,53 @@ paths:
       responses:
         '204': { description: Section deleted. }
         '404': { description: Section not found. }
+  /api/v1/admin/sections/{id}/usage:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: listReusableSectionUsage
+      tags: [Admin Content]
+      summary: List page drafts with linked placements of a reusable section
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+      responses:
+        '200':
+          description: A page of usage rows and the current library version.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReusableSectionUsageCollection' }
+        '401': { description: Authentication required. }
+        '403': { description: Editor permission required. }
+        '404': { description: Section not found. }
+        '422': { description: Invalid pagination. }
+  /api/v1/admin/sections/{id}/refresh:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: refreshReusableSectionPlacements
+      tags: [Admin Content]
+      summary: Apply a reviewed library version to selected page drafts
+      description: Each selected page is checked and saved independently. Refresh never publishes pages.
+      security: [{ sessionCookie: [] }]
+      parameters: [{ $ref: '#/components/parameters/CsrfTokenHeader' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RefreshReusableSectionRequest' }
+      responses:
+        '200':
+          description: One outcome per requested page, in request order.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RefreshReusableSectionReport' }
+        '401': { description: Authentication required. }
+        '403': { description: Editor permission or valid CSRF token required. }
+        '404': { description: Section not found. }
+        '409': { description: Section version changed before the batch started. No pages were written. }
+        '422': { description: Invalid versions, page identifiers, or batch size. }
   /api/v1/admin/imports/wordpress:
     post:
       operationId: importWordPressExport
@@ -3937,6 +3984,60 @@ components:
           required: [version]
           properties:
             version: { type: integer, minimum: 1 }
+    ReusableSectionUsage:
+      type: object
+      additionalProperties: false
+      required: [pageId, title, slug, locale, version, placements]
+      properties:
+        pageId: { type: string, format: uuid }
+        title: { type: string }
+        slug: { type: string }
+        locale: { $ref: '#/components/schemas/Locale' }
+        version: { type: integer, minimum: 1 }
+        placements: { type: array, minItems: 1, items: { $ref: '#/components/schemas/PageSectionLink' } }
+    ReusableSectionUsageCollection:
+      type: object
+      additionalProperties: false
+      required: [section, items, total]
+      properties:
+        section: { $ref: '#/components/schemas/ReusableSection' }
+        items: { type: array, items: { $ref: '#/components/schemas/ReusableSectionUsage' } }
+        total: { type: integer, minimum: 0 }
+    RefreshReusableSectionRequest:
+      type: object
+      additionalProperties: false
+      required: [sectionVersion, pages]
+      properties:
+        sectionVersion: { type: integer, minimum: 1 }
+        pages:
+          type: array
+          minItems: 1
+          maxItems: 50
+          description: Each page identifier may occur once.
+          items:
+            type: object
+            additionalProperties: false
+            required: [pageId, version]
+            properties:
+              pageId: { type: string, format: uuid }
+              version: { type: integer, minimum: 1 }
+    RefreshReusableSectionResult:
+      type: object
+      additionalProperties: false
+      required: [pageId, status]
+      properties:
+        pageId: { type: string, format: uuid }
+        status: { type: string, enum: [updated, current, conflict, missing, unlinked] }
+        version:
+          type: integer
+          minimum: 1
+          description: Resulting or observed draft revision, when available.
+    RefreshReusableSectionReport:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/RefreshReusableSectionResult' } }
     PutPublicationScheduleRequest:
       type: object
       additionalProperties: false

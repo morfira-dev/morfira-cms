@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { expect, test } from '@playwright/test'
 import type { components } from '../src/api/schema'
@@ -308,6 +309,130 @@ test('owner creates, edits and publishes a page through the production surface',
     } finally {
       await target.close()
     }
+  })
+
+  await test.step('updates selected linked pages and reports a conflict without publishing', async () => {
+    type Draft = components['schemas']['Page']
+    const oldHeading = 'Morfira говорит по-русски'
+    const newHeading = 'Updated shared promotion'
+    const name = 'Shared promotion'
+    const [catalog, csrf] = await Promise.all([
+      page.request.get('/api/v1/admin/sections'),
+      page.request.get('/api/v1/auth/csrf'),
+    ])
+    expect(catalog.status()).toBe(200)
+    expect(csrf.status()).toBe(200)
+    const { items: sections } = await catalog.json() as components['schemas']['ReusableSectionCollection']
+    const section = sections.find((candidate) => candidate.name === name)
+    if (!section) throw new Error('The shared promotion section is missing.')
+    const { id: sectionId, version: sectionVersion } = section
+    const { token } = await csrf.json() as components['schemas']['CsrfToken']
+    const headers = { 'X-CSRF-Token': token }
+
+    async function saveDraft(draft: Draft, changes: Partial<components['schemas']['UpdatePageRequest']>): Promise<Draft> {
+      const { title, slug, version, blocks, seo, layout, locale, translationGroupId, sectionLinks } = draft
+      const response = await page.request.put(`/api/v1/admin/pages/${draft.id}`, {
+        headers,
+        data: { title, slug, version, blocks, seo, layout, locale, translationGroupId, sectionLinks, ...changes },
+      })
+      expect(response.status()).toBe(200)
+      return await response.json() as Draft
+    }
+
+    async function createLinkedDraft(title: string, slug: string) {
+      const response = await page.request.post('/api/v1/admin/pages', { headers, data: { title, slug, locale: 'en' } })
+      expect(response.status()).toBe(201)
+      const draft = await response.json() as Draft
+      const blockId = randomUUID()
+      return saveDraft(draft, {
+        blocks: [{ id: blockId, type: 'hero', data: { heading: oldHeading } }],
+        sectionLinks: [{ sectionId, version: 1, blockIds: [blockId] }],
+      })
+    }
+
+    async function getDraft(id: string): Promise<Draft> {
+      const response = await page.request.get(`/api/v1/admin/pages/${id}`)
+      expect(response.status()).toBe(200)
+      return await response.json() as Draft
+    }
+
+    async function publishDraft(draft: Draft) {
+      const response = await page.request.post(`/api/v1/admin/pages/${draft.id}/publish`, {
+        headers, data: { version: draft.version },
+      })
+      expect(response.status()).toBe(200)
+    }
+
+    async function expectPublicVersion(draft: Draft, heading: string, absentHeading: string) {
+      const [publicPage, publicApi] = await Promise.all([
+        request.get(`/${draft.slug}`),
+        request.get(`/api/v1/content/pages/${draft.slug}`),
+      ])
+      expect(publicPage.status()).toBe(200)
+      expect(publicApi.status()).toBe(200)
+      const html = await publicPage.text()
+      expect(html).toContain(heading)
+      expect(html).not.toContain(absentHeading)
+      await expect(publicApi.json()).resolves.toMatchObject({
+        sourceRevision: draft.version,
+        blocks: [{ type: 'hero', data: { heading } }],
+      })
+    }
+
+    const selected = await createLinkedDraft('Batch selected page', 'batch-selected-page')
+    const unselected = await createLinkedDraft('Batch unselected page', 'batch-unselected-page')
+    await publishDraft(selected)
+    const pageList = await page.request.get('/api/v1/admin/pages')
+    expect(pageList.status()).toBe(200)
+    const { items } = await pageList.json() as components['schemas']['PageCollection']
+    const concurrent = items.find((item) => item.slug === 'linked-section-target')
+    if (!concurrent) throw new Error('The concurrency test draft is missing.')
+
+    await page.getByRole('group', { name, exact: true })
+      .getByRole('button', { name: 'Где используется', exact: true }).click()
+    const usage = page.getByRole('dialog', { name: `Использование секции: ${name}`, exact: true })
+    const selectDraft = (draft: Draft) => usage.getByRole('checkbox', { name: `Выбрать черновик «${draft.title}»`, exact: true })
+    await selectDraft(selected).check()
+    await selectDraft(concurrent).check()
+    await expect(selectDraft(unselected)).not.toBeChecked()
+    await usage.getByRole('button', { name: 'Проверить выбранные черновики', exact: true }).click()
+
+    const concurrentEdit = await saveDraft(concurrent, { title: 'Concurrent title edit' })
+    const [refresh] = await Promise.all([
+      page.waitForResponse((response) => response.url().endsWith(`/api/v1/admin/sections/${sectionId}/refresh`)
+        && response.request().method() === 'POST'),
+      usage.getByRole('button', { name: 'Обновить выбранные черновики', exact: true }).click(),
+    ])
+    expect(refresh.status()).toBe(200)
+    const submitted = refresh.request().postDataJSON() as components['schemas']['RefreshReusableSectionRequest']
+    expect(submitted).toMatchObject({
+      sectionVersion,
+      pages: expect.arrayContaining([
+        { pageId: selected.id, version: selected.version },
+        { pageId: concurrent.id, version: concurrent.version },
+      ]),
+    })
+    expect(submitted.pages).toHaveLength(2)
+    const report = await refresh.json() as components['schemas']['RefreshReusableSectionReport']
+    expect(report.items).toHaveLength(2)
+    expect(report.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ pageId: selected.id, status: 'updated', version: selected.version + 1 }),
+      expect.objectContaining({ pageId: concurrent.id, status: 'conflict' }),
+    ]))
+    await expect(usage.getByRole('row').filter({ hasText: selected.title }).filter({ hasText: 'Обновлён' })).toBeVisible()
+    await expect(usage.getByRole('row').filter({ hasText: 'Конфликт ревизии' })).toBeVisible()
+
+    const updated = await getDraft(selected.id)
+    expect(updated).toMatchObject({
+      version: selected.version + 1,
+      blocks: [{ type: 'hero', data: { heading: newHeading } }],
+      sectionLinks: [{ sectionId, version: sectionVersion, blockIds: [updated.blocks[0].id] }],
+    })
+    await expect(getDraft(unselected.id)).resolves.toEqual(unselected)
+    await expect(getDraft(concurrent.id)).resolves.toEqual(concurrentEdit)
+    await expectPublicVersion(selected, oldHeading, newHeading)
+    await publishDraft(updated)
+    await expectPublicVersion(updated, newHeading, oldHeading)
   })
 
   await page.goto('/admin/content-types')

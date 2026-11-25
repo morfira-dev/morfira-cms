@@ -12,7 +12,7 @@ Editors repeat shared compositions across pages and need a way to apply a new se
 - Keep draft history and published HTML and API snapshots deterministic.
 
 ## Non-goals
-- Automatic republishing, bulk refresh across pages, and nested section references.
+- Automatic republishing and nested section references. See [bulk section refresh](bulk-section-refresh.md) for the separate multi-page flow.
 
 ## Actors and permissions
 Editors use the existing authenticated, CSRF-protected page and section endpoints.

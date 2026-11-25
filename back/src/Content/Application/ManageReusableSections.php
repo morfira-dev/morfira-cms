@@ -21,6 +21,12 @@ final readonly class ManageReusableSections
         return array_map(static fn (ReusableSection $section): array => $section->toArray(), $this->sections->all());
     }
 
+    /** @return array{id: string, name: string, blocks: list<array{id: string, type: string, data: array<string, string>}>, version: int, createdAt: string, updatedAt: string} */
+    public function get(string $id): array
+    {
+        return ($this->sections->get($id) ?? throw new \OutOfBoundsException('Reusable section not found.'))->toArray();
+    }
+
     /**
      * @param list<array<string, mixed>> $blocks
      * @return array{id: string, name: string, blocks: list<array{id: string, type: string, data: array<string, string>}>, version: int, createdAt: string, updatedAt: string}

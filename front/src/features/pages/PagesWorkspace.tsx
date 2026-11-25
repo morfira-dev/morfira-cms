@@ -403,6 +403,19 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
     }
   }
 
+  async function reloadUpdatedDrafts(ids: string[], signal: AbortSignal) {
+    const updatedIds = new Set(ids)
+    const fresh = await getPages(signal)
+    if (signal.aborted) return
+    const refreshed = new Map(fresh.filter((page) => updatedIds.has(page.id)).map((page) => [page.id, page]))
+    setPages((current) => current.flatMap((page) => {
+      if (!updatedIds.has(page.id)) return [page]
+      const latest = refreshed.get(page.id)
+      if (!latest) return []
+      return [latest.version >= page.version ? latest : page]
+    }))
+  }
+
   return (
     <Stack spacing={3}>
       <div>
@@ -741,9 +754,11 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
               <PageSectionsPanel
                 key={editorAttempt}
                 page={{ blocks: editing.blocks, sectionLinks: editing.sectionLinks ?? [] }}
+                editingPageId={editing.id}
                 sections={sections}
                 setSections={setSections}
                 onChange={updateComposition}
+                onPagesUpdated={reloadUpdatedDrafts}
                 disabled={saving || publishing || deleting || restoringRevision !== null}
               />
 

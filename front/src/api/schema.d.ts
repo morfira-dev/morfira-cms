@@ -327,6 +327,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/sections/{id}/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** List page drafts with linked placements of a reusable section */
+        get: operations["listReusableSectionUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/sections/{id}/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply a reviewed library version to selected page drafts
+         * @description Each selected page is checked and saved independently. Refresh never publishes pages.
+         */
+        post: operations["refreshReusableSectionPlacements"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/imports/wordpress": {
         parameters: {
             query?: never;
@@ -1783,6 +1824,40 @@ export interface components {
         UpdateReusableSectionRequest: components["schemas"]["CreateReusableSectionRequest"] & {
             version: number;
         };
+        ReusableSectionUsage: {
+            /** Format: uuid */
+            pageId: string;
+            title: string;
+            slug: string;
+            locale: components["schemas"]["Locale"];
+            version: number;
+            placements: components["schemas"]["PageSectionLink"][];
+        };
+        ReusableSectionUsageCollection: {
+            section: components["schemas"]["ReusableSection"];
+            items: components["schemas"]["ReusableSectionUsage"][];
+            total: number;
+        };
+        RefreshReusableSectionRequest: {
+            sectionVersion: number;
+            /** @description Each page identifier may occur once. */
+            pages: {
+                /** Format: uuid */
+                pageId: string;
+                version: number;
+            }[];
+        };
+        RefreshReusableSectionResult: {
+            /** Format: uuid */
+            pageId: string;
+            /** @enum {string} */
+            status: "updated" | "current" | "conflict" | "missing" | "unlinked";
+            /** @description Resulting or observed draft revision, when available. */
+            version?: number;
+        };
+        RefreshReusableSectionReport: {
+            items: components["schemas"]["RefreshReusableSectionResult"][];
+        };
         PutPublicationScheduleRequest: {
             /** @description Exact page revision or entry version to publish. */
             sourceVersion: number;
@@ -2893,6 +2968,123 @@ export interface operations {
             };
             /** @description Section not found. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listReusableSectionUsage: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of usage rows and the current library version. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReusableSectionUsageCollection"];
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Editor permission required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Section not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid pagination. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    refreshReusableSectionPlacements: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Session-bound token obtained from `/api/v1/auth/csrf`. */
+                "X-CSRF-Token": components["parameters"]["CsrfTokenHeader"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefreshReusableSectionRequest"];
+            };
+        };
+        responses: {
+            /** @description One outcome per requested page, in request order. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefreshReusableSectionReport"];
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Editor permission or valid CSRF token required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Section not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Section version changed before the batch started. No pages were written. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid versions */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

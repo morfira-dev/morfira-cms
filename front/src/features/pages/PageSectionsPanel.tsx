@@ -11,22 +11,26 @@ import {
   type ReusableSection,
 } from './catalogApi'
 import { copySectionBlocks, insertLinkedSection, refreshLinkedSection, richTextPreview, type PageComposition } from './pageBuilder'
+import { SectionUsageDialog } from './SectionUsageDialog'
 
 interface PageSectionsPanelProps {
   page: PageComposition
+  editingPageId: string
   sections: ReusableSection[]
   setSections: Dispatch<SetStateAction<ReusableSection[]>>
   onChange: (composition: PageComposition) => void
+  onPagesUpdated: (ids: string[], signal: AbortSignal) => Promise<void>
   disabled: boolean
 }
 
-export function PageSectionsPanel({ page, sections, setSections, onChange, disabled }: PageSectionsPanelProps) {
+export function PageSectionsPanel({ page, editingPageId, sections, setSections, onChange, onPagesUpdated, disabled }: PageSectionsPanelProps) {
   const { locale, t } = useAdminLocale()
   const [name, setName] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [status, setStatus] = useState<string | null>(null)
   const [pending, setPending] = useState<{ link: PageSectionLink; section: ReusableSection } | null>(null)
+  const [usageSection, setUsageSection] = useState<ReusableSection | null>(null)
   const request = useRef<AbortController | null>(null)
   const controlsDisabled = disabled || busy
 
@@ -148,6 +152,9 @@ export function PageSectionsPanel({ page, sections, setSections, onChange, disab
               <Button size="small" disabled={controlsDisabled || page.blocks.length === 0} onClick={() => void replaceSection(section)}>
                 {t('Replace section with page blocks')}
               </Button>
+              <Button size="small" disabled={controlsDisabled} onClick={() => setUsageSection(section)}>
+                {t('View usages')}
+              </Button>
             </Stack>
           ))}
           {page.sectionLinks.map((link) => {
@@ -189,6 +196,14 @@ export function PageSectionsPanel({ page, sections, setSections, onChange, disab
               </Stack>
             )
           })}
+          {usageSection && (
+            <SectionUsageDialog
+              section={usageSection}
+              editingPageId={editingPageId}
+              onClose={() => setUsageSection(null)}
+              onPagesUpdated={onPagesUpdated}
+            />
+          )}
         </Stack>
       </CardContent>
     </Card>
