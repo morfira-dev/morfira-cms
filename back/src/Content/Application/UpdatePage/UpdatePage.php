@@ -14,6 +14,7 @@ use Cms\Content\Domain\PageRepository;
 use Cms\Content\Domain\PageSeo;
 use Cms\Content\Domain\PageSlug;
 use Cms\Content\Domain\PageTitle;
+use Cms\Content\Domain\ReusableSectionRepository;
 use Cms\Theme\Application\ThemeCatalog;
 
 final readonly class UpdatePage
@@ -22,6 +23,7 @@ final readonly class UpdatePage
         private PageRepository $pages,
         private RichTextSanitizer $richTextSanitizer,
         private ?ThemeCatalog $themes = null,
+        private ?ReusableSectionRepository $sections = null,
     ) {
     }
 
@@ -56,6 +58,19 @@ final readonly class UpdatePage
             $translationGroupId,
             $sectionLinks,
         );
+
+        $checked = [];
+        foreach ($revised->sectionLinks as $link) {
+            $sectionId = $link['sectionId'];
+            if (isset($checked[$sectionId])) {
+                continue;
+            }
+            $checked[$sectionId] = true;
+            $sectionLocale = $this->sections?->get($sectionId)?->locale;
+            if ($sectionLocale !== null && $sectionLocale !== $revised->locale) {
+                throw new \InvalidArgumentException('Linked section language must match the page language.');
+            }
+        }
 
         $this->pages->save($revised, $version);
 

@@ -10,8 +10,11 @@ use Cms\Content\Application\ListPageRevisions;
 use Cms\Content\Application\ListPages\ListPages;
 use Cms\Content\Application\RestorePageRevision;
 use Cms\Content\Application\UpdatePage\UpdatePage;
+use Cms\Content\Domain\PageBlock;
 use Cms\Content\Domain\PageLayout;
 use Cms\Content\Domain\PageSeo;
+use Cms\Content\Domain\ReusableSection;
+use Cms\Content\Domain\ReusableSectionRepository;
 use Cms\Content\Presentation\Http\PageController;
 use Cms\Content\Presentation\Http\PageRevisionController;
 use Cms\Tests\Content\InMemoryPageRepository;
@@ -95,13 +98,31 @@ final class LinkedSectionsControllerTest extends TestCase
         self::assertSame(1, self::payload($controller->get($id))['version']);
     }
 
-    private static function controller(InMemoryPageRepository $pages): PageController
+    public function testKnownLocalizedSectionMustMatchTheAuthoredPageLocale(): void
+    {
+        $pages = new InMemoryPageRepository();
+        $id = (new CreatePage($pages))('Landing', 'landing')->id;
+        $clock = new \DateTimeImmutable('2026-11-25T00:00:00Z');
+        $section = new ReusableSection(self::LINK['sectionId'], 'Localized', [PageBlock::fromArray(self::BLOCK)], 1, $clock, $clock, 'ru-RU');
+        $sections = $this->createStub(ReusableSectionRepository::class);
+        $sections->method('get')->willReturn($section);
+        $controller = self::controller($pages, $sections);
+        $payload = [...self::revisionPayload(1), 'sectionLinks' => [self::LINK]];
+
+        self::assertSame(422, $controller->update($id, self::request($payload))->getStatusCode());
+        self::assertSame(1, self::payload($controller->get($id))['version']);
+        self::assertSame(200, $controller->update($id, self::request([...$payload, 'locale' => 'ru-RU']))->getStatusCode());
+        self::assertSame(422, $controller->update($id, self::request([...self::revisionPayload(2), 'locale' => 'en']))->getStatusCode());
+        self::assertSame(200, $controller->update($id, self::request([...self::revisionPayload(2), 'locale' => 'en', 'sectionLinks' => []]))->getStatusCode());
+    }
+
+    private static function controller(InMemoryPageRepository $pages, ?ReusableSectionRepository $sections = null): PageController
     {
         return new PageController(
             new CreatePage($pages),
             new GetPage($pages),
             new ListPages($pages),
-            new UpdatePage($pages, new PassThroughRichTextSanitizer()),
+            new UpdatePage($pages, new PassThroughRichTextSanitizer(), sections: $sections),
         );
     }
 

@@ -36,6 +36,9 @@ final readonly class DoctrineReusableSectionRepository implements ReusableSectio
         try {
             $this->connection->insert('content_reusable_sections', self::row($section));
         } catch (UniqueConstraintViolationException $exception) {
+            if (str_contains($exception->getMessage(), 'uniq_reusable_section_group_locale')) {
+                throw new ReusableSectionConflict('This translation group already contains a section for that locale.', $exception);
+            }
             throw new ReusableSectionConflict(previous: $exception);
         }
     }
@@ -43,7 +46,7 @@ final readonly class DoctrineReusableSectionRepository implements ReusableSectio
     public function save(ReusableSection $section, int $expectedVersion): void
     {
         $row = self::row($section);
-        unset($row['id'], $row['created_at']);
+        unset($row['id'], $row['created_at'], $row['locale'], $row['translation_group_id']);
         try {
             $affected = $this->connection->update('content_reusable_sections', $row, ['id' => $section->id, 'version' => $expectedVersion]);
         } catch (UniqueConstraintViolationException $exception) {
@@ -69,6 +72,8 @@ final readonly class DoctrineReusableSectionRepository implements ReusableSectio
             'version' => $section->version,
             'created_at' => $section->createdAt->format('Y-m-d H:i:s.u'),
             'updated_at' => $section->updatedAt->format('Y-m-d H:i:s.u'),
+            'locale' => $section->locale,
+            'translation_group_id' => $section->translationGroupId,
         ];
     }
 
@@ -94,7 +99,15 @@ final readonly class DoctrineReusableSectionRepository implements ReusableSectio
             self::intValue($row, 'version'),
             new \DateTimeImmutable(self::stringValue($row, 'created_at'), new \DateTimeZone('UTC')),
             new \DateTimeImmutable(self::stringValue($row, 'updated_at'), new \DateTimeZone('UTC')),
+            self::nullableStringValue($row, 'locale'),
+            self::nullableStringValue($row, 'translation_group_id'),
         );
+    }
+
+    /** @param array<string, mixed> $row */
+    private static function nullableStringValue(array $row, string $key): ?string
+    {
+        return ($row[$key] ?? null) === null ? null : self::stringValue($row, $key);
     }
 
     /** @param array<string, mixed> $row */

@@ -9,19 +9,20 @@ use Cms\Content\Domain\ReusableSection;
 use Cms\Content\Domain\ReusableSectionConflict;
 use Cms\Content\Domain\ReusableSectionRepository;
 
+/** @phpstan-import-type SectionData from ReusableSection */
 final readonly class ManageReusableSections
 {
     public function __construct(private ReusableSectionRepository $sections)
     {
     }
 
-    /** @return list<array<string, mixed>> */
+    /** @return list<SectionData> */
     public function all(): array
     {
         return array_map(static fn (ReusableSection $section): array => $section->toArray(), $this->sections->all());
     }
 
-    /** @return array{id: string, name: string, blocks: list<array{id: string, type: string, data: array<string, string>}>, version: int, createdAt: string, updatedAt: string} */
+    /** @return SectionData */
     public function get(string $id): array
     {
         return ($this->sections->get($id) ?? throw new \OutOfBoundsException('Reusable section not found.'))->toArray();
@@ -29,12 +30,22 @@ final readonly class ManageReusableSections
 
     /**
      * @param list<array<string, mixed>> $blocks
-     * @return array{id: string, name: string, blocks: list<array{id: string, type: string, data: array<string, string>}>, version: int, createdAt: string, updatedAt: string}
+     * @return SectionData
      */
-    public function create(string $name, array $blocks): array
+    public function create(string $name, array $blocks, ?string $locale = null, ?string $translationSourceId = null): array
     {
+        $groupId = null;
+        if ($translationSourceId !== null) {
+            if ($locale === null) {
+                throw new \InvalidArgumentException('A section translation requires an explicit locale.');
+            }
+            ReusableSection::assertValidId($translationSourceId);
+            $source = $this->sections->get($translationSourceId) ?? throw new \OutOfBoundsException('Reusable section translation source not found.');
+            $groupId = $source->translationGroupId;
+        }
+
         $now = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
-        $section = new ReusableSection(self::uuid(), trim($name), self::blocks($blocks), 1, $now, $now);
+        $section = new ReusableSection(self::uuid(), trim($name), self::blocks($blocks), 1, $now, $now, $locale, $groupId);
         $this->sections->add($section);
 
         return $section->toArray();
@@ -42,7 +53,7 @@ final readonly class ManageReusableSections
 
     /**
      * @param list<array<string, mixed>> $blocks
-     * @return array{id: string, name: string, blocks: list<array{id: string, type: string, data: array<string, string>}>, version: int, createdAt: string, updatedAt: string}
+     * @return SectionData
      */
     public function update(string $id, string $name, array $blocks, int $expectedVersion): array
     {

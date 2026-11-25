@@ -49,16 +49,22 @@ final readonly class ReusableSectionController
     private function write(Request $request, ?string $id): JsonResponse
     {
         $payload = $request->toArray();
-        $allowed = $id === null ? ['name', 'blocks'] : ['name', 'blocks', 'version'];
+        $allowed = $id === null ? ['name', 'blocks', 'locale', 'translationSourceId'] : ['name', 'blocks', 'version'];
         $name = $payload['name'] ?? null;
         $blocks = $payload['blocks'] ?? null;
         $version = $payload['version'] ?? null;
+        $locale = $payload['locale'] ?? null;
+        $sourceId = $payload['translationSourceId'] ?? null;
         if (array_diff(array_keys($payload), $allowed) !== [] || !is_string($name) || !is_array($blocks) || !array_is_list($blocks) || ($id !== null && !is_int($version))) {
             return new JsonResponse(['error' => 'Name, blocks and the expected version are required.'], 422);
         }
+        if (($locale !== null && !is_string($locale)) || ($sourceId !== null && !is_string($sourceId))
+            || ($sourceId === null && array_key_exists('translationSourceId', $payload))) {
+            return new JsonResponse(['error' => 'Section locale and translation source must be valid strings.'], 422);
+        }
         try {
             /** @var list<array<string, mixed>> $blocks */
-            $result = $id === null ? $this->sections->create($name, $blocks) : $this->sections->update($id, $name, $blocks, $version);
+            $result = $id === null ? $this->sections->create($name, $blocks, $locale, $sourceId) : $this->sections->update($id, $name, $blocks, $version);
             return new JsonResponse($result, $id === null ? 201 : 200);
         } catch (ReusableSectionConflict $exception) {
             return new JsonResponse(['error' => $exception->getMessage()], 409);

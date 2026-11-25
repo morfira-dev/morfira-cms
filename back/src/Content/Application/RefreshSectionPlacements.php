@@ -55,6 +55,10 @@ final readonly class RefreshSectionPlacements
                 $results[] = [...$result, 'status' => 'unlinked'];
                 continue;
             }
+            if ($section->locale !== null && $section->locale !== $page->locale) {
+                $results[] = [...$result, 'status' => 'conflict'];
+                continue;
+            }
             $outdated = array_filter($links, static fn (array $link): bool => $link['version'] < $sectionVersion);
             if ($outdated === []) {
                 $results[] = [...$result, 'status' => 'current'];

@@ -755,6 +755,7 @@ export function PagesWorkspace({ mediaAssets, navigationMenus }: PagesWorkspaceP
                 key={editorAttempt}
                 page={{ blocks: editing.blocks, sectionLinks: editing.sectionLinks ?? [] }}
                 editingPageId={editing.id}
+                pageLocale={editing.locale}
                 sections={sections}
                 setSections={setSections}
                 onChange={updateComposition}

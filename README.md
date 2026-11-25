@@ -139,7 +139,7 @@ The initial foundation contains:
 - locale-aware page variants grouped as translations, with stable default and prefixed public URLs, canonical links and `hreflang` alternates;
 - a visual page canvas with selection, drag-and-drop ordering, keyboard move controls, duplication and removal;
 - deployment-trusted theme packages with catalog-backed template selection and two bundled themes;
-- versioned reusable sections with [linked placements](docs/specs/linked-sections.md), an overview of page usages, and [bulk draft refresh](docs/specs/bulk-section-refresh.md);
+- versioned reusable sections with [language variants](docs/specs/localized-reusable-sections.md), [linked placements](docs/specs/linked-sections.md), an overview of page usages, and [bulk draft refresh](docs/specs/bulk-section-refresh.md);
 - a versioned, container-registered extension API with declared capabilities, typed publication hooks and owner-visible diagnostics;
 - authenticated self-service password rotation;
 - a live Admin Studio content overview with direct workspace navigation;

@@ -435,6 +435,126 @@ test('owner creates, edits and publishes a page through the production surface',
     await expectPublicVersion(updated, newHeading, oldHeading)
   })
 
+  await test.step('inserts and publishes the selected localized section variant', async () => {
+    const englishName = 'English shared bonus'
+    const russianName = 'Russian shared bonus'
+    const targetTitle = 'Localized section target'
+    const targetSlug = 'localized-section-target'
+    const russianHeading = 'Morfira говорит по-русски'
+    const readSectionCatalog = async () => {
+      const response = await page.request.get('/api/v1/admin/sections')
+      expect(response.status()).toBe(200)
+      const { items } = await response.json() as components['schemas']['ReusableSectionCollection']
+      return items
+    }
+    const openDraft = (title: string) => page.getByRole('row', { name: new RegExp(title) })
+      .getByRole('button', { name: 'Изменить', exact: true }).click()
+    const libraryRow = (name: string) => page.getByRole('group', { name, exact: true })
+    const linkedButton = (name: string) => libraryRow(name)
+      .getByRole('button', { name: 'Вставить связанную секцию', exact: true })
+    const sectionName = page.getByLabel('Сохранить текущий холст как')
+    const sectionLocale = page.getByRole('combobox', { name: 'Язык секции', exact: true })
+    const saveSection = page.getByRole('button', { name: 'Сохранить секцию', exact: true })
+    const useSectionLocale = async (locale: string) => {
+      await sectionLocale.click()
+      await page.getByRole('option', { name: locale, exact: true }).click()
+    }
+    const captureSection = async () => {
+      const [response] = await Promise.all([
+        page.waitForResponse((candidate) => candidate.url().endsWith('/api/v1/admin/sections')
+          && candidate.request().method() === 'POST'),
+        saveSection.click(),
+      ])
+      expect(response.status()).toBe(201)
+      return await response.json() as components['schemas']['ReusableSection']
+    }
+
+    expect((await readSectionCatalog()).find((entry) => entry.name === 'Launch hero')).toMatchObject({ locale: null })
+    await page.goto('/admin/pages')
+    await openDraft('Beta home')
+    await sectionName.fill(englishName)
+    await useSectionLocale('en')
+    const englishSection = await captureSection()
+    expect(englishSection).toMatchObject({ version: 1, locale: 'en' })
+    await expect(libraryRow(englishName)).toBeVisible()
+
+    const englishHeading = 'Updated English shared bonus'
+    await page.getByLabel('Заголовок блока').fill(englishHeading)
+    page.once('dialog', (dialog) => dialog.accept())
+    const [englishUpdate] = await Promise.all([
+      page.waitForResponse((response) => response.url().endsWith(`/api/v1/admin/sections/${englishSection.id}`)
+        && response.request().method() === 'PUT'),
+      libraryRow(englishName).getByRole('button', { name: 'Заменить секцию блоками страницы', exact: true }).click(),
+    ])
+    expect(englishUpdate.status()).toBe(200)
+    await expect(englishUpdate.json()).resolves.toMatchObject({
+      version: 2, locale: 'en', translationGroupId: englishSection.translationGroupId,
+    })
+
+    await openDraft('Русская версия')
+    await sectionName.fill(russianName)
+    await useSectionLocale('ru-RU')
+    await page.getByRole('combobox', { name: 'Перевод секции', exact: true }).click()
+    await page.getByRole('option', { name: new RegExp(englishName) }).click()
+    const russianSection = await captureSection()
+    expect(russianSection).toMatchObject({
+      version: 1, locale: 'ru-RU', translationGroupId: englishSection.translationGroupId,
+    })
+    expect(russianSection.id).not.toBe(englishSection.id)
+    const csrf = await page.request.get('/api/v1/auth/csrf')
+    expect(csrf.status()).toBe(200)
+    const { token } = await csrf.json() as components['schemas']['CsrfToken']
+    const duplicateLocale = await page.request.post('/api/v1/admin/sections', {
+      headers: { 'X-CSRF-Token': token },
+      data: {
+        name: 'Conflicting Russian bonus', blocks: russianSection.blocks,
+        locale: 'ru-RU', translationSourceId: englishSection.id,
+      } satisfies components['schemas']['CreateReusableSectionRequest'],
+    })
+    expect(duplicateLocale.status()).toBe(409)
+
+    await page.getByRole('textbox', { name: 'Заголовок', exact: true }).first().fill(targetTitle)
+    await page.getByRole('textbox', { name: 'Slug', exact: true }).first().fill(targetSlug)
+    await page.getByLabel('Язык контента').first().fill('ru-RU')
+    await page.getByRole('button', { name: 'Создать черновик', exact: true }).click()
+    await openDraft(targetTitle)
+    await expect(linkedButton('Launch hero')).toBeEnabled()
+    await expect(linkedButton(englishName)).toBeDisabled()
+    await linkedButton(russianName).click()
+    await expect(page.getByLabel('Заголовок блока')).toHaveValue(russianHeading)
+    const [saved] = await Promise.all([
+      page.waitForResponse((response) => /\/api\/v1\/admin\/pages\/[^/]+$/.test(response.url())
+        && response.request().method() === 'PUT'),
+      page.getByRole('button', { name: 'Сохранить ревизию', exact: true }).click(),
+    ])
+    expect(saved.status()).toBe(200)
+    const savedDraft = await saved.json() as components['schemas']['Page']
+    expect(savedDraft).toMatchObject({
+      locale: 'ru-RU',
+      version: 2,
+      sectionLinks: [{ sectionId: russianSection.id, version: 1, blockIds: [savedDraft.blocks[0].id] }],
+    })
+    await page.getByRole('group', { name: `Связанная секция: ${russianName}` })
+      .getByRole('button', { name: 'Проверить обновление секции', exact: true }).click()
+    await expect(page.getByText('Здесь уже используется последняя версия секции.')).toBeVisible()
+    const publishedPath = `/ru-RU/${targetSlug}`
+    expect((await request.get(publishedPath)).status()).toBe(404)
+    await page.getByRole('button', { name: 'Опубликовать', exact: true }).click()
+    await expect(page.getByText(/Ревизия 2 опубликована/)).toBeVisible()
+    const [html, api] = await Promise.all([
+      request.get(publishedPath),
+      request.get(`/api/v1/content/pages${publishedPath}`),
+    ])
+    expect(html.status()).toBe(200)
+    const body = await html.text()
+    expect(body).toContain(russianHeading)
+    expect(body).not.toContain(englishHeading)
+    expect(api.status()).toBe(200)
+    await expect(api.json()).resolves.toMatchObject({
+      locale: 'ru-RU', sourceRevision: 2, blocks: [{ type: 'hero', data: { heading: russianHeading } }],
+    })
+  })
+
   await page.goto('/admin/content-types')
   await expect(page.getByRole('heading', { name: 'Типы контента' })).toBeVisible()
   await page.getByLabel('Название').first().fill('Articles')

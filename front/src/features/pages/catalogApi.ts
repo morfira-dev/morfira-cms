@@ -22,11 +22,11 @@ export async function getReusableSections(signal?: AbortSignal): Promise<Reusabl
   return ((await response.json()) as components['schemas']['ReusableSectionCollection']).items
 }
 
-export async function createReusableSection(name: string, blocks: ReusableSection['blocks'], signal?: AbortSignal): Promise<ReusableSection> {
+export async function createReusableSection(section: components['schemas']['CreateReusableSectionRequest'], signal?: AbortSignal): Promise<ReusableSection> {
   const response = await apiFetch('/api/v1/admin/sections', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, blocks }),
+    body: JSON.stringify(section),
     signal,
   })
   if (!response.ok) throw new Error(await readApiError(response))

@@ -29,6 +29,8 @@ Admin page and revision payloads may contain `sectionLinks`. Omitting this field
 ## Data and invariants
 A placement refers to one section version and one or more distinct existing block IDs. Each referenced ID identifies exactly one block on the page. A block belongs to at most one placement. Draft and revision links are stored with their corresponding blocks. A missing library section leaves the stored content available for editing and publishing.
 
+See [localized variants](localized-reusable-sections.md) for page and section language compatibility.
+
 ## Failure modes
 Invalid placements return HTTP 422. Stale page or section writes use the existing HTTP 409 contracts. A deleted source cannot be refreshed. Nothing is written by opening or refreshing the editor until the draft is saved.
 

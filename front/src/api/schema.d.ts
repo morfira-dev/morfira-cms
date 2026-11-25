@@ -1813,6 +1813,10 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+            /** @description Language-neutral when null. */
+            locale: components["schemas"]["Locale"] | null;
+            /** Format: uuid */
+            translationGroupId: string;
         };
         ReusableSectionCollection: {
             items: components["schemas"]["ReusableSection"][];
@@ -1820,8 +1824,16 @@ export interface components {
         CreateReusableSectionRequest: {
             name: string;
             blocks: components["schemas"]["PageBlock"][];
+            locale?: components["schemas"]["Locale"] | null;
+            /**
+             * Format: uuid
+             * @description Join the source section's translation group. Requires an explicit locale.
+             */
+            translationSourceId?: string;
         };
-        UpdateReusableSectionRequest: components["schemas"]["CreateReusableSectionRequest"] & {
+        UpdateReusableSectionRequest: {
+            name: string;
+            blocks: components["schemas"]["PageBlock"][];
             version: number;
         };
         ReusableSectionUsage: {
@@ -2886,14 +2898,21 @@ export interface operations {
                     "application/json": components["schemas"]["ReusableSection"];
                 };
             };
-            /** @description Section name conflict. */
+            /** @description Translation source not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Section name or translation locale conflict. */
             409: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Invalid name or blocks. */
+            /** @description Invalid name */
             422: {
                 headers: {
                     [name: string]: unknown;

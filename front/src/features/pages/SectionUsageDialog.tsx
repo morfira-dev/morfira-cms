@@ -85,7 +85,7 @@ export function SectionUsageDialog({ section, editingPageId, onClose, onPagesUpd
     return row.placements.some((link) => link.version < sourceVersion)
   }
 
-  const targets = usage?.items.filter((row) => row.pageId !== editingPageId && isOutdated(row, usage.section.version)) ?? []
+  const targets = usage?.items.filter((row) => row.pageId !== editingPageId && (usage.section.locale === null || usage.section.locale === row.locale) && isOutdated(row, usage.section.version)) ?? []
   const selectedRows = targets.filter((row) => selected.includes(row.pageId))
   const selectionDisabled = loading || applying || needsReload || review !== null
 
@@ -162,7 +162,7 @@ export function SectionUsageDialog({ section, editingPageId, onClose, onPagesUpd
           {loading && <CircularProgress size={24} aria-label={t('Loading section usage')} />}
           {usage && !loading && (
             <>
-              <Typography>{t('Library version {{version}}', { version: usage.section.version })}</Typography>
+              <Typography>{usage.section.locale ?? t('Language-neutral')} · {t('Library version {{version}}', { version: usage.section.version })}</Typography>
               {!usage.items.length ? <Typography color="text.secondary">{t('No drafts use this section.')}</Typography> : (
                 <>
                   <Typography color="text.secondary" variant="body2">{t('The open draft can be updated individually in the editor. Select drafts on this page to refresh them together.')}</Typography>
@@ -188,7 +188,7 @@ export function SectionUsageDialog({ section, editingPageId, onClose, onPagesUpd
                       <TableBody>
                         {usage.items.map((row) => {
                           const currentPage = row.pageId === editingPageId
-                          const outdated = isOutdated(row, usage.section.version)
+                          const outdated = isOutdated(row, usage.section.version) && (usage.section.locale === null || usage.section.locale === row.locale)
                           return (
                             <TableRow key={row.pageId}>
                               <TableCell padding="checkbox">
