@@ -1,3 +1,13 @@
+## [1.16.0](https://github.com/morfira-dev/morfira-cms/compare/v1.15.0...v1.16.0) (2026-11-25)
+
+### Features
+
+* **content:** add editorial reviews for page revisions ([20c67ec](https://github.com/morfira-dev/morfira-cms/commit/20c67eca686b656b2af28040f7b6c19ed2566f2a))
+* **content:** add linked reusable section placements ([60a7c2e](https://github.com/morfira-dev/morfira-cms/commit/60a7c2e15b1bece0ba9477b7a736b8d795024c74))
+* **content:** add localized reusable section variants ([ee2db87](https://github.com/morfira-dev/morfira-cms/commit/ee2db877e5d162043bbaf02eacad8f6b15ee0f3b))
+* **content:** preview submitted page revisions ([2eda826](https://github.com/morfira-dev/morfira-cms/commit/2eda82694f7d3ecf8319250df9ff517779d151b1))
+* **content:** refresh linked sections across drafts ([2ad6492](https://github.com/morfira-dev/morfira-cms/commit/2ad649257157816263ed55fec2bb944f174d8003))
+
 ## [1.15.0](https://github.com/morfira-dev/morfira-cms/compare/v1.14.0...v1.15.0) (2026-11-23)
 
 ### Features
