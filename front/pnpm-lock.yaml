@@ -21,8 +21,8 @@ importers:
         specifier: 1.15.0
         version: 1.15.0
       '@morfira-dev/wysiwyg-plugins':
-        specifier: 1.21.0
-        version: 1.21.0(@morfira-dev/wysiwyg-core@1.15.0)
+        specifier: 1.22.0
+        version: 1.22.0(@morfira-dev/wysiwyg-core@1.15.0)
       '@morfira-dev/wysiwyg-react':
         specifier: 1.15.0
         version: 1.15.0(@morfira-dev/wysiwyg-core@1.15.0)(react@19.3.1)
@@ -181,8 +181,8 @@ packages:
   '@morfira-dev/wysiwyg-core@1.15.0':
     resolution: {integrity: sha512-lf02R1A6Axd7PJRQZ4HrtmWhWwD/pS3bbL+6oLnf51nUoeymlzkK/bRNc4LbnwTv0vWPyGY4zWNFleyotZ+i1Q==}
 
-  '@morfira-dev/wysiwyg-plugins@1.21.0':
-    resolution: {integrity: sha512-wzx+o3t8NaagksaRkE4Ub8j9NEX/vtp18JOsKPgi5NMNAi0WjVUToKgCgv3ZT3edq6LAPTku8V3ud6W0hSVVDA==}
+  '@morfira-dev/wysiwyg-plugins@1.22.0':
+    resolution: {integrity: sha512-dCbm5eDzXyq2D4zvivOVkvhiiB6LsHs3xMxTwSzFPwoqGO7T21s777xNfXoeGUR5RHlSa5sKCkEzI3Zx0MqzTw==}
     peerDependencies:
       '@morfira-dev/wysiwyg-core': ^1.15.0
 
@@ -1113,7 +1113,7 @@ snapshots:
 
   '@morfira-dev/wysiwyg-core@1.15.0': {}
 
-  '@morfira-dev/wysiwyg-plugins@1.21.0(@morfira-dev/wysiwyg-core@1.15.0)':
+  '@morfira-dev/wysiwyg-plugins@1.22.0(@morfira-dev/wysiwyg-core@1.15.0)':
     dependencies:
       '@morfira-dev/wysiwyg-core': 1.15.0
 

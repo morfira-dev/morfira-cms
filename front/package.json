@@ -19,7 +19,7 @@
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@morfira-dev/wysiwyg-core": "1.15.0",
-    "@morfira-dev/wysiwyg-plugins": "1.21.0",
+    "@morfira-dev/wysiwyg-plugins": "1.22.0",
     "@morfira-dev/wysiwyg-react": "1.15.0",
     "@mui/material": "^9.6.0",
     "react": "^19.3.1",
