@@ -515,6 +515,7 @@ export const russianMessages = {
   'Could not submit the revision for review.': 'Не удалось отправить ревизию на проверку.',
   'Review queue': 'Очередь согласований',
   'Review history': 'История согласований',
+  'Preview submitted revision': 'Предпросмотр отправленной ревизии',
   'Review status': 'Статус согласования',
   'All statuses': 'Все статусы',
   'In review': 'На проверке',

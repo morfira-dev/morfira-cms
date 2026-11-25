@@ -25,6 +25,18 @@ final readonly class ManagePageReviews
         return array_map(static fn (PageReview $review): array => $review->toArray(), $this->reviews->list($status, $pageId, $limit));
     }
 
+    public function preview(string $id): ?PageRevisionView
+    {
+        $review = $this->reviews->get($id);
+        if ($review === null) {
+            return null;
+        }
+
+        $revision = $this->pages->revision($review->pageId, $review->revision);
+
+        return $revision === null ? null : PageRevisionView::fromRevision($revision);
+    }
+
     /** @return array{created: bool, review: ReviewData} */
     public function submit(PageId $pageId, int $revision, string $actor): array
     {

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cms\Tests\Content\Presentation\Http;
 
 use Cms\Content\Application\CreatePage\CreatePage;
+use Cms\Content\Application\GetPage\GetPage;
 use Cms\Content\Application\ManagePageReviews;
 use Cms\Content\Application\UpdatePage\UpdatePage;
 use Cms\Content\Domain\PageId;
@@ -12,6 +13,8 @@ use Cms\Content\Domain\PageReview;
 use Cms\Content\Domain\PageReviewStatus;
 use Cms\Content\Domain\PageSeo;
 use Cms\Content\Infrastructure\Persistence\DoctrinePageReviewRepository;
+use Cms\Content\Infrastructure\Twig\RichTextExtension;
+use Cms\Content\Presentation\Http\PagePreviewController;
 use Cms\Content\Presentation\Http\PageReviewController;
 use Cms\Identity\Infrastructure\Security\SecurityUser;
 use Cms\Tests\Content\InMemoryPageRepository;
@@ -23,6 +26,9 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Twig\Environment;
+use Twig\Loader\FilesystemLoader;
+use Twig\TwigFunction;
 
 #[RequiresPhpExtension('pdo_sqlite')]
 final class PageReviewControllerTest extends TestCase
@@ -63,7 +69,12 @@ SQL);
         $created = (new CreatePage($this->pages))('Original title', 'original', 'pt-BR');
         $this->pageId = PageId::fromString($created->id);
         (new UpdatePage($this->pages, new PassThroughRichTextSanitizer()))(
-            $created->id, 'New title', 'new-title', [], PageSeo::defaults(), 1,
+            $created->id,
+            'New title',
+            'new-title',
+            [['id' => PageId::new()->value, 'type' => 'hero', 'data' => ['heading' => 'Reviewed heading']]],
+            PageSeo::defaults(),
+            1,
         );
         $this->connection->insert('content_page_revisions', ['page_id' => $created->id, 'revision_number' => 1]);
         $this->connection->insert('content_page_revisions', ['page_id' => $created->id, 'revision_number' => 2]);
@@ -96,6 +107,50 @@ SQL);
         $newRevisionReview = $editor->submit($this->pageId->value, self::request(['revision' => 2]));
         self::assertSame(201, $newRevisionReview->getStatusCode());
         self::assertSame('New title', self::body($newRevisionReview)['pageTitle']);
+    }
+
+    public function test_private_review_preview_renders_the_exact_revision_after_draft_changes(): void
+    {
+        $review = self::body($this->controller(owner: false)->submit($this->pageId->value, self::request(['revision' => 2])));
+        self::assertIsString($id = $review['id']);
+        (new UpdatePage($this->pages, new PassThroughRichTextSanitizer()))(
+            $this->pageId->value, 'Later title', 'later-title', [], PageSeo::defaults(), 2, locale: 'en',
+        );
+        $preview = $this->previewController();
+
+        $response = $preview->review($id);
+        self::assertSame(200, $response->getStatusCode());
+        self::assertTrue($response->headers->hasCacheControlDirective('private'));
+        self::assertTrue($response->headers->hasCacheControlDirective('no-store'));
+        self::assertSame('noindex, nofollow', $response->headers->get('X-Robots-Tag'));
+        $body = $response->getContent();
+        self::assertIsString($body);
+        self::assertStringContainsString('<html lang="pt-BR">', $body);
+        self::assertStringContainsString('Review preview · revision 2', $body);
+        self::assertStringContainsString('<h1>Reviewed heading</h1>', $body);
+        self::assertStringNotContainsString('Later title', $body);
+
+        $draft = $preview($this->pageId->value)->getContent();
+        self::assertIsString($draft);
+        self::assertStringContainsString('Draft preview · revision 3', $draft);
+        self::assertStringContainsString('Later title', $draft);
+        self::assertStringNotContainsString('Reviewed heading', $draft);
+    }
+
+    public function test_invalid_unknown_and_deleted_review_previews_are_private_not_found(): void
+    {
+        $review = self::body($this->controller(owner: false)->submit($this->pageId->value, self::request(['revision' => 1])));
+        self::assertIsString($id = $review['id']);
+        $this->connection->delete('content_page_revisions', ['page_id' => $this->pageId->value, 'revision_number' => 1]);
+        $preview = $this->previewController();
+
+        foreach (['malformed', PageId::new()->value, $id] as $unavailable) {
+            $response = $preview->review($unavailable);
+            self::assertSame(404, $response->getStatusCode());
+            self::assertTrue($response->headers->hasCacheControlDirective('private'));
+            self::assertTrue($response->headers->hasCacheControlDirective('no-store'));
+            self::assertSame('noindex, nofollow', $response->headers->get('X-Robots-Tag'));
+        }
     }
 
     public function test_owner_can_decide_once_and_feedback_is_required_for_changes(): void
@@ -158,6 +213,19 @@ SQL);
         $security->method('isGranted')->willReturn($owner);
 
         return new PageReviewController(new ManagePageReviews($this->repository, $this->pages), $security);
+    }
+
+    private function previewController(): PagePreviewController
+    {
+        $twig = new Environment(new FilesystemLoader(dirname(__DIR__, 4) . '/templates'), ['strict_variables' => true]);
+        $twig->addExtension(new RichTextExtension(new PassThroughRichTextSanitizer()));
+        $twig->addFunction(new TwigFunction('media_asset', static fn (string $id): null => null));
+
+        return new PagePreviewController(
+            new GetPage($this->pages),
+            new ManagePageReviews($this->repository, $this->pages),
+            $twig,
+        );
     }
 
     /** @param array<string, mixed> $payload */

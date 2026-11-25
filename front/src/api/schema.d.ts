@@ -562,6 +562,23 @@ export interface paths {
         patch: operations["decidePageReview"];
         trace?: never;
     };
+    "/_preview/page-reviews/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Render the exact saved page revision attached to a review */
+        get: operations["previewPageReview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/pages/{id}/revisions": {
         parameters: {
             query?: never;
@@ -3895,6 +3912,53 @@ export interface operations {
             };
             /** @description Invalid decision or absent changes-requested comment. */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    previewPageReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Private HTML preview of the submitted revision. */
+            200: {
+                headers: {
+                    /** @description Prevents caching of the review preview. */
+                    "Cache-Control"?: string;
+                    /** @description Prevents search indexing and link following. */
+                    "X-Robots-Tag"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            /** @description Authentication required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Editor role required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Review or its saved revision not found. */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -12,6 +12,8 @@ A status stored on the mutable page would silently carry approval to subsequent 
 ## Consequences
 Editors can continue drafting while another revision is reviewed. The publication pipeline continues to serve immutable snapshots and is independent of the optional review queue in this slice.
 
+The private review preview resolves the revision through the review record and renders it with the existing draft preview renderer. It remains separate from the public delivery routes and from the preview of the current draft.
+
 ## Migration impact
 Add the review table. Existing revisions and snapshots require no backfill.
 

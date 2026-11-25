@@ -29,7 +29,7 @@
     </style>
 </head>
 <body>
-    <div class="preview-bar">Draft preview · revision {{ page.version }}</div>
+    <div class="preview-bar">{% if review_preview|default(false) %}Review preview · revision {{ page.revision }}{% else %}Draft preview · revision {{ page.version }}{% endif %}</div>
 
     {% if page.blocks is empty %}
         <div class="empty">This page has no blocks yet.</div>

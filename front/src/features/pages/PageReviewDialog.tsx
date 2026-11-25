@@ -130,8 +130,20 @@ export function PageReviewDialog({ pageId, isOwner, onClose }: PageReviewDialogP
                   {items.map((review) => (
                     <TableRow key={review.id}>
                       <TableCell component="th" scope="row">
-                        <Typography variant="body2">{review.pageTitle}</Typography>
-                        <Typography variant="caption" color="text.secondary">{review.locale} · {review.pageSlug}</Typography>
+                        <Stack sx={{ alignItems: 'flex-start' }}>
+                          <Typography variant="body2">{review.pageTitle}</Typography>
+                          <Typography variant="caption" color="text.secondary">{review.locale} · {review.pageSlug}</Typography>
+                          <Button
+                            component="a"
+                            href={`/_preview/page-reviews/${encodeURIComponent(review.id)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            size="small"
+                            sx={{ px: 0, textAlign: 'left' }}
+                          >
+                            {t('Preview submitted revision')}
+                          </Button>
+                        </Stack>
                       </TableCell>
                       <TableCell>{review.revision}</TableCell>
                       <TableCell><Chip size="small" label={t(statusLabels[review.status])} /></TableCell>

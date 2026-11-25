@@ -555,7 +555,7 @@ test('owner creates, edits and publishes a page through the production surface',
     })
   })
 
-  await test.step('applies an owner decision to the exact submitted page revision', async () => {
+  await test.step('previews and applies an owner decision to the exact submitted page revision', async () => {
     const title = 'Editorial review target'
     const slug = 'editorial-review-target'
     const publishedHeading = 'Public edition before editorial review'
@@ -631,6 +631,31 @@ test('owner creates, edits and publishes a page through the production surface',
       await save.click()
       await expect(editor.getByText(`Ревизия черновика ${submittedVersion + 1}`, { exact: true })).toBeVisible()
 
+      const reviewPreviewPath = `/_preview/page-reviews/${review.id}`
+      await editor.getByRole('button', { name: 'История согласований', exact: true }).click()
+      const editorHistory = editor.getByRole('dialog', { name: 'История согласований', exact: true })
+      await expect(editorHistory.getByRole('link', { name: 'Предпросмотр отправленной ревизии', exact: true }))
+        .toHaveAttribute('href', reviewPreviewPath)
+      const [editorPreview, anonymousPreview, missingPreview, latestPreview] = await Promise.all([
+        editor.request.get(reviewPreviewPath),
+        request.get(reviewPreviewPath),
+        editor.request.get(`/_preview/page-reviews/${randomUUID()}`),
+        editor.request.get(`/_preview/pages/${draft.id}`),
+      ])
+      expect(editorPreview.status()).toBe(200)
+      expect(await editorPreview.text()).toContain(submittedHeading)
+      expect(anonymousPreview.status()).toBe(401)
+      expect(await anonymousPreview.text()).not.toContain(submittedHeading)
+      expect(missingPreview.status()).toBe(404)
+      expect(latestPreview.status()).toBe(200)
+      expect(await latestPreview.text()).toContain(laterHeading)
+      for (const response of [editorPreview, missingPreview]) {
+        expect(response.headers()['cache-control']).toContain('private')
+        expect(response.headers()['cache-control']).toContain('no-store')
+        expect(response.headers()['x-robots-tag']).toContain('noindex')
+        expect(response.headers()['x-robots-tag']).toContain('nofollow')
+      }
+
       const editorCsrf = await editor.request.get('/api/v1/auth/csrf')
       expect(editorCsrf.status()).toBe(200)
       const { token: editorToken } = await editorCsrf.json() as components['schemas']['CsrfToken']
@@ -646,6 +671,21 @@ test('owner creates, edits and publishes a page through the production surface',
       const reviewRow = queue.getByRole('row').filter({ hasText: title })
       await expect(reviewRow.getByRole('cell', { name: String(submittedVersion), exact: true })).toBeVisible()
       await expect(reviewRow.getByRole('cell', { name: 'На проверке', exact: true })).toBeVisible()
+      const previewLink = reviewRow.getByRole('link', { name: 'Предпросмотр отправленной ревизии', exact: true })
+      await expect(previewLink).toHaveAttribute('href', reviewPreviewPath)
+      const [previewTab] = await Promise.all([
+        page.context().waitForEvent('page'),
+        previewLink.click(),
+      ])
+      try {
+        await expect(previewTab).toHaveURL(new RegExp(`${reviewPreviewPath}$`))
+        await expect(previewTab.getByText(`Review preview · revision ${submittedVersion}`, { exact: true })).toBeVisible()
+        await expect(previewTab.getByRole('heading', { name: submittedHeading, exact: true })).toBeVisible()
+        await expect(previewTab.getByText(laterHeading, { exact: true })).toHaveCount(0)
+        await expect(previewTab.getByText(publishedHeading, { exact: true })).toHaveCount(0)
+      } finally {
+        await previewTab.close()
+      }
       const [decision] = await Promise.all([
         page.waitForResponse((response) => response.url().endsWith(`/api/v1/admin/page-reviews/${review.id}`)
           && response.request().method() === 'PATCH'),
@@ -659,6 +699,7 @@ test('owner creates, edits and publishes a page through the production surface',
       await page.getByRole('option', { name: 'Все статусы', exact: true }).click()
       await expect(reviewRow.getByRole('cell', { name: String(submittedVersion), exact: true })).toBeVisible()
       await expect(reviewRow.getByRole('cell', { name: 'Одобрено', exact: true })).toBeVisible()
+      await expect(previewLink).toHaveAttribute('href', reviewPreviewPath)
 
       const [latest, liveHtml, liveApi] = await Promise.all([
         page.request.get(`/api/v1/admin/pages/${draft.id}`),

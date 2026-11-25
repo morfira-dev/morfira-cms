@@ -1131,6 +1131,30 @@ paths:
         '404': { description: Review not found. }
         '409': { description: The review has already been decided. }
         '422': { description: Invalid decision or absent changes-requested comment. }
+  /_preview/page-reviews/{id}:
+    get:
+      operationId: previewPageReview
+      tags: [Admin Content]
+      summary: Render the exact saved page revision attached to a review
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Private HTML preview of the submitted revision.
+          headers:
+            Cache-Control:
+              description: Prevents caching of the review preview.
+              schema: { type: string, example: 'no-store, private' }
+            X-Robots-Tag:
+              description: Prevents search indexing and link following.
+              schema: { type: string, example: 'noindex, nofollow' }
+          content:
+            text/html:
+              schema: { type: string }
+        '401': { description: Authentication required. }
+        '403': { description: Editor role required. }
+        '404': { description: Review or its saved revision not found. }
   /api/v1/admin/pages/{id}/revisions:
     parameters:
       - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
